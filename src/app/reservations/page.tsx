@@ -19,7 +19,7 @@ export default async function ReservationsPage({
   if (!email) redirect("/login");
 
   const params = searchParams ?? {};
-  const where: any = { userEmail: email };
+  const where: any = { userEmail: email, isDeleted: false }; // ✅ exclude deleted ones
 
   if (params.from || params.to) {
     where.startAt = {};

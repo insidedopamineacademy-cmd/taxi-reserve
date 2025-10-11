@@ -1,4 +1,3 @@
-// src/components/ServerNavbar.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -24,10 +23,12 @@ export default function ServerNavbar() {
           AppReserve
         </Link>
 
+        {/* Desktop Menu */}
         <div className="hidden sm:flex items-center gap-6">
           <Link href="/reservations" className="hover:text-yellow-400">Reservations</Link>
           <Link href="/reservations/new" className="hover:text-yellow-400">New</Link>
           <Link href="/reminders" className="hover:text-yellow-400">Reminders</Link>
+          <Link href="/reservations/deleted" className="hover:text-yellow-400">Deleted</Link> {/* ✅ Added */}
 
           {user ? (
             <UserMenu email={user.email ?? "Account"} />
@@ -44,15 +45,20 @@ export default function ServerNavbar() {
           )}
         </div>
 
-        <button className="sm:hidden" onClick={() => setOpen(v => !v)} aria-label="Menu">☰</button>
+        {/* Mobile Menu Toggle */}
+        <button className="sm:hidden" onClick={() => setOpen(v => !v)} aria-label="Menu">
+          ☰
+        </button>
       </div>
 
+      {/* Mobile Dropdown */}
       {open && (
         <div className="sm:hidden border-t border-white/10 px-4 pb-3">
           <div className="flex flex-col gap-3 pt-3">
             <Link href="/reservations" onClick={() => setOpen(false)}>Reservations</Link>
             <Link href="/reservations/new" onClick={() => setOpen(false)}>New</Link>
             <Link href="/reminders" onClick={() => setOpen(false)}>Reminders</Link>
+            <Link href="/reservations/deleted" onClick={() => setOpen(false)}>Deleted</Link> {/* ✅ Added */}
 
             {user ? (
               <UserMenu email={user.email ?? "Account"} />

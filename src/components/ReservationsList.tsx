@@ -1,4 +1,3 @@
-// src/components/ReservationsList.tsx
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
@@ -153,10 +152,11 @@ export default function ReservationsList({ items }: Props) {
     router.refresh();
   }
 
+  // ✅ UPDATED delete logic (mark as deleted instead of removing)
   async function handleDelete(id: string) {
-    if (!confirm("Delete this reservation?")) return;
+    if (!confirm("Move this reservation to Deleted list?")) return;
 
-    // optimistic remove
+    // optimistic update
     setBusyId(id);
     const prev = rows;
     setRows(prev.filter((r) => r.id !== id));
@@ -168,7 +168,7 @@ export default function ReservationsList({ items }: Props) {
     } catch (e) {
       // rollback on error
       setRows(prev);
-      alert("Failed to delete. Please try again.");
+      alert("Failed to move to deleted list. Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -212,7 +212,6 @@ export default function ReservationsList({ items }: Props) {
                 <div className="flex items-baseline gap-3">
                   <div className="text-base font-semibold">{date}</div>
                   <div className="text-sm text-neutral-400">{time}</div>
-                  {/* status badge was here – removed */}
                 </div>
 
                 {/* Keep on one line: no wrap + tighter gap */}
@@ -250,8 +249,8 @@ export default function ReservationsList({ items }: Props) {
                   <button
                     disabled={busyId === r.id}
                     onClick={() => handleDelete(r.id)}
-                    title={busyId === r.id ? "Deleting…" : "Delete reservation"}
-                    aria-label="Delete reservation"
+                    title={busyId === r.id ? "Moving…" : "Move to Deleted list"}
+                    aria-label="Move to Deleted list"
                     className={`rounded-md p-1 border ${
                       busyId === r.id
                         ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"

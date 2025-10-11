@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -49,7 +48,8 @@ model Reservation {
   phone  String? @db.VarChar(40)
   flight String? @db.VarChar(40)
 
-  status ResStatus @default(PENDING)
+  status    ResStatus @default(PENDING)
+  isDeleted Boolean   @default(false) // ✅ added field
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

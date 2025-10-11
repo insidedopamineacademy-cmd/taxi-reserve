@@ -79,7 +79,7 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-// --- DELETE: unchanged ---
+// --- DELETE: now marks reservation as deleted instead of removing ---
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
@@ -90,6 +90,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Check if reservation exists and belongs to user
   const existing = await prisma.reservation.findFirst({
     where: { id: params.id, user: { email } },
     select: { id: true },
@@ -98,7 +99,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await prisma.reservation.delete({ where: { id: params.id } });
-  revalidatePath("/reservations"); // ✅ also revalidate on delete
-  return NextResponse.json({ ok: true });
+  // 👇 Instead of deleting, mark as deleted
+  await prisma.reservation.update({
+    where: { id: params.id },
+    data: { isDeleted: true },
+  });
+
+  // Revalidate list
+  revalidatePath("/reservations"); // ✅ also revalidate on soft delete
+
+  return NextResponse.json({ ok: true, message: "Moved to deleted list" });
 }
