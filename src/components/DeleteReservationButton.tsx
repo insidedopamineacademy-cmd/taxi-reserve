@@ -14,9 +14,16 @@ export default function DeleteReservationButton({ id }: { id: string }) {
         start(async () => {
           const ok = confirm("Delete this reservation?");
           if (!ok) return;
+
           const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
-          if (res.ok) router.refresh();
-          else alert("Delete failed");
+
+          if (res.ok) {
+            // ✅ Give the backend a moment to commit before refreshing
+            await new Promise((r) => setTimeout(r, 150));
+            router.refresh();
+          } else {
+            alert("Delete failed");
+          }
         })
       }
     >
