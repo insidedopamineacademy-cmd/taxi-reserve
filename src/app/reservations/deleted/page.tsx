@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 // src/app/reservations/deleted/page.tsx
 export const runtime = "nodejs";
 export const revalidate = 0;
