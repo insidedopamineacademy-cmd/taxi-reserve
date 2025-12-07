@@ -18,7 +18,7 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.2",
     "ics": "^3.8.1",
-    "next": "15.5.2",
+    "next": "15.5.7",
     "next-auth": "^4.24.11",
     "node-cron": "^4.2.1",
     "nodemailer": "^6.10.1",
@@ -33,7 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.2",
+    "eslint-config-next": "15.5.7",
     "prisma": "^6.16.1",
     "tailwindcss": "^4",
     "typescript": "^5"
