@@ -16,7 +16,7 @@ export default async function Home() {
           {email ? `Welcome, ${email}` : "Welcome to AppReserve"}
         </h1>
         <p className="mt-2 text-sm text-neutral-300">
-          Manage your taxi reservations and reminders from one place.
+          Manage your taxi reservations from one place.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -37,16 +37,6 @@ export default async function Home() {
             <h3 className="font-medium text-white">New reservation</h3>
             <p className="mt-1 text-sm text-neutral-300">
               Create a new booking fast.
-            </p>
-          </Link>
-
-          <Link
-            href="/reminders"
-            className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-          >
-            <h3 className="font-medium text-white">Reminders</h3>
-            <p className="mt-1 text-sm text-neutral-300">
-              Set alerts for upcoming trips.
             </p>
           </Link>
 

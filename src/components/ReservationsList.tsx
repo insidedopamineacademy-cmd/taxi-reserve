@@ -22,7 +22,6 @@ type Reservation = {
 type Props = {
   items: Reservation[];
   showEdit?: boolean;
-  showReminder?: boolean;
   showShare?: boolean;
   showSoftDelete?: boolean;
   showSort?: boolean;
@@ -103,29 +102,6 @@ function Field({
   );
 }
 
-/* Small inline calendar icon (no extra deps) */
-function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
-}
-
 /* Small inline trash icon for Delete (no extra deps) */
 function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -150,44 +126,10 @@ function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-/* Build best calendar link for a reservation (Android => Google; others => ICS) */
-function getReminderLink(r: Reservation) {
-  const start = new Date(r.startAt);
-  const end = new Date(r.endAt ?? start.getTime() + 60 * 60 * 1000); // default 1h
-
-  // YYYYMMDDTHHMMSSZ in UTC
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const fmt = (d: Date) =>
-    d.getUTCFullYear().toString() +
-    pad(d.getUTCMonth() + 1) +
-    pad(d.getUTCDate()) +
-    "T" +
-    pad(d.getUTCHours()) +
-    pad(d.getUTCMinutes()) +
-    pad(d.getUTCSeconds()) +
-    "Z";
-
-  const base = "https://calendar.google.com/calendar/render";
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: "Assign booking",
-    dates: `${fmt(start)}/${fmt(end)}`,
-    details: "You have a booking to assign in 45 minutes",
-  });
-  if (r.pickupText) params.set("location", r.pickupText);
-
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent.toLowerCase() : "";
-  const isAndroid = /android/.test(ua);
-
-  // Android → Google Calendar; iOS/mac/Windows → ICS (your API route)
-  return isAndroid ? `${base}?${params.toString()}` : `/api/ics/${r.id}`;
-}
-
 /* ---------- Component ---------- */
 export default function ReservationsList({
   items,
   showEdit = true,
-  showReminder = true,
   showShare = true,
   showSoftDelete = true,
   showSort = true,
@@ -298,20 +240,6 @@ export default function ReservationsList({
                     >
                       Edit
                     </Link>
-                  )}
-
-                  {showReminder && (
-                    <button
-                      onClick={() => {
-                        const link = getReminderLink(r);
-                        window.open(link, "_blank");
-                      }}
-                      title="Add Reminder (45m before)"
-                      aria-label="Add Reminder (45m before)"
-                      className="rounded-md border border-white/10 p-1 hover:bg-white/5"
-                    >
-                      <CalendarIcon className="h-4 w-4" />
-                    </button>
                   )}
 
                   {showShare && (

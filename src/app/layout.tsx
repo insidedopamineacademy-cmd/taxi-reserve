@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ReservationApp",
-  description: "Reservation & Reminder App",
+  description: "Taxi reservation app",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

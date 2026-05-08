@@ -38,9 +38,6 @@ export default function UserMenu({ email }: { email: string }) {
               <a href="/reservations" className="block px-4 py-2 hover:bg-gray-800">My reservations</a>
             </li>
             <li>
-              <a href="/reminders" className="block px-4 py-2 hover:bg-gray-800">Reminders</a>
-            </li>
-            <li>
               <a href="/settings" className="block px-4 py-2 hover:bg-gray-800">Settings</a>
             </li>
           </ul>

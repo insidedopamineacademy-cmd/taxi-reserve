@@ -53,43 +53,6 @@ export default function ReservationRow({ res }: Props) {
     });
   };
 
-  // --- Reminder helper (auto-detect) ---
-  function getCalendarLink() {
-    const start = new Date(res.startAt);
-    const end = new Date(start.getTime() + 60 * 60 * 1000); // default 1h
-
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const fmtGCal = (d: Date) =>
-      d.getUTCFullYear().toString() +
-      pad(d.getUTCMonth() + 1) +
-      pad(d.getUTCDate()) +
-      "T" +
-      pad(d.getUTCHours()) +
-      pad(d.getUTCMinutes()) +
-      pad(d.getUTCSeconds()) +
-      "Z";
-
-    // Google Calendar deep link (we keep it minimal; the notification is set within GCal UI)
-    const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Assign+booking&dates=${fmtGCal(
-      start
-    )}/${fmtGCal(end)}&details=You+have+a+booking+to+assign+in+45+minutes&location=${encodeURIComponent(
-      res.pickupText ?? ""
-    )}`;
-
-    const ua = typeof navigator !== "undefined" ? navigator.userAgent.toLowerCase() : "";
-    const isAndroid = /android/.test(ua);
-
-    // Android → Google Calendar; iOS/mac/others → ICS
-    if (isAndroid) return gcal;
-    return `/api/ics/${res.id}`;
-  }
-
-  const handleReminderClick = () => {
-    const link = getCalendarLink();
-    // Open in new tab/window to preserve current list state
-    window.open(link, "_blank");
-  };
-
   const dt = new Date(res.startAt);
   const startAtText = dt.toLocaleString("en-GB", {
     dateStyle: "short",
@@ -157,17 +120,6 @@ export default function ReservationRow({ res }: Props) {
           </select>
         </div>
 
-        {/* 📅 NEW: Reminder button (auto-detects iOS vs Android/Google) */}
-        <button
-          onClick={handleReminderClick}
-          title="Add Reminder (45 min before)"
-          aria-label="Add Reminder (45 min before)"
-          className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700"
-        >
-          📅 Reminder
-        </button>
-
-        {/* NEW: Edit button (kept exactly as you had it) */}
         <Link
           href={`/reservations/${res.id}/edit`}
           className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700"

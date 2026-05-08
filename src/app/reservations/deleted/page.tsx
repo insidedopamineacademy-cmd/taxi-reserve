@@ -60,7 +60,6 @@ export default async function DeletedReservationsPage() {
         <ReservationsList
           items={items}
           showEdit={false}
-          showReminder={false}
           showSoftDelete={false}
           showSort={false}
         />

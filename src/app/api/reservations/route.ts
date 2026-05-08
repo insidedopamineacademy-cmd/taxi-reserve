@@ -110,52 +110,32 @@ export async function POST(req: Request) {
       ? (status as ResStatus)
       : ResStatus.PENDING;
 
-    // Auto-reminder at T-30 minutes
-    const dueAt = new Date(startAtDate.getTime() - 30 * 60 * 1000);
-
-    const created = await prisma.$transaction(async (tx) => {
-      // Create reservation
-      const reservation = await tx.reservation.create({
-        data: {
-          userEmail: email,                  // uses userEmail field
-          startAt: startAtDate,              // store the exact instant
-          pickupText: pickupTextValue,
-          dropoffText: dropoffTextValue,
-          pax: paxNum,
-          priceEuro: priceNum,
-          phone: phoneValue,
-          flight: flightValue,
-          notes: notesValue,
-          status: statusEnum,                // Prisma enum, not a bare string
-        },
-        select: {
-          id: true,
-          startAt: true,
-          pickupText: true,
-          dropoffText: true,
-          pax: true,
-          priceEuro: true,
-          phone: true,
-          flight: true,
-          notes: true,
-          status: true,
-          userEmail: true,
-        },
-      });
-
-      // Create reminder (adjust to your schema if different)
-      await tx.reminder.create({
-        data: {
-          userEmail: email,
-          reservationId: reservation.id,
-          title: "Upcoming reservation",
-          note: `Pickup: ${pickupTextValue ?? "-"} -> Drop-off: ${dropoffTextValue ?? "-"}`,
-          dueAt,
-          isDone: false,
-        },
-      });
-
-      return reservation;
+    const created = await prisma.reservation.create({
+      data: {
+        userEmail: email,                  // uses userEmail field
+        startAt: startAtDate,              // store the exact instant
+        pickupText: pickupTextValue,
+        dropoffText: dropoffTextValue,
+        pax: paxNum,
+        priceEuro: priceNum,
+        phone: phoneValue,
+        flight: flightValue,
+        notes: notesValue,
+        status: statusEnum,                // Prisma enum, not a bare string
+      },
+      select: {
+        id: true,
+        startAt: true,
+        pickupText: true,
+        dropoffText: true,
+        pax: true,
+        priceEuro: true,
+        phone: true,
+        flight: true,
+        notes: true,
+        status: true,
+        userEmail: true,
+      },
     });
 
     return NextResponse.json({ ok: true, reservation: created }, { status: 201 });
