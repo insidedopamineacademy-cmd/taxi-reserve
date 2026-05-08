@@ -16,10 +16,17 @@ type Reservation = {
   phone?: string | null;
   flight?: string | null;
   notes?: string | null;
-  // (status removed)
+  status?: string | null;
 };
 
-type Props = { items: Reservation[] };
+type Props = {
+  items: Reservation[];
+  showEdit?: boolean;
+  showReminder?: boolean;
+  showShare?: boolean;
+  showSoftDelete?: boolean;
+  showSort?: boolean;
+};
 
 /* ---------- Helpers ---------- */
 function fmtDateParts(ms: number) {
@@ -31,6 +38,53 @@ function fmtDateParts(ms: number) {
   });
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   return { date, time };
+}
+
+function fmtShareDateParts(ms: number) {
+  const d = new Date(ms);
+  if (!Number.isFinite(d.getTime())) return null;
+  return {
+    date: d.toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
+    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function formatStatus(status?: string | null) {
+  if (!status) return null;
+  const labels: Record<string, string> = {
+    PENDING: "Pending",
+    ASSIGNED: "Assigned",
+    COMPLETED: "Completed",
+    R_RECEIVED: "R received",
+  };
+  return labels[status] ?? status;
+}
+
+function buildWhatsAppShareLink(r: Reservation) {
+  const when = fmtShareDateParts(r.startAt);
+  const lines = ["Taxi Reservation Details:"];
+
+  if (r.phone) lines.push(`Phone: ${r.phone}`);
+  if (r.pickupText) lines.push(`Pickup: ${r.pickupText}`);
+  if (r.dropoffText) lines.push(`Dropoff: ${r.dropoffText}`);
+  if (when) {
+    lines.push(`Date: ${when.date}`);
+    lines.push(`Time: ${when.time}`);
+  }
+  lines.push(`Passengers: ${r.pax}`);
+  if (r.flight) lines.push(`Flight number: ${r.flight}`);
+  if (r.notes) lines.push(`Notes: ${r.notes}`);
+
+  const status = formatStatus(r.status);
+  if (status) lines.push(`Reservation status: ${status}`);
+  if (typeof r.priceEuro === "number") lines.push(`Price: ${r.priceEuro} EUR`);
+
+  return `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
 }
 
 /* Reusable tiny field row */
@@ -130,7 +184,14 @@ function getReminderLink(r: Reservation) {
 }
 
 /* ---------- Component ---------- */
-export default function ReservationsList({ items }: Props) {
+export default function ReservationsList({
+  items,
+  showEdit = true,
+  showReminder = true,
+  showShare = true,
+  showSoftDelete = true,
+  showSort = true,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -142,8 +203,12 @@ export default function ReservationsList({ items }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // ---- SORT control (updates ?sort=asc|desc in the URL) ----
-  const sort = sp.get("sort") === "asc" ? "asc" : "desc";
+  // ---- SORT control (updates ?sort=closest|asc|desc in the URL) ----
+  const sortParam = sp.get("sort");
+  const sort =
+    sortParam === "asc" || sortParam === "desc" || sortParam === "closest"
+      ? sortParam
+      : "closest";
   function onChangeSort(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(sp?.toString() || "");
     params.set("sort", e.target.value);
@@ -165,7 +230,7 @@ export default function ReservationsList({ items }: Props) {
       const res = await fetch(`/api/reservations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       router.refresh(); // revalidate server list
-    } catch (e) {
+    } catch {
       // rollback on error
       setRows(prev);
       alert("Failed to move to deleted list. Please try again.");
@@ -184,23 +249,26 @@ export default function ReservationsList({ items }: Props) {
 
   return (
     <>
-      {/* Sort bar */}
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-sm text-neutral-300">Sort by time:</span>
-        <select
-          value={sort}
-          onChange={onChangeSort}
-          className="rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm"
-        >
-          <option value="desc">Newest first</option>
-          <option value="asc">Oldest first</option>
-        </select>
-      </div>
+      {showSort && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-sm text-neutral-300">Sort by time:</span>
+          <select
+            value={sort}
+            onChange={onChangeSort}
+            className="rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm"
+          >
+            <option value="closest">Closest first</option>
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
+          </select>
+        </div>
+      )}
 
       <ul className="mt-2 grid gap-4">
         {rows.map((r) => {
           const { date, time } = fmtDateParts(r.startAt);
           const open = openId === r.id;
+          const statusLabel = formatStatus(r.status);
 
           return (
             <li
@@ -208,14 +276,13 @@ export default function ReservationsList({ items }: Props) {
               className="rounded-xl border border-white/10 bg-[#0e1426] shadow-sm transition hover:border-white/20"
             >
               {/* Header row */}
-              <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-baseline gap-3">
                   <div className="text-base font-semibold">{date}</div>
                   <div className="text-sm text-neutral-400">{time}</div>
                 </div>
 
-                {/* Keep on one line: no wrap + tighter gap */}
-                <div className="flex items-center gap-2 sm:gap-2 flex-nowrap">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <button
                     onClick={() => setOpenId(open ? null : r.id)}
                     className="rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
@@ -223,42 +290,56 @@ export default function ReservationsList({ items }: Props) {
                     {open ? "Hide" : "Details"}
                   </button>
 
-                  {/* Edit button */}
-                  <Link
-                    href={`/reservations/${r.id}/edit`}
-                    className="rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
-                    title="Edit reservation"
-                  >
-                    Edit
-                  </Link>
+                  {showEdit && (
+                    <Link
+                      href={`/reservations/${r.id}/edit`}
+                      className="rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                      title="Edit reservation"
+                    >
+                      Edit
+                    </Link>
+                  )}
 
-                  {/* 📅 Icon-only Reminder button (compact) */}
-                  <button
-                    onClick={() => {
-                      const link = getReminderLink(r);
-                      window.open(link, "_blank");
-                    }}
-                    title="Add Reminder (45m before)"
-                    aria-label="Add Reminder (45m before)"
-                    className="rounded-md border border-white/10 p-1 hover:bg-white/5"
-                  >
-                    <CalendarIcon className="h-4 w-4" />
-                  </button>
+                  {showReminder && (
+                    <button
+                      onClick={() => {
+                        const link = getReminderLink(r);
+                        window.open(link, "_blank");
+                      }}
+                      title="Add Reminder (45m before)"
+                      aria-label="Add Reminder (45m before)"
+                      className="rounded-md border border-white/10 p-1 hover:bg-white/5"
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                    </button>
+                  )}
 
-                  {/* 🗑️ Icon-only Delete button (compact, red) */}
-                  <button
-                    disabled={busyId === r.id}
-                    onClick={() => handleDelete(r.id)}
-                    title={busyId === r.id ? "Moving…" : "Move to Deleted list"}
-                    aria-label="Move to Deleted list"
-                    className={`rounded-md p-1 border ${
-                      busyId === r.id
-                        ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
-                        : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
-                    }`}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                  {showShare && (
+                    <button
+                      onClick={() => {
+                        window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
+                      }}
+                      className="rounded-md border border-green-600/40 bg-green-600/20 px-3 py-1.5 text-sm text-green-100 hover:bg-green-600/30"
+                    >
+                      Share WhatsApp
+                    </button>
+                  )}
+
+                  {showSoftDelete && (
+                    <button
+                      disabled={busyId === r.id}
+                      onClick={() => handleDelete(r.id)}
+                      title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
+                      aria-label="Move to Deleted list"
+                      className={`rounded-md p-1 border ${
+                        busyId === r.id
+                          ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
+                          : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
+                      }`}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -271,6 +352,7 @@ export default function ReservationsList({ items }: Props) {
                   {typeof r.priceEuro === "number" && <Field label="Price" value={`${r.priceEuro}€`} />}
                   {r.phone && <Field label="Phone" value={r.phone} />}
                   {r.flight && <Field label="Flight" value={r.flight} />}
+                  {statusLabel && <Field label="Status" value={statusLabel} />}
                   {r.notes && (
                     <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
                   )}
