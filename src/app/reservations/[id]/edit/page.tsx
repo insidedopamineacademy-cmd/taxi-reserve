@@ -3,20 +3,21 @@ export const revalidate = 0; // always fetch fresh data
 
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import EditReservationForm from "./EditReservationForm";
 
-type PageProps = { params: { id: string } };
+type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditReservationPage({ params }: PageProps) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) redirect("/login");
 
   // Security: only fetch if it belongs to the logged-in user
   const reservation = await prisma.reservation.findFirst({
-    where: { id: params.id, user: { email } }, // use relation filter
+    where: { id, userEmail: email, isDeleted: false },
   });
 
   if (!reservation) {
@@ -37,7 +38,7 @@ export default async function EditReservationPage({ params }: PageProps) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
       <h1 className="text-xl font-semibold">Edit Reservation</h1>
-      <EditReservationForm initial={initial as any} />
+      <EditReservationForm initial={initial} />
     </div>
   );
 }

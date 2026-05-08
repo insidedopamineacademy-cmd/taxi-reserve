@@ -56,7 +56,7 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
     if (saving) return;
     setSaving(true);
     try {
-      const payload: any = {
+      const payload = {
         pickupText: form.pickupText.trim() || null,
         dropoffText: form.dropoffText.trim() || null,
         startAt: localInputToUTC(form.startAt),
@@ -157,7 +157,7 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
               setForm({
                 ...form,
                 priceEuro:
-                  e.target.value === "" ? "" : (Number(e.target.value) as any),
+                  e.target.value === "" ? "" : Number(e.target.value),
               })
             }
           />

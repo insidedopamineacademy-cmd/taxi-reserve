@@ -78,7 +78,6 @@ export default function ReservationRow({ res }: Props) {
 
     const ua = typeof navigator !== "undefined" ? navigator.userAgent.toLowerCase() : "";
     const isAndroid = /android/.test(ua);
-    const isIOS = /iphone|ipad|ipod|macintosh/.test(ua);
 
     // Android → Google Calendar; iOS/mac/others → ICS
     if (isAndroid) return gcal;

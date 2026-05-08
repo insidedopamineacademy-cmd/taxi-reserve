@@ -3,7 +3,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // UI labels shown in your dropdown
 export type ReservationStatus = "Pending" | "Assigned" | "Completed" | "R received";
@@ -45,7 +45,7 @@ export async function updateReservationField(
   if (!email) throw new Error("Unauthorized");
 
   const owned = await prisma.reservation.findFirst({
-    where: { id, userEmail: email },
+    where: { id, userEmail: email, isDeleted: false },
     select: { id: true },
   });
   if (!owned) throw new Error("Not found");
