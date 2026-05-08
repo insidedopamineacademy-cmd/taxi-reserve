@@ -1,112 +1,107 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
-import { revalidatePath } from "next/cache"; // ⬅️ NEW
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
 
-// --- PATCH: update a reservation ---
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+function parseDate(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number" && !(value instanceof Date)) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+async function requireOwnedActiveReservation(id: string) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!email) return { email: null, found: false };
 
-  // Ensure ownership
-  const owns = await prisma.reservation.findFirst({
-    where: { id: params.id, user: { email } },
+  const reservation = await prisma.reservation.findFirst({
+    where: { id, userEmail: email, isDeleted: false },
     select: { id: true },
   });
-  if (!owns) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
-  // Read/validate JSON
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
+  return { email, found: Boolean(reservation) };
+}
+
+export async function PATCH(req: Request, { params }: RouteContext) {
+  const { id } = await params;
+  const { email, found } = await requireOwnedActiveReservation(id);
+  if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!found) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Whitelist fields (no 'driver', no 'status')
-  const allowed = [
-    "pickupText",
-    "dropoffText",
-    "startAt",
-    "endAt",
-    "pax",
-    "priceEuro",
-    "phone",
-    "flight",
-    "notes",
-  ];
-  const data: any = {};
-  for (const k of allowed) {
-    if (Object.prototype.hasOwnProperty.call(body, k)) data[k] = body[k];
+  const data: Prisma.ReservationUpdateInput = {};
+
+  if ("pickupText" in body) {
+    data.pickupText = String(body.pickupText ?? "").slice(0, 500) || null;
+  }
+  if ("dropoffText" in body) {
+    data.dropoffText = String(body.dropoffText ?? "").slice(0, 500) || null;
+  }
+  if ("startAt" in body) {
+    const startAt = parseDate(body.startAt);
+    if (!startAt) return NextResponse.json({ error: "Invalid startAt" }, { status: 400 });
+    data.startAt = startAt;
+  }
+  if ("endAt" in body) {
+    if (!body.endAt) {
+      data.endAt = null;
+    } else {
+      const endAt = parseDate(body.endAt);
+      if (!endAt) return NextResponse.json({ error: "Invalid endAt" }, { status: 400 });
+      data.endAt = endAt;
+    }
+  }
+  if ("pax" in body) {
+    const pax = Number(body.pax);
+    if (!Number.isFinite(pax) || pax < 1 || pax > 99) {
+      return NextResponse.json({ error: "Invalid pax" }, { status: 400 });
+    }
+    data.pax = pax;
+  }
+  if ("priceEuro" in body) {
+    const priceEuro = body.priceEuro === "" || body.priceEuro == null ? null : Number(body.priceEuro);
+    if (priceEuro !== null && !Number.isFinite(priceEuro)) {
+      return NextResponse.json({ error: "Invalid priceEuro" }, { status: 400 });
+    }
+    data.priceEuro = priceEuro;
+  }
+  if ("phone" in body) {
+    data.phone = String(body.phone ?? "").slice(0, 40) || null;
+  }
+  if ("flight" in body) {
+    data.flight = String(body.flight ?? "").slice(0, 40) || null;
+  }
+  if ("notes" in body) {
+    data.notes = String(body.notes ?? "").slice(0, 2000) || null;
   }
 
-  // Coerce types / sanitize
-  if ("startAt" in data) data.startAt = data.startAt ? new Date(data.startAt) : null;
-  if ("endAt" in data) data.endAt = data.endAt ? new Date(data.endAt) : null;
+  await prisma.reservation.update({ where: { id }, data });
 
-  if ("pax" in data) {
-    const n = Number(data.pax);
-    data.pax = Number.isFinite(n) ? Math.max(1, Math.min(99, n)) : 1;
-  }
-
-  if ("priceEuro" in data) {
-    const v = data.priceEuro;
-    data.priceEuro = v === "" || v == null ? null : Number(v);
-    if (Number.isNaN(data.priceEuro)) data.priceEuro = null;
-  }
-
-  if ("notes" in data) data.notes = (data.notes ?? "").toString().slice(0, 2000) || null;
-  if ("pickupText" in data) data.pickupText = (data.pickupText ?? "").toString().slice(0, 500) || null;
-  if ("dropoffText" in data) data.dropoffText = (data.dropoffText ?? "").toString().slice(0, 500) || null;
-  if ("phone" in data) data.phone = (data.phone ?? "").toString().slice(0, 100) || null;
-  if ("flight" in data) data.flight = (data.flight ?? "").toString().slice(0, 50) || null;
-
-  await prisma.reservation.update({
-    where: { id: params.id },
-    data,
-  });
-
-  revalidatePath("/reservations"); // ⬅️ force the list page to refresh
+  revalidatePath("/reservations");
   return NextResponse.json({ ok: true });
 }
 
-// --- DELETE: now marks reservation as deleted instead of removing ---
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function DELETE(_req: Request, { params }: RouteContext) {
+  const { id } = await params;
+  const { email, found } = await requireOwnedActiveReservation(id);
+  if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!found) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Check if reservation exists and belongs to user
-  const existing = await prisma.reservation.findFirst({
-    where: { id: params.id, user: { email } },
-    select: { id: true },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // 👇 Instead of deleting, mark as deleted
   await prisma.reservation.update({
-    where: { id: params.id },
+    where: { id },
     data: { isDeleted: true },
   });
 
-  // Revalidate list
-  revalidatePath("/reservations"); // ✅ also revalidate on soft delete
-
+  revalidatePath("/reservations");
   return NextResponse.json({ ok: true, message: "Moved to deleted list" });
 }

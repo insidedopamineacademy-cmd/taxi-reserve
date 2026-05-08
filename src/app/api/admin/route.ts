@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const pw = searchParams.get("pw");
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  return session?.user?.role === "ADMIN";
+}
 
-  if (pw !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET() {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const users = await prisma.user.findMany({
@@ -19,20 +23,9 @@ export async function GET(req: Request) {
   return NextResponse.json({ count, users });
 }
 
-export async function DELETE(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const pw = searchParams.get("pw");
-  const id = searchParams.get("id");
-
-  if (pw !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function DELETE() {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  if (!id) {
-    return NextResponse.json({ error: "Missing user id" }, { status: 400 });
-  }
-
-  await prisma.user.delete({ where: { id } });
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ error: "User deletion is disabled" }, { status: 405 });
 }

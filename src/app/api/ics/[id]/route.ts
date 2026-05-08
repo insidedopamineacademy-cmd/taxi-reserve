@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createEvent, type EventAttributes } from "ics";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs"; // ensure Node runtime (not Edge)
+
+type RouteContext = { params: Promise<{ id: string }> };
 
 function toDateParts(d: Date): [number, number, number, number, number] {
   return [
@@ -16,10 +20,15 @@ function toDateParts(d: Date): [number, number, number, number, number] {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteContext
 ) {
-  const resv = await prisma.reservation.findUnique({
-    where: { id: params.id },
+  const { id } = await params;
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email;
+  if (!email) return new NextResponse("Unauthorized", { status: 401 });
+
+  const resv = await prisma.reservation.findFirst({
+    where: { id, userEmail: email, isDeleted: false },
     select: { id: true, startAt: true },
   });
 
@@ -59,7 +68,7 @@ export async function GET(
           headers: {
             "Content-Type": "text/calendar; charset=utf-8",
             "Content-Disposition": `attachment; filename="booking-${resv.id}.ics"`,
-            "Cache-Control": "public, max-age=300",
+            "Cache-Control": "private, no-store",
           },
         })
       );
