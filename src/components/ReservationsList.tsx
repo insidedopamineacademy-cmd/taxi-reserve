@@ -122,6 +122,28 @@ function Field({
   );
 }
 
+/* iOS-style share icon */
+function ShareIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 3v12" />
+      <path d="m7 8 5-5 5 5" />
+      <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+    </svg>
+  );
+}
+
 /* Small inline trash icon for Delete (no extra deps) */
 function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -296,9 +318,11 @@ export default function ReservationsList({
                       onClick={() => {
                         window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
                       }}
-                      className="rounded-md border border-green-600/40 bg-green-600/20 px-3 py-1.5 text-sm text-green-100 hover:bg-green-600/30"
+                      title="Share to WhatsApp"
+                      aria-label="Share to WhatsApp"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
                     >
-                      Share WhatsApp
+                      <ShareIcon className="h-4 w-4" />
                     </button>
                   )}
 
