@@ -295,7 +295,7 @@ export default function ReservationsList({
                   <div className="text-sm text-neutral-400">{time}</div>
                 </div>
 
-                <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden sm:w-auto sm:justify-end sm:gap-2">
+                <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2">
                   <button
                     onClick={() => setOpenId(open ? null : r.id)}
                     className="h-8 shrink-0 rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
