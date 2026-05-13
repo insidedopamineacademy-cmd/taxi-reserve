@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { parseReservationStatusCode } from "@/lib/reservationStatus";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -83,6 +84,11 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   }
   if ("notes" in body) {
     data.notes = String(body.notes ?? "").slice(0, 2000) || null;
+  }
+  if ("status" in body) {
+    const status = parseReservationStatusCode(body.status);
+    if (!status) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    data.status = status;
   }
 
   await prisma.reservation.update({ where: { id }, data });

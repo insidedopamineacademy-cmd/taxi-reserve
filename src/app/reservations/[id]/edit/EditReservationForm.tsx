@@ -3,6 +3,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  RESERVATION_STATUS_OPTIONS,
+  normalizeReservationStatusCode,
+} from "@/lib/reservationStatus";
 
 type Initial = {
   id: string;
@@ -15,6 +19,7 @@ type Initial = {
   phone?: string | null;
   flight?: string | null;
   notes?: string | null;
+  status?: string | null;
 };
 
 // --- Local helpers ---
@@ -43,6 +48,7 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
     phone: initial.phone ?? "",
     flight: initial.flight ?? "",
     notes: initial.notes ?? "",
+    status: normalizeReservationStatusCode(initial.status),
   });
 
   // 🔧 unify input styles so all controls align (same height/padding across iOS/desktop)
@@ -69,6 +75,7 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
         phone: form.phone.trim() || null,
         flight: form.flight.trim() || null,
         notes: form.notes.trim() || null,
+        status: form.status,
       };
 
       const res = await fetch(`/api/reservations/${initial.id}`, {
@@ -183,6 +190,26 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
             onChange={(e) => setForm({ ...form, flight: e.target.value })}
             placeholder="VY1234"
           />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm text-gray-300">Status</span>
+          <select
+            className={inputClass}
+            value={form.status}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                status: normalizeReservationStatusCode(e.target.value),
+              })
+            }
+          >
+            {RESERVATION_STATUS_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

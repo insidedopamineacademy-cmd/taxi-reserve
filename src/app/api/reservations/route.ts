@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ResStatus } from "@prisma/client"; // <- Prisma enum (names may differ in your schema)
+import { parseReservationStatusCode } from "@/lib/reservationStatus";
 
 /* ------------------------------------------------------------------ */
 /* Time parsing – bulletproof                                          */
@@ -104,11 +105,7 @@ export async function POST(req: Request) {
     const notesValue = optionalText(notes, 2000);
 
     // Status: coerce to Prisma enum (defaults to PENDING)
-    const statusEnum: ResStatus = (Object.values(ResStatus) as string[]).includes(
-      String(status)
-    )
-      ? (status as ResStatus)
-      : ResStatus.PENDING;
+    const statusEnum: ResStatus = parseReservationStatusCode(status) ?? ResStatus.PENDING;
 
     const created = await prisma.reservation.create({
       data: {

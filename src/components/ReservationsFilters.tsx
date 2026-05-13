@@ -2,8 +2,9 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { RESERVATION_STATUS_OPTIONS } from "@/lib/reservationStatus";
 
-const STATUS_OPTIONS = ["ALL", "PENDING", "ASSIGNED", "COMPLETED", "R_RECEIVED"] as const;
+const STATUS_OPTIONS = [{ code: "ALL", label: "All statuses" }, ...RESERVATION_STATUS_OPTIONS] as const;
 
 export default function ReservationsFilters() {
   const router = useRouter();
@@ -41,9 +42,9 @@ export default function ReservationsFilters() {
         onChange={(e) => apply({ status: e.target.value === "ALL" ? "" : e.target.value })}
         className="rounded-md border border-gray-600 bg-gray-900 text-gray-100 px-3 py-2"
       >
-        {STATUS_OPTIONS.map((s) => (
-          <option key={s} value={s}>
-            {s === "R_RECEIVED" ? "R received" : s[0] + s.slice(1).toLowerCase()}
+        {STATUS_OPTIONS.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.label}
           </option>
         ))}
       </select>

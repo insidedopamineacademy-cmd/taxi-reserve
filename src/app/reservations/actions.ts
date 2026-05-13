@@ -4,21 +4,13 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import {
+  parseReservationStatusCode,
+  type EditableReservationStatusCode,
+  type ReservationStatusLabel,
+} from "@/lib/reservationStatus";
 
-// UI labels shown in your dropdown
-export type ReservationStatus = "Pending" | "Assigned" | "Completed" | "R received";
-
-// DB enum codes stored by Prisma
-type DbCode = "PENDING" | "ASSIGNED" | "COMPLETED" | "R_RECEIVED";
-
-const UI_TO_DB: Record<ReservationStatus, DbCode> = {
-  Pending: "PENDING",
-  Assigned: "ASSIGNED",
-  Completed: "COMPLETED",
-  "R received": "R_RECEIVED",
-};
-
-const DB_CODES: DbCode[] = ["PENDING", "ASSIGNED", "COMPLETED", "R_RECEIVED"];
+export type ReservationStatus = ReservationStatusLabel;
 
 async function getUserEmailBySession() {
   const session = await getServerSession(authOptions);
@@ -38,7 +30,7 @@ export async function updateReservationField(
     notes?: string | null;
     pax?: number;
     driver?: string | null;
-    status?: ReservationStatus | DbCode;
+    status?: ReservationStatus | EditableReservationStatusCode | "R_RECEIVED";
   }
 ) {
   const email = await getUserEmailBySession();
@@ -70,11 +62,7 @@ export async function updateReservationField(
   }
 
   if (typeof patch.status !== "undefined") {
-    const asDb: DbCode =
-      (DB_CODES.includes(patch.status as DbCode)
-        ? (patch.status as DbCode)
-        : UI_TO_DB[patch.status as ReservationStatus]) ?? (null as never);
-
+    const asDb = parseReservationStatusCode(patch.status);
     if (!asDb) throw new Error("Invalid status");
     data.status = asDb;
   }

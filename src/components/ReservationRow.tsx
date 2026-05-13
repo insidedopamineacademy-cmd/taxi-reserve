@@ -3,10 +3,12 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { updateReservationField } from "@/app/reservations/actions";
-import type { ReservationStatus } from "@/app/reservations/actions";
 import { relTimeFromNow } from "@/lib/parseStartAt";
-
-const STATUS_OPTIONS: ReservationStatus[] = ["Pending", "Assigned", "Completed", "R received"];
+import {
+  RESERVATION_STATUS_OPTIONS,
+  normalizeReservationStatusCode,
+  type EditableReservationStatusCode,
+} from "@/lib/reservationStatus";
 
 type Props = {
   res: {
@@ -17,18 +19,20 @@ type Props = {
     pax: number | null;
     priceEuro: number | null;
     notes: string | null;
-    status: ReservationStatus;
+    status: string | null;
   };
 };
 
 export default function ReservationRow({ res }: Props) {
   const [isPending, startTransition] = useTransition();
-  const [status, setStatus] = useState<ReservationStatus>(res.status);
+  const [status, setStatus] = useState<EditableReservationStatusCode>(
+    normalizeReservationStatusCode(res.status)
+  );
   const [notes, setNotes] = useState(res.notes ?? "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const saveStatus = (next: ReservationStatus) => {
+  const saveStatus = (next: EditableReservationStatusCode) => {
     setStatus(next);
     startTransition(async () => {
       try {
@@ -109,12 +113,12 @@ export default function ReservationRow({ res }: Props) {
           <label className="mb-1 block text-xs text-slate-400">Status</label>
           <select
             value={status}
-            onChange={(e) => saveStatus(e.target.value as ReservationStatus)}
+            onChange={(e) => saveStatus(normalizeReservationStatusCode(e.target.value))}
             className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 outline-none focus:border-slate-500"
           >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {RESERVATION_STATUS_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
               </option>
             ))}
           </select>

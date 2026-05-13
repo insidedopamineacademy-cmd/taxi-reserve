@@ -3,6 +3,11 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  nextReservationStatusCode,
+  normalizeReservationStatusCode,
+  reservationStatusLabel,
+} from "@/lib/reservationStatus";
 
 /* ---------- Types ---------- */
 type Reservation = {
@@ -23,6 +28,7 @@ type Props = {
   items: Reservation[];
   showEdit?: boolean;
   showShare?: boolean;
+  showStatus?: boolean;
   showSoftDelete?: boolean;
   showSort?: boolean;
 };
@@ -53,35 +59,49 @@ function fmtShareDateParts(ms: number) {
   };
 }
 
-function formatStatus(status?: string | null) {
-  if (!status) return null;
-  const labels: Record<string, string> = {
-    PENDING: "Pending",
-    ASSIGNED: "Assigned",
-    COMPLETED: "Completed",
-    R_RECEIVED: "R received",
-  };
-  return labels[status] ?? status;
+function statusChipClass(status?: string | null) {
+  const code = normalizeReservationStatusCode(status);
+  if (code === "COMPLETED") {
+    return "border-green-500/40 bg-green-500/15 text-green-100 hover:bg-green-500/25";
+  }
+  if (code === "ASSIGNED") {
+    return "border-blue-500/40 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25";
+  }
+  return "border-amber-500/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25";
+}
+
+function addShareSection(
+  lines: string[],
+  title: string,
+  fields: Array<string | null | undefined | false>
+) {
+  const visibleFields = fields.filter(Boolean) as string[];
+  if (visibleFields.length === 0) return;
+  lines.push("", title, ...visibleFields);
 }
 
 function buildWhatsAppShareLink(r: Reservation) {
   const when = fmtShareDateParts(r.startAt);
-  const lines = ["Taxi Reservation Details:"];
+  const lines = ["Taxi Reservation Details"];
 
-  if (r.phone) lines.push(`Phone: ${r.phone}`);
-  if (r.pickupText) lines.push(`Pickup: ${r.pickupText}`);
-  if (r.dropoffText) lines.push(`Dropoff: ${r.dropoffText}`);
-  if (when) {
-    lines.push(`Date: ${when.date}`);
-    lines.push(`Time: ${when.time}`);
-  }
-  lines.push(`Passengers: ${r.pax}`);
-  if (r.flight) lines.push(`Flight number: ${r.flight}`);
-  if (r.notes) lines.push(`Notes: ${r.notes}`);
-
-  const status = formatStatus(r.status);
-  if (status) lines.push(`Reservation status: ${status}`);
-  if (typeof r.priceEuro === "number") lines.push(`Price: ${r.priceEuro} EUR`);
+  addShareSection(lines, "📍 TRIP", [
+    r.pickupText && `Pickup: ${r.pickupText}`,
+    r.dropoffText && `Dropoff: ${r.dropoffText}`,
+    r.flight && `Flight: ${r.flight}`,
+  ]);
+  addShareSection(lines, "📅 SCHEDULE", [
+    when && `Date: ${when.date}`,
+    when && `Time: ${when.time}`,
+  ]);
+  addShareSection(lines, "👤 CUSTOMER", [
+    r.phone && `Phone: ${r.phone}`,
+    `Passengers: ${r.pax}`,
+  ]);
+  addShareSection(lines, "📝 NOTES", [r.notes && `Notes: ${r.notes}`]);
+  addShareSection(lines, "💰 BOOKING", [
+    `Status: ${reservationStatusLabel(r.status)}`,
+    typeof r.priceEuro === "number" && `Price: ${r.priceEuro} EUR`,
+  ]);
 
   return `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
 }
@@ -131,6 +151,7 @@ export default function ReservationsList({
   items,
   showEdit = true,
   showShare = true,
+  showStatus = true,
   showSoftDelete = true,
   showSort = true,
 }: Props) {
@@ -144,6 +165,7 @@ export default function ReservationsList({
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   // ---- SORT control (updates ?sort=closest|asc|desc in the URL) ----
   const sortParam = sp.get("sort");
@@ -181,6 +203,33 @@ export default function ReservationsList({
     }
   }
 
+  async function handleStatusCycle(reservation: Reservation) {
+    if (statusBusyId) return;
+
+    const nextStatus = nextReservationStatusCode(reservation.status);
+    const prev = rows;
+    setStatusBusyId(reservation.id);
+    setRows((current) =>
+      current.map((row) =>
+        row.id === reservation.id ? { ...row, status: nextStatus } : row
+      )
+    );
+
+    try {
+      const res = await fetch(`/api/reservations/${reservation.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) throw new Error("Status update failed");
+    } catch {
+      setRows(prev);
+      alert("Failed to update status. Please try again.");
+    } finally {
+      setStatusBusyId(null);
+    }
+  }
+
   if (rows.length === 0) {
     return (
       <div className="mt-6 rounded-xl border border-white/10 p-6 text-center text-sm text-neutral-400">
@@ -210,7 +259,7 @@ export default function ReservationsList({
         {rows.map((r) => {
           const { date, time } = fmtDateParts(r.startAt);
           const open = openId === r.id;
-          const statusLabel = formatStatus(r.status);
+          const statusLabel = reservationStatusLabel(r.status);
 
           return (
             <li
@@ -250,6 +299,21 @@ export default function ReservationsList({
                       className="rounded-md border border-green-600/40 bg-green-600/20 px-3 py-1.5 text-sm text-green-100 hover:bg-green-600/30"
                     >
                       Share WhatsApp
+                    </button>
+                  )}
+
+                  {showStatus && (
+                    <button
+                      type="button"
+                      disabled={statusBusyId === r.id}
+                      onClick={() => handleStatusCycle(r)}
+                      title={`Status: ${statusLabel}. Tap to change.`}
+                      aria-label={`Status: ${statusLabel}. Tap to change.`}
+                      className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-wait disabled:opacity-60 ${statusChipClass(
+                        r.status
+                      )}`}
+                    >
+                      {statusLabel}
                     </button>
                   )}
 
