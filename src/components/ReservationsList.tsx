@@ -295,10 +295,10 @@ export default function ReservationsList({
                   <div className="text-sm text-neutral-400">{time}</div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden sm:w-auto sm:justify-end sm:gap-2">
                   <button
                     onClick={() => setOpenId(open ? null : r.id)}
-                    className="rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                    className="h-8 shrink-0 rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
                   >
                     {open ? "Hide" : "Details"}
                   </button>
@@ -306,7 +306,7 @@ export default function ReservationsList({
                   {showEdit && (
                     <Link
                       href={`/reservations/${r.id}/edit`}
-                      className="rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                      className="inline-flex h-8 shrink-0 items-center rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
                       title="Edit reservation"
                     >
                       Edit
@@ -320,7 +320,7 @@ export default function ReservationsList({
                       }}
                       title="Share to WhatsApp"
                       aria-label="Share to WhatsApp"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
                     >
                       <ShareIcon className="h-4 w-4" />
                     </button>
@@ -333,11 +333,11 @@ export default function ReservationsList({
                       onClick={() => handleStatusCycle(r)}
                       title={`Status: ${statusLabel}. Tap to change.`}
                       aria-label={`Status: ${statusLabel}. Tap to change.`}
-                      className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-wait disabled:opacity-60 ${statusChipClass(
+                      className={`h-8 min-w-0 shrink rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:px-2.5 sm:text-xs ${statusChipClass(
                         r.status
                       )}`}
                     >
-                      {statusLabel}
+                      <span className="whitespace-nowrap">{statusLabel}</span>
                     </button>
                   )}
 
@@ -347,7 +347,7 @@ export default function ReservationsList({
                       onClick={() => handleDelete(r.id)}
                       title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
                       aria-label="Move to Deleted list"
-                      className={`rounded-md p-1 border ${
+                      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
                         busyId === r.id
                           ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
                           : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
