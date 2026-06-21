@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -104,6 +104,29 @@ function buildWhatsAppShareLink(r: Reservation) {
   return `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
 }
 
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function reservationMatchesSearch(r: Reservation, query: string) {
+  if (!query) return true;
+
+  const { date, time } = fmtDateParts(r.startAt);
+  const fields = [
+    r.phone,
+    r.pickupText,
+    r.dropoffText,
+    r.flight,
+    r.notes,
+    typeof r.priceEuro === "number" ? String(r.priceEuro) : null,
+    reservationStatusLabel(r.status),
+    date,
+    time,
+  ];
+
+  return fields.some((field) => normalizeSearchText(field).includes(query));
+}
+
 /* Reusable tiny field row */
 function Field({
   label,
@@ -117,6 +140,46 @@ function Field({
       <span className="text-neutral-400 font-medium">{label}: </span>
       <span className="text-neutral-100">{value}</span>
     </div>
+  );
+}
+
+function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+function XIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
   );
 }
 
@@ -183,6 +246,13 @@ export default function ReservationsList({
   // keep local rows (for optimistic delete) but sync when props change (after sort)
   const [rows, setRows] = useState<Reservation[]>(items);
   useEffect(() => setRows(items), [items]);
+
+  const [search, setSearch] = useState("");
+  const searchQuery = normalizeSearchText(search);
+  const filteredRows = useMemo(
+    () => rows.filter((row) => reservationMatchesSearch(row, searchQuery)),
+    [rows, searchQuery]
+  );
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -279,6 +349,37 @@ export default function ReservationsList({
   return (
     <>
       {showSort && (
+        <div className="mb-4">
+          <label htmlFor="reservation-search" className="sr-only">
+            Search reservations
+          </label>
+          <div className="relative">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+            <input
+              id="reservation-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search phone, pickup, drop-off, flight or notes"
+              autoComplete="off"
+              className="h-11 w-full rounded-md border border-white/10 bg-black/30 pl-10 pr-10 text-sm text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-white/25 focus:ring-2 focus:ring-white/10"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                title="Clear search"
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-neutral-100"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSort && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-sm text-neutral-300">Sort by time:</span>
           <select
@@ -292,120 +393,126 @@ export default function ReservationsList({
         </div>
       )}
 
-      <ul className="mt-2 grid gap-4">
-        {rows.map((r) => {
-          const { date, time } = fmtDateParts(r.startAt);
-          const open = openId === r.id;
-          const statusLabel = reservationStatusLabel(r.status);
+      {filteredRows.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-white/10 p-6 text-center text-sm text-neutral-400">
+          No reservations found for this search.
+        </div>
+      ) : (
+        <ul className="mt-2 grid gap-4">
+          {filteredRows.map((r) => {
+            const { date, time } = fmtDateParts(r.startAt);
+            const open = openId === r.id;
+            const statusLabel = reservationStatusLabel(r.status);
 
-          return (
-            <li
-              key={r.id}
-              className="rounded-xl border border-white/10 bg-[#0e1426] shadow-sm transition hover:border-white/20"
-            >
-              {/* Header row */}
-              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-baseline gap-3">
-                  <div className="text-base font-semibold">{date}</div>
-                  <div className="text-sm text-neutral-400">{time}</div>
+            return (
+              <li
+                key={r.id}
+                className="rounded-xl border border-white/10 bg-[#0e1426] shadow-sm transition hover:border-white/20"
+              >
+                {/* Header row */}
+                <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-baseline gap-3">
+                    <div className="text-base font-semibold">{date}</div>
+                    <div className="text-sm text-neutral-400">{time}</div>
+                  </div>
+
+                  <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2">
+                    <button
+                      onClick={() => setOpenId(open ? null : r.id)}
+                      className="h-8 shrink-0 rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
+                    >
+                      {open ? "Hide" : "Details"}
+                    </button>
+
+                    {showEdit && (
+                      <Link
+                        href={`/reservations/${r.id}/edit`}
+                        className="inline-flex h-8 shrink-0 items-center rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
+                        title="Edit reservation"
+                      >
+                        Edit
+                      </Link>
+                    )}
+
+                    {showShare && (
+                      <button
+                        onClick={() => {
+                          window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
+                        }}
+                        title="Share to WhatsApp"
+                        aria-label="Share to WhatsApp"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
+                      >
+                        <ShareIcon className="h-4 w-4" />
+                      </button>
+                    )}
+
+                    {showStatus && (
+                      <button
+                        type="button"
+                        disabled={statusBusyId === r.id}
+                        onClick={() => handleStatusCycle(r)}
+                        title={`Status: ${statusLabel}. Tap to change.`}
+                        aria-label={`Status: ${statusLabel}. Tap to change.`}
+                        className={`inline-flex h-8 min-w-0 max-w-[9rem] shrink items-center justify-center rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:max-w-none sm:px-2.5 sm:text-xs ${statusChipClass(
+                          r.status
+                        )}`}
+                      >
+                        <span className="truncate">{statusLabel}</span>
+                      </button>
+                    )}
+
+                    {showRestore && (
+                      <button
+                        type="button"
+                        disabled={restoreBusyId === r.id}
+                        onClick={() => handleRestore(r.id)}
+                        title="Restore reservation"
+                        aria-label="Restore reservation"
+                        className="h-8 shrink-0 rounded-md border border-green-600/40 bg-green-600/20 px-2 text-xs text-green-100 transition hover:bg-green-600/30 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
+                      >
+                        {restoreBusyId === r.id ? "Restoring..." : "Restore"}
+                      </button>
+                    )}
+
+                    {showSoftDelete && (
+                      <button
+                        disabled={busyId === r.id}
+                        onClick={() => handleDelete(r.id)}
+                        title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
+                        aria-label="Move to Deleted list"
+                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
+                          busyId === r.id
+                            ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
+                            : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
+                        }`}
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2">
-                  <button
-                    onClick={() => setOpenId(open ? null : r.id)}
-                    className="h-8 shrink-0 rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
-                  >
-                    {open ? "Hide" : "Details"}
-                  </button>
-
-                  {showEdit && (
-                    <Link
-                      href={`/reservations/${r.id}/edit`}
-                      className="inline-flex h-8 shrink-0 items-center rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
-                      title="Edit reservation"
-                    >
-                      Edit
-                    </Link>
-                  )}
-
-                  {showShare && (
-                    <button
-                      onClick={() => {
-                        window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
-                      }}
-                      title="Share to WhatsApp"
-                      aria-label="Share to WhatsApp"
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
-                    >
-                      <ShareIcon className="h-4 w-4" />
-                    </button>
-                  )}
-
-                  {showStatus && (
-                    <button
-                      type="button"
-                      disabled={statusBusyId === r.id}
-                      onClick={() => handleStatusCycle(r)}
-                      title={`Status: ${statusLabel}. Tap to change.`}
-                      aria-label={`Status: ${statusLabel}. Tap to change.`}
-                      className={`inline-flex h-8 min-w-0 max-w-[9rem] shrink items-center justify-center rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:max-w-none sm:px-2.5 sm:text-xs ${statusChipClass(
-                        r.status
-                      )}`}
-                    >
-                      <span className="truncate">{statusLabel}</span>
-                    </button>
-                  )}
-
-                  {showRestore && (
-                    <button
-                      type="button"
-                      disabled={restoreBusyId === r.id}
-                      onClick={() => handleRestore(r.id)}
-                      title="Restore reservation"
-                      aria-label="Restore reservation"
-                      className="h-8 shrink-0 rounded-md border border-green-600/40 bg-green-600/20 px-2 text-xs text-green-100 transition hover:bg-green-600/30 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
-                    >
-                      {restoreBusyId === r.id ? "Restoring..." : "Restore"}
-                    </button>
-                  )}
-
-                  {showSoftDelete && (
-                    <button
-                      disabled={busyId === r.id}
-                      onClick={() => handleDelete(r.id)}
-                      title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
-                      aria-label="Move to Deleted list"
-                      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
-                        busyId === r.id
-                          ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
-                          : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
-                      }`}
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Details */}
-              {open && (
-                <div className="grid gap-1.5 border-t border-white/10 px-4 py-3">
-                  {r.pickupText && <Field label="Pickup" value={r.pickupText} />}
-                  {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
-                  <Field label="Pax" value={r.pax} />
-                  {typeof r.priceEuro === "number" && <Field label="Price" value={`${r.priceEuro}€`} />}
-                  {r.phone && <Field label="Phone" value={r.phone} />}
-                  {r.flight && <Field label="Flight" value={r.flight} />}
-                  {statusLabel && <Field label="Status" value={statusLabel} />}
-                  {r.notes && (
-                    <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                {/* Details */}
+                {open && (
+                  <div className="grid gap-1.5 border-t border-white/10 px-4 py-3">
+                    {r.pickupText && <Field label="Pickup" value={r.pickupText} />}
+                    {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
+                    <Field label="Pax" value={r.pax} />
+                    {typeof r.priceEuro === "number" && <Field label="Price" value={`${r.priceEuro}€`} />}
+                    {r.phone && <Field label="Phone" value={r.phone} />}
+                    {r.flight && <Field label="Flight" value={r.flight} />}
+                    {statusLabel && <Field label="Status" value={statusLabel} />}
+                    {r.notes && (
+                      <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }
