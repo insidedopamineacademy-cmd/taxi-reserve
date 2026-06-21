@@ -105,11 +105,33 @@ function buildWhatsAppShareLink(r: Reservation) {
 }
 
 function normalizeSearchText(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function reservationMatchesSearch(r: Reservation, query: string) {
-  if (!query) return true;
+function normalizePhone(value: unknown) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function phoneMatchesSearch(phone: unknown, queryDigits: string) {
+  if (queryDigits.length < 3) return false;
+
+  const phoneDigits = normalizePhone(phone);
+  if (!phoneDigits) return false;
+
+  return (
+    phoneDigits.includes(queryDigits) ||
+    (queryDigits.length >= 6 &&
+      phoneDigits.length >= 6 &&
+      queryDigits.includes(phoneDigits))
+  );
+}
+
+function reservationMatchesSearch(
+  r: Reservation,
+  textQuery: string,
+  phoneQuery: string
+) {
+  if (!textQuery && phoneQuery.length < 3) return true;
 
   const { date, time } = fmtDateParts(r.startAt);
   const fields = [
@@ -124,7 +146,10 @@ function reservationMatchesSearch(r: Reservation, query: string) {
     time,
   ];
 
-  return fields.some((field) => normalizeSearchText(field).includes(query));
+  return (
+    fields.some((field) => normalizeSearchText(field).includes(textQuery)) ||
+    phoneMatchesSearch(r.phone, phoneQuery)
+  );
 }
 
 /* Reusable tiny field row */
@@ -249,9 +274,13 @@ export default function ReservationsList({
 
   const [search, setSearch] = useState("");
   const searchQuery = normalizeSearchText(search);
+  const phoneSearchQuery = normalizePhone(search);
   const filteredRows = useMemo(
-    () => rows.filter((row) => reservationMatchesSearch(row, searchQuery)),
-    [rows, searchQuery]
+    () =>
+      rows.filter((row) =>
+        reservationMatchesSearch(row, searchQuery, phoneSearchQuery)
+      ),
+    [rows, searchQuery, phoneSearchQuery]
   );
 
   const [openId, setOpenId] = useState<string | null>(null);
