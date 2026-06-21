@@ -1,13 +1,12 @@
-export type EditableReservationStatusCode = "PENDING" | "ASSIGNED" | "COMPLETED";
-export type ReservationStatusLabel = "Pending" | "Paid Confirmed" | "Unpaid Confirmed";
+export type EditableReservationStatusCode = "ASSIGNED" | "COMPLETED";
+export type ReservationStatusLabel = "Cobrado" | "Falta cobrar por el conductor";
 
 export const RESERVATION_STATUS_OPTIONS: Array<{
   code: EditableReservationStatusCode;
   label: ReservationStatusLabel;
 }> = [
-  { code: "PENDING", label: "Pending" },
-  { code: "COMPLETED", label: "Paid Confirmed" },
-  { code: "ASSIGNED", label: "Unpaid Confirmed" },
+  { code: "COMPLETED", label: "Cobrado" },
+  { code: "ASSIGNED", label: "Falta cobrar por el conductor" },
 ];
 
 export function parseReservationStatusCode(value: unknown): EditableReservationStatusCode | null {
@@ -16,13 +15,14 @@ export function parseReservationStatusCode(value: unknown): EditableReservationS
 
   switch (normalized) {
     case "PENDING":
-      return "PENDING";
     case "ASSIGNED":
     case "R_RECEIVED":
     case "UNPAID_CONFIRMED":
+    case "FALTA_COBRAR_POR_EL_CONDUCTOR":
       return "ASSIGNED";
     case "COMPLETED":
     case "PAID_CONFIRMED":
+    case "COBRADO":
       return "COMPLETED";
     default:
       return null;
@@ -30,12 +30,15 @@ export function parseReservationStatusCode(value: unknown): EditableReservationS
 }
 
 export function normalizeReservationStatusCode(value: unknown): EditableReservationStatusCode {
-  return parseReservationStatusCode(value) ?? "PENDING";
+  return parseReservationStatusCode(value) ?? "ASSIGNED";
 }
 
 export function reservationStatusLabel(value: unknown): ReservationStatusLabel {
   const code = normalizeReservationStatusCode(value);
-  return RESERVATION_STATUS_OPTIONS.find((option) => option.code === code)?.label ?? "Pending";
+  return (
+    RESERVATION_STATUS_OPTIONS.find((option) => option.code === code)?.label ??
+    "Falta cobrar por el conductor"
+  );
 }
 
 export function nextReservationStatusCode(value: unknown): EditableReservationStatusCode {

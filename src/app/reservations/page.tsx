@@ -6,53 +6,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ReservationsListView from "@/components/ReservationsList"; // alias to avoid name clash
-import type { Prisma, ResStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
-type SortMode = "closest" | "asc" | "desc";
+type SortMode = "asc" | "desc";
 type Search = { from?: string; to?: string; sort?: SortMode };
-type ReservationForList = {
-  id: string;
-  startAt: Date;
-  endAt: Date | null;
-  pickupText: string | null;
-  dropoffText: string | null;
-  pax: number;
-  priceEuro: number | null;
-  phone: string | null;
-  flight: string | null;
-  notes: string | null;
-  status: ResStatus;
-};
 
 function getSortMode(value: string | undefined): SortMode {
-  return value === "asc" || value === "desc" ? value : "closest";
-}
-
-function getStartTime(row: ReservationForList) {
-  const time = row.startAt.getTime();
-  return Number.isFinite(time) ? time : null;
-}
-
-function sortByClosestDate(rows: ReservationForList[]) {
-  const now = Date.now();
-
-  return [...rows].sort((a, b) => {
-    const aTime = getStartTime(a);
-    const bTime = getStartTime(b);
-
-    if (aTime === null && bTime === null) return 0;
-    if (aTime === null) return 1;
-    if (bTime === null) return -1;
-
-    const aUpcoming = aTime >= now;
-    const bUpcoming = bTime >= now;
-
-    if (aUpcoming && bUpcoming) return aTime - bTime;
-    if (aUpcoming) return -1;
-    if (bUpcoming) return 1;
-
-    return bTime - aTime;
-  });
+  return value === "desc" ? "desc" : "asc";
 }
 
 const reservationListSelect = {
@@ -92,26 +52,19 @@ export default async function ReservationsPage({
   }
 
   const sort = getSortMode(params.sort);
-  const sortDir: "asc" | "desc" = sort === "desc" ? "desc" : "asc";
   const where: Prisma.ReservationWhereInput =
     Object.keys(dateRange).length > 0
       ? { ...baseWhere, startAt: dateRange }
       : baseWhere;
 
-  const reservations =
-    sort === "closest"
-      ? await getClosestReservations(baseWhere, dateRange)
-      : await prisma.reservation.findMany({
-          where,
-          orderBy: { startAt: sortDir },
-          take: 500,
-          select: reservationListSelect,
-        });
+  const reservations = await prisma.reservation.findMany({
+    where,
+    orderBy: { startAt: sort },
+    take: 500,
+    select: reservationListSelect,
+  });
 
-  const sortedReservations =
-    sort === "closest" ? sortByClosestDate(reservations) : reservations;
-
-  const items = sortedReservations.map((r) => ({
+  const items = reservations.map((r) => ({
     id: r.id,
     startAt: r.startAt.getTime(), // epoch ms for client
     endAt: r.endAt ? r.endAt.getTime() : null,
@@ -131,37 +84,4 @@ export default async function ReservationsPage({
       <ReservationsListView items={items} />
     </div>
   );
-}
-
-async function getClosestReservations(
-  baseWhere: Prisma.ReservationWhereInput,
-  dateRange: Prisma.DateTimeFilter,
-) {
-  const now = new Date();
-  const dateRangeGte = dateRange.gte instanceof Date ? dateRange.gte : null;
-  const upcomingStartAt: Prisma.DateTimeFilter = {
-    ...dateRange,
-    gte: dateRangeGte && dateRangeGte > now ? dateRangeGte : now,
-  };
-  const pastStartAt: Prisma.DateTimeFilter = {
-    ...dateRange,
-    lt: now,
-  };
-
-  const [upcoming, past] = await Promise.all([
-    prisma.reservation.findMany({
-      where: { ...baseWhere, startAt: upcomingStartAt },
-      orderBy: { startAt: "asc" },
-      take: 500,
-      select: reservationListSelect,
-    }),
-    prisma.reservation.findMany({
-      where: { ...baseWhere, startAt: pastStartAt },
-      orderBy: { startAt: "desc" },
-      take: 500,
-      select: reservationListSelect,
-    }),
-  ]);
-
-  return [...upcoming, ...past].slice(0, 500);
 }

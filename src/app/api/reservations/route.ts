@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       phone,
       flight,
       notes,
-      status, // may be string like "PENDING" | "ASSIGNED" | ...
+      status, // may be string like "COBRADO" | "ASSIGNED" | ...
     } = body || {};
 
     // Parse start time (LOCAL safe)
@@ -104,8 +104,8 @@ export async function POST(req: Request) {
     const flightValue = optionalText(flight, 40);
     const notesValue = optionalText(notes, 2000);
 
-    // Status: coerce to Prisma enum (defaults to PENDING)
-    const statusEnum: ResStatus = parseReservationStatusCode(status) ?? ResStatus.PENDING;
+    // Status: coerce to Prisma enum (defaults to unpaid/assigned)
+    const statusEnum: ResStatus = parseReservationStatusCode(status) ?? ResStatus.ASSIGNED;
 
     const created = await prisma.reservation.create({
       data: {

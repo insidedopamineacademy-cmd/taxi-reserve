@@ -8,7 +8,7 @@ export default function SortControls() {
   const pathname = usePathname();
   const sp = useSearchParams();
 
-  const sort = sp.get("sort") === "asc" ? "asc" : "desc";
+  const sort = sp.get("sort") === "desc" ? "desc" : "asc";
 
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(sp?.toString() || "");
@@ -26,8 +26,8 @@ export default function SortControls() {
         onChange={onChange}
         className="rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm"
       >
-        <option value="desc">Newest first</option>
         <option value="asc">Oldest first</option>
+        <option value="desc">Newest first</option>
       </select>
     </div>
   );

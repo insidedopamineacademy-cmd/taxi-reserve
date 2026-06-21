@@ -21,8 +21,8 @@ async function getUserEmailBySession() {
  * Update a single reservation's editable fields.
  * Ownership is validated by userEmail.
  *
- * `status` accepts either UI labels (e.g., "Pending")
- * or DB codes (e.g., "PENDING").
+   * `status` accepts either UI labels (e.g., "Cobrado")
+   * or DB codes (e.g., "COMPLETED").
  */
 export async function updateReservationField(
   id: string,
@@ -30,7 +30,7 @@ export async function updateReservationField(
     notes?: string | null;
     pax?: number;
     driver?: string | null;
-    status?: ReservationStatus | EditableReservationStatusCode | "R_RECEIVED";
+    status?: ReservationStatus | EditableReservationStatusCode | "PENDING" | "R_RECEIVED";
   }
 ) {
   const email = await getUserEmailBySession();

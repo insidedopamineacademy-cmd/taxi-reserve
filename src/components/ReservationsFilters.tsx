@@ -14,7 +14,7 @@ export default function ReservationsFilters() {
   const status = params.get("status") ?? "ALL";
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
-  const sort = (params.get("sort") as "asc" | "desc") ?? "desc";
+  const sort = (params.get("sort") as "asc" | "desc") ?? "asc";
 
   function apply(patch: Record<string, string | null | undefined>) {
     const q = new URLSearchParams(params.toString());
@@ -71,8 +71,8 @@ export default function ReservationsFilters() {
           onChange={(e) => apply({ sort: e.target.value as "asc" | "desc" })}
           className="rounded-md border border-gray-600 bg-gray-900 text-gray-100 px-3 py-1.5"
         >
-          <option value="desc">Newest first</option>
           <option value="asc">Oldest first</option>
+          <option value="desc">Newest first</option>
         </select>
 
         <button

@@ -62,6 +62,7 @@ export default async function DeletedReservationsPage() {
           showEdit={false}
           showSoftDelete={false}
           showStatus={false}
+          showRestore
           showSort={false}
         />
       ) : (

@@ -29,6 +29,7 @@ type Props = {
   showEdit?: boolean;
   showShare?: boolean;
   showStatus?: boolean;
+  showRestore?: boolean;
   showSoftDelete?: boolean;
   showSort?: boolean;
 };
@@ -64,10 +65,7 @@ function statusChipClass(status?: string | null) {
   if (code === "COMPLETED") {
     return "border-green-500/40 bg-green-500/15 text-green-100 hover:bg-green-500/25";
   }
-  if (code === "ASSIGNED") {
-    return "border-blue-500/40 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25";
-  }
-  return "border-amber-500/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25";
+  return "border-blue-500/40 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25";
 }
 
 function addShareSection(
@@ -174,6 +172,7 @@ export default function ReservationsList({
   showEdit = true,
   showShare = true,
   showStatus = true,
+  showRestore = false,
   showSoftDelete = true,
   showSort = true,
 }: Props) {
@@ -187,14 +186,12 @@ export default function ReservationsList({
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
-  // ---- SORT control (updates ?sort=closest|asc|desc in the URL) ----
+  // ---- SORT control (updates ?sort=asc|desc in the URL) ----
   const sortParam = sp.get("sort");
-  const sort =
-    sortParam === "asc" || sortParam === "desc" || sortParam === "closest"
-      ? sortParam
-      : "closest";
+  const sort = sortParam === "desc" ? "desc" : "asc";
   function onChangeSort(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(sp?.toString() || "");
     params.set("sort", e.target.value);
@@ -222,6 +219,25 @@ export default function ReservationsList({
       alert("Failed to move to deleted list. Please try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function handleRestore(id: string) {
+    if (!confirm("Restore this reservation?")) return;
+
+    setRestoreBusyId(id);
+    const prev = rows;
+    setRows(prev.filter((r) => r.id !== id));
+
+    try {
+      const res = await fetch(`/api/reservations/${id}/restore`, { method: "PATCH" });
+      if (!res.ok) throw new Error("Restore failed");
+      router.refresh();
+    } catch {
+      setRows(prev);
+      alert("Failed to restore reservation. Please try again.");
+    } finally {
+      setRestoreBusyId(null);
     }
   }
 
@@ -270,9 +286,8 @@ export default function ReservationsList({
             onChange={onChangeSort}
             className="rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm"
           >
-            <option value="closest">Closest first</option>
-            <option value="desc">Newest first</option>
             <option value="asc">Oldest first</option>
+            <option value="desc">Newest first</option>
           </select>
         </div>
       )}
@@ -333,11 +348,24 @@ export default function ReservationsList({
                       onClick={() => handleStatusCycle(r)}
                       title={`Status: ${statusLabel}. Tap to change.`}
                       aria-label={`Status: ${statusLabel}. Tap to change.`}
-                      className={`h-8 min-w-0 shrink rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:px-2.5 sm:text-xs ${statusChipClass(
+                      className={`inline-flex h-8 min-w-0 max-w-[9rem] shrink items-center justify-center rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:max-w-none sm:px-2.5 sm:text-xs ${statusChipClass(
                         r.status
                       )}`}
                     >
-                      <span className="whitespace-nowrap">{statusLabel}</span>
+                      <span className="truncate">{statusLabel}</span>
+                    </button>
+                  )}
+
+                  {showRestore && (
+                    <button
+                      type="button"
+                      disabled={restoreBusyId === r.id}
+                      onClick={() => handleRestore(r.id)}
+                      title="Restore reservation"
+                      aria-label="Restore reservation"
+                      className="h-8 shrink-0 rounded-md border border-green-600/40 bg-green-600/20 px-2 text-xs text-green-100 transition hover:bg-green-600/30 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
+                    >
+                      {restoreBusyId === r.id ? "Restoring..." : "Restore"}
                     </button>
                   )}
 
