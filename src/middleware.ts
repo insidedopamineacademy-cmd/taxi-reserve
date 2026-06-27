@@ -16,6 +16,7 @@ export default withAuth({
 export const config = {
   matcher: [
     "/reservations/:path*",
+    "/emails/:path*",
     "/settings/:path*",
     "/admin/:path*",
   ],

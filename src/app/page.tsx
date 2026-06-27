@@ -2,12 +2,15 @@
 export const revalidate = 0;
 
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getEmailInboxAccess } from "@/lib/emails/permissions";
+import { prisma } from "@/lib/prisma";
 
 export default async function Home() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? "";
+  const inboxAccess = await getEmailInboxAccess();
+  const email = inboxAccess.email ?? "";
+  const unreadEmails = inboxAccess.allowed
+    ? await prisma.emailThread.count({ where: { unread: true } })
+    : 0;
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -39,6 +42,18 @@ export default async function Home() {
               Create a new booking fast.
             </p>
           </Link>
+
+          {inboxAccess.allowed ? (
+            <Link
+              href="/emails"
+              className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
+            >
+              <h3 className="font-medium text-white">Inbox</h3>
+              <p className="mt-1 text-sm text-neutral-300">
+                {unreadEmails} unread {unreadEmails === 1 ? "email" : "emails"}. Open Inbox.
+              </p>
+            </Link>
+          ) : null}
 
           <Link
             href={email ? "/settings" : "/login"}

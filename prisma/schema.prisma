@@ -19,6 +19,11 @@ enum ResStatus {
   R_RECEIVED
 }
 
+enum EmailDirection {
+  INCOMING
+  OUTGOING
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -74,4 +79,66 @@ model Reminder {
   updatedAt DateTime @updatedAt
 
   @@index([userEmail, dueAt])
+}
+
+model EmailThread {
+  id            String         @id @default(cuid())
+  subject       String?
+  customerEmail String?
+  customerName  String?
+  lastMessageAt DateTime?
+  unread        Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  messages      EmailMessage[]
+
+  @@index([lastMessageAt])
+  @@index([unread, lastMessageAt])
+}
+
+model EmailMessage {
+  id           String            @id @default(cuid())
+  threadId     String
+  messageId    String            @unique
+  inReplyTo    String?
+  referenceIds String[]          @default([])
+  fromEmail    String?
+  fromName     String?
+  toEmails     String?
+  ccEmails     String?
+  subject      String?
+  bodyHtml     String?
+  bodyText     String?
+  direction    EmailDirection
+  receivedAt   DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime          @default(now())
+  thread       EmailThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  attachments  EmailAttachment[]
+
+  @@index([threadId, receivedAt])
+  @@index([threadId, sentAt])
+  @@index([inReplyTo])
+}
+
+model EmailAttachment {
+  id          String       @id @default(cuid())
+  messageId   String
+  filename    String
+  mimeType    String?
+  size        Int?
+  storagePath String?
+  createdAt   DateTime     @default(now())
+  message     EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model EmailSyncState {
+  id          String   @id @default(cuid())
+  mailbox     String   @unique
+  uidValidity BigInt
+  lastUid     Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

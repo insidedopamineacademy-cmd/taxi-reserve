@@ -24,3 +24,45 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.email-html p,
+.email-html div,
+.email-html blockquote,
+.email-html ul,
+.email-html ol,
+.email-html pre,
+.email-html table {
+  margin-block: 0.75rem;
+}
+
+.email-html a {
+  color: #facc15;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.email-html blockquote {
+  border-left: 3px solid #525252;
+  padding-left: 0.75rem;
+  color: #d4d4d4;
+}
+
+.email-html ul,
+.email-html ol {
+  padding-left: 1.25rem;
+}
+
+.email-html ul { list-style: disc; }
+.email-html ol { list-style: decimal; }
+
+.email-html table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.email-html th,
+.email-html td {
+  border: 1px solid #404040;
+  padding: 0.4rem;
+  vertical-align: top;
+}
