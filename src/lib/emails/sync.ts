@@ -1,11 +1,33 @@
 import { createHash } from "crypto";
 import { EmailDirection, Prisma } from "@prisma/client";
-import { ImapFlow, type FetchMessageObject, type ListResponse } from "imapflow";
+import {
+  ImapFlow,
+  type FetchMessageObject,
+  type ListResponse,
+  type MailboxObject,
+} from "imapflow";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { prisma } from "@/lib/prisma";
-import { getEmailInitialSyncLimit, getImapConfig } from "@/lib/emails/config";
+import {
+  getEmailConfigIssue,
+  getEmailConfigStatus,
+  getEmailInitialSyncLimit,
+  getImapConfig,
+} from "@/lib/emails/config";
 import { sanitizeEmailHtml } from "@/lib/emails/content";
-import { classifyMailbox, EMAIL_FOLDERS, type EmailFolder } from "@/lib/emails/folders";
+import {
+  classifyMailbox,
+  emailFolderLabel,
+  EMAIL_FOLDERS,
+  type EmailFolder,
+} from "@/lib/emails/folders";
+import {
+  classifyMailFailure,
+  EmailOperationTimeoutError,
+  logMailFailure,
+  safeMailFailureDetail,
+  withTimeout,
+} from "@/lib/emails/errors";
 import {
   addressList,
   firstAddress,
@@ -13,17 +35,26 @@ import {
   normalizeReferenceIds,
   safeAttachmentName,
 } from "@/lib/emails/headers";
+import {
+  EmailSyncProgressCollector,
+  type EmailSyncResult,
+} from "@/lib/emails/progress";
 
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
+const SYNC_TIMEOUT_MS = 110_000;
 
 type MailboxTarget = { path: string; folder: EmailFolder };
 type StoreResult = "imported" | "updated" | "skipped";
-type SyncResult = {
-  imported: number;
-  updated: number;
-  skipped: number;
-  folders: EmailFolder[];
-};
+
+class MailboxOpenError extends Error {
+  constructor(
+    readonly folder: EmailFolder,
+    readonly originalError: unknown,
+  ) {
+    super(`Unable to open ${folder}`);
+    this.name = "MailboxOpenError";
+  }
+}
 
 function mailboxTargets(mailboxes: ListResponse[]): MailboxTarget[] {
   const targets = mailboxes
@@ -237,7 +268,12 @@ async function syncMailbox(
   accountEmail: string,
   initialLimit: number,
 ) {
-  const mailbox = await client.mailboxOpen(target.path, { readOnly: true });
+  let mailbox: MailboxObject;
+  try {
+    mailbox = await client.mailboxOpen(target.path, { readOnly: true });
+  } catch (error) {
+    throw new MailboxOpenError(target.folder, error);
+  }
   const state = await prisma.emailSyncState.findUnique({ where: { mailbox: target.path } });
   const sameMailbox = state?.uidValidity === mailbox.uidValidity;
 
@@ -304,7 +340,26 @@ async function syncMailbox(
   return { imported, updated, skipped };
 }
 
-export async function syncInbox(): Promise<SyncResult> {
+export async function syncInbox(): Promise<EmailSyncResult> {
+  const progress = new EmailSyncProgressCollector();
+  const configStatus = getEmailConfigStatus();
+  if (!configStatus.imapConfigured) {
+    progress.add({
+      status: "error",
+      label: "IMAP configuration is incomplete",
+      detail: getEmailConfigIssue("imap") ?? "Required IMAP settings are missing.",
+    });
+    return progress.result(false);
+  }
+
+  progress.add({ status: "success", label: "Email configuration checked" });
+  if (!configStatus.smtpConfigured) {
+    progress.add({
+      status: "warning",
+      label: "SMTP settings incomplete — replies disabled",
+      detail: getEmailConfigIssue("smtp") ?? undefined,
+    });
+  }
   const config = getImapConfig();
   const client = new ImapFlow({
     host: config.host,
@@ -312,35 +367,140 @@ export async function syncInbox(): Promise<SyncResult> {
     secure: config.secure,
     auth: { user: config.user, pass: config.password },
     logger: false,
-    connectionTimeout: 20_000,
-    greetingTimeout: 15_000,
-    socketTimeout: 60_000,
+    connectionTimeout: 15_000,
+    greetingTimeout: 12_000,
+    socketTimeout: 45_000,
   });
+  const syncState: { stage: "connect" | "mailboxes" | "sync" } = { stage: "connect" };
+  let timedOut = false;
 
   try {
-    await client.connect();
-    const targets = mailboxTargets(await client.list());
-    const initialLimit = getEmailInitialSyncLimit();
-    let imported = 0;
-    let updated = 0;
-    let skipped = 0;
+    await withTimeout(
+      (async () => {
+        await client.connect();
+        progress.add({ status: "success", label: "Connected to IMAP server" });
+        progress.add({ status: "success", label: "IMAP login successful" });
 
-    for (const target of targets) {
-      const result = await syncMailbox(client, target, config.user, initialLimit);
-      imported += result.imported;
-      updated += result.updated;
-      skipped += result.skipped;
+        syncState.stage = "mailboxes";
+        const targets = mailboxTargets(await client.list());
+        const foundFolders = new Set(targets.map((target) => target.folder));
+        progress.summary.foldersChecked = EMAIL_FOLDERS.length;
+        progress.add({
+          status: "success",
+          label: `Mailbox folders found: ${targets
+            .map((target) => emailFolderLabel(target.folder))
+            .join(", ")}`,
+        });
+
+        for (const folder of EMAIL_FOLDERS) {
+          if (!foundFolders.has(folder)) {
+            progress.add({
+              status: "warning",
+              label: `${emailFolderLabel(folder)} folder not found`,
+              folder,
+            });
+          }
+        }
+
+        syncState.stage = "sync";
+        const initialLimit = getEmailInitialSyncLimit();
+        for (const target of targets) {
+          if (timedOut) throw new EmailOperationTimeoutError();
+
+          try {
+            const result = await syncMailbox(client, target, config.user, initialLimit);
+            if (timedOut) throw new EmailOperationTimeoutError();
+
+            progress.summary.foldersSynced++;
+            progress.summary.messagesImported += result.imported;
+            progress.summary.duplicatesSkipped += result.skipped;
+            const detailParts = [
+              result.updated ? `${result.updated} updated` : "",
+              result.skipped ? `${result.skipped} duplicates skipped` : "",
+            ].filter(Boolean);
+            progress.add({
+              status: "success",
+              label: `Synced ${emailFolderLabel(target.folder)}`,
+              detail: detailParts.join("; ") || undefined,
+              folder: target.folder,
+              count: result.imported,
+            });
+          } catch (error) {
+            if (error instanceof MailboxOpenError) {
+              const kind = classifyMailFailure(error.originalError);
+              if (kind === "unknown") {
+                logMailFailure(
+                  `Email sync could not open ${emailFolderLabel(error.folder)}`,
+                  error.originalError,
+                );
+                progress.add({
+                  status: "warning",
+                  label: `${emailFolderLabel(error.folder)} folder could not be opened`,
+                  detail: "The remaining mailbox folders were still checked.",
+                  folder: error.folder,
+                });
+                continue;
+              }
+              throw error.originalError;
+            }
+            throw error;
+          }
+        }
+      })(),
+      SYNC_TIMEOUT_MS,
+      () => {
+        timedOut = true;
+        client.close();
+      },
+    );
+
+    progress.add({
+      status: "success",
+      label: progress.summary.messagesImported
+        ? `Imported ${progress.summary.messagesImported} messages`
+        : "No new messages to import",
+      count: progress.summary.messagesImported,
+    });
+    if (progress.summary.duplicatesSkipped) {
+      progress.add({
+        status: "success",
+        label: `Skipped ${progress.summary.duplicatesSkipped} duplicate messages`,
+        count: progress.summary.duplicatesSkipped,
+      });
     }
-
-    return {
-      imported,
-      updated,
-      skipped,
-      folders: [...new Set(targets.map((target) => target.folder))],
-    };
+    progress.add({
+      status: "success",
+      label: "Sync completed",
+      count: progress.summary.messagesImported,
+    });
+    return progress.result(true);
+  } catch (error) {
+    logMailFailure("Email inbox sync failed", error);
+    const failureKind = classifyMailFailure(error);
+    const timedOutFailure = failureKind === "timeout";
+    const authenticationFailure = failureKind === "authentication";
+    const databaseFailure = failureKind === "database";
+    progress.add({
+      status: "error",
+      label: timedOutFailure
+        ? "Email sync timed out"
+        : authenticationFailure
+          ? "IMAP login failed"
+          : databaseFailure
+            ? "Inbox database update failed"
+            : syncState.stage === "mailboxes"
+              ? "Finding mailbox folders failed"
+              : syncState.stage === "sync"
+                ? "Email sync failed"
+                : "IMAP connection failed",
+      detail: timedOutFailure
+        ? "The server stopped waiting after 110 seconds. Try syncing again."
+        : safeMailFailureDetail("IMAP", error),
+    });
+    return progress.result(false);
   } finally {
     if (client.usable) {
-      await client.logout().catch(() => client.close());
+      await withTimeout(client.logout(), 5_000, () => client.close()).catch(() => client.close());
     } else {
       client.close();
     }

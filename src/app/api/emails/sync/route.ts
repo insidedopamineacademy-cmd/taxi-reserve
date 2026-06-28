@@ -1,11 +1,27 @@
 import { NextResponse } from "next/server";
-import { EmailConfigError } from "@/lib/emails/config";
+import { EmailConfigError, getEmailConfigStatus } from "@/lib/emails/config";
 import { isEmailInboxSchemaReady } from "@/lib/emails/database";
+import { logMailFailure } from "@/lib/emails/errors";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
+import type { EmailSyncResult } from "@/lib/emails/progress";
 import { syncInbox } from "@/lib/emails/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
+function failedSync(label: string, detail?: string): EmailSyncResult {
+  return {
+    ok: false,
+    steps: [{ status: "error", label, detail }],
+    summary: {
+      foldersChecked: 0,
+      foldersSynced: 0,
+      messagesImported: 0,
+      duplicatesSkipped: 0,
+    },
+  };
+}
 
 export async function POST() {
   const access = await getEmailInboxAccess();
@@ -15,16 +31,29 @@ export async function POST() {
 
   try {
     if (!(await isEmailInboxSchemaReady())) {
-      return NextResponse.json({ error: "Inbox database setup is incomplete." }, { status: 503 });
+      return NextResponse.json(
+        failedSync(
+          "Inbox database setup is incomplete",
+          "Email sync is unavailable until the email tables are deployed.",
+        ),
+        { status: 503 },
+      );
     }
-    return NextResponse.json(await syncInbox());
+    const imapConfigured = getEmailConfigStatus().imapConfigured;
+    const result = await syncInbox();
+    return NextResponse.json(result, { status: result.ok ? 200 : imapConfigured ? 502 : 503 });
   } catch (error) {
     if (error instanceof EmailConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
+      return NextResponse.json(failedSync("Email configuration is incomplete", error.message), {
+        status: 503,
+      });
     }
-    console.error("Email inbox sync failed", error);
+    logMailFailure("Email inbox sync route failed", error);
     return NextResponse.json(
-      { error: "Inbox sync failed. Your existing emails were not changed." },
+      failedSync(
+        "Inbox sync failed",
+        "The server could not complete the sync. Existing inbox data was preserved.",
+      ),
       { status: 502 },
     );
   }

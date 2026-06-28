@@ -112,7 +112,7 @@ export default async function EmailsPage({ searchParams }: { searchParams?: Prom
 
   return (
     <div className="mx-auto min-h-[calc(100vh-3rem)] max-w-2xl px-3 py-4 sm:px-5">
-      <header className="flex items-start justify-between gap-3">
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Inbox</h1>
           <p className="mt-1 text-sm text-neutral-400">{folderLabel} · Shared MXRoute email</p>

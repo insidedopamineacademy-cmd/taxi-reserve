@@ -17,7 +17,7 @@ export default function EmailConfigNotice({ imapConfigured, smtpConfigured, comp
       ) : null}
       {!smtpConfigured ? (
         <p className={`text-sm leading-5 text-amber-100 ${!imapConfigured ? "mt-2" : ""}`}>
-          Replies are unavailable because the server-side SMTP settings are incomplete.
+          Replies are unavailable because SMTP settings are incomplete.
         </p>
       ) : null}
     </div>

@@ -12,6 +12,7 @@ import ReplyComposer from "@/components/emails/ReplyComposer";
 import { getEmailConfigStatus } from "@/lib/emails/config";
 import { isEmailInboxSchemaError, isEmailInboxSchemaReady } from "@/lib/emails/database";
 import { emailFolderKey, emailFolderLabel, parseEmailFolder } from "@/lib/emails/folders";
+import { getSmtpConnectionHealth } from "@/lib/emails/health";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -55,6 +56,19 @@ export default async function EmailThreadPage({
 
   const messages = [...thread.messages].reverse();
   const recipient = thread.customerEmail || "Unknown recipient";
+  const hasReplyAddress = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient);
+  const smtpHealth = hasReplyAddress ? await getSmtpConnectionHealth() : null;
+  const smtpVerified = Boolean(
+    smtpHealth?.configured &&
+      smtpHealth.connectionTested &&
+      smtpHealth.connected &&
+      smtpHealth.authenticated,
+  );
+  const replyUnavailableReason = !hasReplyAddress
+    ? "This thread does not have a valid reply address."
+    : !smtpHealth?.configured
+      ? `Replies are unavailable because SMTP settings are incomplete.${smtpHealth?.error ? ` ${smtpHealth.error}.` : ""}`
+      : `Replies are unavailable because SMTP could not be verified.${smtpHealth.error ? ` ${smtpHealth.error}` : ""}`;
 
   return (
     <div className="mx-auto min-h-[calc(100vh-3rem)] max-w-2xl px-3 pt-3 sm:px-5 sm:py-5">
@@ -102,9 +116,12 @@ export default async function EmailThreadPage({
         compact
       />
 
-      {configStatus.smtpConfigured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) ? (
-        <ReplyComposer threadId={thread.id} recipient={recipient} />
-      ) : null}
+      <ReplyComposer
+        threadId={thread.id}
+        recipient={recipient}
+        available={smtpVerified}
+        unavailableReason={smtpVerified ? undefined : replyUnavailableReason}
+      />
     </div>
   );
 }

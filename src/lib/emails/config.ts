@@ -6,7 +6,7 @@ type MailConnectionConfig = {
   secure: boolean;
 };
 
-type EmailTransport = "imap" | "smtp";
+export type EmailTransport = "imap" | "smtp";
 
 export type EmailConfigStatus = {
   imapHost: boolean;
@@ -98,6 +98,20 @@ export function getEmailConfigStatus(): EmailConfigStatus {
     smtpConfigured,
     emailServiceConfigured: imapConfigured && smtpConfigured,
   };
+}
+
+export function getEmailConfigIssue(transport: EmailTransport) {
+  const prefix = transport.toUpperCase();
+  const keys = [`${prefix}_HOST`, `${prefix}_PORT`, `${prefix}_USER`, `${prefix}_PASSWORD`];
+  const issues = keys.flatMap((key) => {
+    if (key.endsWith("_PORT")) {
+      if (validPort(key)) return [];
+      return [process.env[key]?.trim() ? `${key} is invalid` : `${key} is missing`];
+    }
+    return present(key) ? [] : [`${key} is missing`];
+  });
+
+  return issues.join("; ") || null;
 }
 
 export function getImapConfig(): MailConnectionConfig {
