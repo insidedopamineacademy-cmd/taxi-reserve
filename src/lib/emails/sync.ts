@@ -57,21 +57,34 @@ class MailboxOpenError extends Error {
 }
 
 function mailboxTargets(mailboxes: ListResponse[]): MailboxTarget[] {
-  const targets = mailboxes
+  const candidates = mailboxes
     .filter((mailbox) => !mailbox.flags.has("\\Noselect"))
-    .map((mailbox) => ({ path: mailbox.path, folder: classifyMailbox(mailbox) }))
-    .filter((target): target is MailboxTarget => target.folder !== null);
+    .map((mailbox) => ({
+      path: mailbox.path,
+      folder: classifyMailbox(mailbox),
+      specialUse: Boolean(mailbox.specialUse),
+    }))
+    .filter(
+      (target): target is MailboxTarget & { specialUse: boolean } => target.folder !== null,
+    );
 
-  if (!targets.some((target) => target.folder === "INBOX")) {
-    targets.unshift({ path: "INBOX", folder: "INBOX" });
+  const unique = new Map<EmailFolder, MailboxTarget & { specialUse: boolean }>();
+  for (const target of candidates) {
+    const current = unique.get(target.folder);
+    if (!current || (!current.specialUse && target.specialUse)) {
+      unique.set(target.folder, target);
+    }
   }
 
-  const unique = new Map<string, MailboxTarget>();
-  for (const target of targets) unique.set(target.path, target);
+  if (!unique.has("INBOX")) {
+    unique.set("INBOX", { path: "INBOX", folder: "INBOX", specialUse: true });
+  }
 
-  return [...unique.values()].sort(
-    (left, right) => EMAIL_FOLDERS.indexOf(left.folder) - EMAIL_FOLDERS.indexOf(right.folder),
-  );
+  return [...unique.values()]
+    .map(({ path, folder }) => ({ path, folder }))
+    .sort(
+      (left, right) => EMAIL_FOLDERS.indexOf(left.folder) - EMAIL_FOLDERS.indexOf(right.folder),
+    );
 }
 
 async function parseFetchedMessage(
@@ -384,7 +397,9 @@ export async function syncInbox(): Promise<EmailSyncResult> {
         syncState.stage = "mailboxes";
         const targets = mailboxTargets(await client.list());
         const foundFolders = new Set(targets.map((target) => target.folder));
-        progress.summary.foldersChecked = EMAIL_FOLDERS.length;
+        progress.summary.foldersChecked = EMAIL_FOLDERS.filter(
+          (folder) => folder !== "ARCHIVE" || foundFolders.has(folder),
+        ).length;
         progress.add({
           status: "success",
           label: `Mailbox folders found: ${targets
@@ -393,7 +408,7 @@ export async function syncInbox(): Promise<EmailSyncResult> {
         });
 
         for (const folder of EMAIL_FOLDERS) {
-          if (!foundFolders.has(folder)) {
+          if (folder !== "ARCHIVE" && !foundFolders.has(folder)) {
             progress.add({
               status: "warning",
               label: `${emailFolderLabel(folder)} folder not found`,
