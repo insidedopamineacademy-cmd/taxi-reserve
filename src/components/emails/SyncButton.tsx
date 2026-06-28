@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function SyncButton() {
+export default function SyncButton({ configured = true }: { configured?: boolean }) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
@@ -39,10 +39,10 @@ export default function SyncButton() {
       <button
         type="button"
         onClick={sync}
-        disabled={syncing}
+        disabled={syncing || !configured}
         className="min-h-11 rounded-xl bg-yellow-400 px-4 font-semibold text-black transition hover:bg-yellow-300 disabled:cursor-wait disabled:opacity-60"
       >
-        {syncing ? "Syncing…" : "Sync inbox"}
+        {syncing ? "Syncing…" : configured ? "Sync inbox" : "Sync unavailable"}
       </button>
       <p
         aria-live="polite"

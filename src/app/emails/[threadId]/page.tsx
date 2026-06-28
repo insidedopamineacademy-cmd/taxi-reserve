@@ -4,10 +4,12 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import EmailMessageCard from "@/components/emails/EmailMessageCard";
+import EmailConfigNotice from "@/components/emails/EmailConfigNotice";
 import InboxAccessDenied from "@/components/emails/InboxAccessDenied";
 import InboxSetupState from "@/components/emails/InboxSetupState";
 import MarkThreadRead from "@/components/emails/MarkThreadRead";
 import ReplyComposer from "@/components/emails/ReplyComposer";
+import { getEmailConfigStatus } from "@/lib/emails/config";
 import { isEmailInboxSchemaError, isEmailInboxSchemaReady } from "@/lib/emails/database";
 import { emailFolderKey, emailFolderLabel, parseEmailFolder } from "@/lib/emails/folders";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
@@ -30,6 +32,7 @@ export default async function EmailThreadPage({
   const folder = parseEmailFolder((await searchParams)?.folder);
   const folderKey = emailFolderKey(folder);
   const folderLabel = emailFolderLabel(folder);
+  const configStatus = getEmailConfigStatus();
   const { threadId } = await params;
   let thread;
   try {
@@ -93,7 +96,13 @@ export default async function EmailThreadPage({
         {messages.map((message) => <EmailMessageCard key={message.id} message={message} />)}
       </section>
 
-      {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) ? (
+      <EmailConfigNotice
+        imapConfigured={configStatus.imapConfigured}
+        smtpConfigured={configStatus.smtpConfigured}
+        compact
+      />
+
+      {configStatus.smtpConfigured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) ? (
         <ReplyComposer threadId={thread.id} recipient={recipient} />
       ) : null}
     </div>

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import InboxAccessDenied from "@/components/emails/InboxAccessDenied";
+import EmailConfigNotice from "@/components/emails/EmailConfigNotice";
 import InboxSetupState from "@/components/emails/InboxSetupState";
 import SyncButton from "@/components/emails/SyncButton";
 import { emailPreview } from "@/lib/emails/content";
+import { getEmailConfigStatus } from "@/lib/emails/config";
 import { isEmailInboxSchemaError, isEmailInboxSchemaReady } from "@/lib/emails/database";
 import {
   emailFolderKey,
@@ -55,6 +57,7 @@ export default async function EmailsPage({ searchParams }: { searchParams?: Prom
   const filter = params.filter === "unread" && folder === "INBOX" ? "unread" : "all";
   const folderKey = emailFolderKey(folder);
   const folderLabel = emailFolderLabel(folder);
+  const configStatus = getEmailConfigStatus();
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
@@ -114,8 +117,13 @@ export default async function EmailsPage({ searchParams }: { searchParams?: Prom
           <h1 className="text-2xl font-semibold text-white">Inbox</h1>
           <p className="mt-1 text-sm text-neutral-400">{folderLabel} · Shared MXRoute email</p>
         </div>
-        <SyncButton />
+        <SyncButton configured={configStatus.imapConfigured} />
       </header>
+
+      <EmailConfigNotice
+        imapConfigured={configStatus.imapConfigured}
+        smtpConfigured={configStatus.smtpConfigured}
+      />
 
       <nav
         aria-label="Email folders"
