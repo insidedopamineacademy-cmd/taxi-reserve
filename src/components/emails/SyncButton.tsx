@@ -17,16 +17,14 @@ export default function SyncButton() {
       const response = await fetch("/api/emails/sync", { method: "POST" });
       const result = (await response.json()) as {
         imported?: number;
+        updated?: number;
         skipped?: number;
         error?: string;
       };
       if (!response.ok) throw new Error(result.error || "Inbox sync failed.");
 
-      setMessage(
-        result.imported
-          ? `${result.imported} new ${result.imported === 1 ? "email" : "emails"}`
-          : "Inbox is up to date",
-      );
+      const changes = (result.imported ?? 0) + (result.updated ?? 0);
+      setMessage(changes ? `${changes} email ${changes === 1 ? "change" : "changes"}` : "Folders are up to date");
       router.refresh();
     } catch (error) {
       setIsError(true);

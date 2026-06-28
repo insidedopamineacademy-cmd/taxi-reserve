@@ -8,8 +8,11 @@ const EMAIL_TABLES = [
   'public."EmailSyncState"',
 ] as const;
 
-export function isEmailInboxMissingTableError(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021";
+export function isEmailInboxSchemaError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
 }
 
 export async function isEmailInboxSchemaReady() {
@@ -19,6 +22,18 @@ export async function isEmailInboxSchemaReady() {
       AND to_regclass(${EMAIL_TABLES[1]}) IS NOT NULL
       AND to_regclass(${EMAIL_TABLES[2]}) IS NOT NULL
       AND to_regclass(${EMAIL_TABLES[3]}) IS NOT NULL
+      AND NOT EXISTS (
+        SELECT required.column_name
+        FROM (VALUES ('folder'), ('folders'), ('mailbox'), ('mailboxes'), ('imapUid'))
+          AS required(column_name)
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM information_schema.columns column_info
+          WHERE column_info.table_schema = 'public'
+            AND column_info.table_name = 'EmailMessage'
+            AND column_info.column_name = required.column_name
+        )
+      )
       AND EXISTS (
         SELECT 1
         FROM pg_type type
@@ -37,7 +52,7 @@ export async function getUnreadEmailCountSafely() {
   try {
     return await prisma.emailThread.count({ where: { unread: true } });
   } catch (error) {
-    if (isEmailInboxMissingTableError(error)) return 0;
+    if (isEmailInboxSchemaError(error)) return 0;
     throw error;
   }
 }

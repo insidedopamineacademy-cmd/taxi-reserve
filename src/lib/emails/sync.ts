@@ -1,9 +1,11 @@
+import { createHash } from "crypto";
 import { EmailDirection, Prisma } from "@prisma/client";
-import { ImapFlow, type FetchMessageObject } from "imapflow";
+import { ImapFlow, type FetchMessageObject, type ListResponse } from "imapflow";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { prisma } from "@/lib/prisma";
-import { getImapConfig } from "@/lib/emails/config";
+import { getEmailInitialSyncLimit, getImapConfig } from "@/lib/emails/config";
 import { sanitizeEmailHtml } from "@/lib/emails/content";
+import { classifyMailbox, EMAIL_FOLDERS, type EmailFolder } from "@/lib/emails/folders";
 import {
   addressList,
   firstAddress,
@@ -12,16 +14,40 @@ import {
   safeAttachmentName,
 } from "@/lib/emails/headers";
 
-const MAILBOX = "INBOX";
-const INITIAL_SYNC_LIMIT = 100;
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
 
-type SyncResult = { imported: number; skipped: number };
+type MailboxTarget = { path: string; folder: EmailFolder };
+type StoreResult = "imported" | "updated" | "skipped";
+type SyncResult = {
+  imported: number;
+  updated: number;
+  skipped: number;
+  folders: EmailFolder[];
+};
+
+function mailboxTargets(mailboxes: ListResponse[]): MailboxTarget[] {
+  const targets = mailboxes
+    .filter((mailbox) => !mailbox.flags.has("\\Noselect"))
+    .map((mailbox) => ({ path: mailbox.path, folder: classifyMailbox(mailbox) }))
+    .filter((target): target is MailboxTarget => target.folder !== null);
+
+  if (!targets.some((target) => target.folder === "INBOX")) {
+    targets.unshift({ path: "INBOX", folder: "INBOX" });
+  }
+
+  const unique = new Map<string, MailboxTarget>();
+  for (const target of targets) unique.set(target.path, target);
+
+  return [...unique.values()].sort(
+    (left, right) => EMAIL_FOLDERS.indexOf(left.folder) - EMAIL_FOLDERS.indexOf(right.folder),
+  );
+}
 
 async function parseFetchedMessage(
   client: ImapFlow,
   message: FetchMessageObject,
   uidValidity: bigint,
+  mailboxPath: string,
 ) {
   const oversized = (message.size ?? 0) > MAX_MESSAGE_BYTES;
   const full = await client.fetchOne(
@@ -46,30 +72,71 @@ async function parseFetchedMessage(
     parsed.attachments = [];
   }
 
+  const mailboxKey = createHash("sha256").update(mailboxPath).digest("hex").slice(0, 12);
   const messageId =
     normalizeMessageId(parsed.messageId ?? message.envelope?.messageId) ??
-    `<imap-${uidValidity.toString()}-${message.uid}@taxi-reserve.local>`;
+    `<imap-${mailboxKey}-${uidValidity.toString()}-${message.uid}@taxi-reserve.local>`;
 
   return { parsed, messageId };
 }
 
-async function storeIncomingMessage(
+async function storeMailboxMessage(
   parsed: ParsedMail,
   message: FetchMessageObject,
   messageId: string,
-) {
+  target: MailboxTarget,
+  accountEmail: string,
+): Promise<StoreResult> {
   const inReplyTo = normalizeMessageId(parsed.inReplyTo ?? message.envelope?.inReplyTo);
   const referenceIds = normalizeReferenceIds(parsed.references);
   const relationshipIds = [...new Set([...referenceIds, inReplyTo].filter(Boolean))] as string[];
   const from = firstAddress(parsed.from);
-  const replyTo = firstAddress(parsed.replyTo);
-  const customer = replyTo ?? from;
-  const receivedAt = parsed.date ?? (message.internalDate ? new Date(message.internalDate) : new Date());
-  const unread = !message.flags?.has("\\Seen");
+  const outgoing =
+    target.folder === "SENT" || from?.address?.trim().toLowerCase() === accountEmail.toLowerCase();
+  const direction = outgoing ? EmailDirection.OUTGOING : EmailDirection.INCOMING;
+  const customer = outgoing ? firstAddress(parsed.to) : (firstAddress(parsed.replyTo) ?? from);
+  const messageAt = parsed.date ?? (message.internalDate ? new Date(message.internalDate) : new Date());
+  const unread = target.folder === "INBOX" && !outgoing && !message.flags?.has("\\Seen");
 
   return prisma.$transaction(async (tx) => {
-    const duplicate = await tx.emailMessage.findUnique({ where: { messageId }, select: { id: true } });
-    if (duplicate) return false;
+    const duplicate = await tx.emailMessage.findUnique({
+      where: { messageId },
+      select: {
+        id: true,
+        folder: true,
+        folders: true,
+        mailbox: true,
+        mailboxes: true,
+        imapUid: true,
+      },
+    });
+
+    if (duplicate) {
+      const folders = [...new Set([...duplicate.folders, target.folder])];
+      const mailboxes = [...new Set([...duplicate.mailboxes, target.path])];
+      const changed =
+        folders.length !== duplicate.folders.length ||
+        mailboxes.length !== duplicate.mailboxes.length ||
+        (duplicate.mailbox === target.path && duplicate.imapUid !== message.uid) ||
+        duplicate.mailbox === null;
+
+      if (!changed) return "skipped";
+
+      await tx.emailMessage.update({
+        where: { id: duplicate.id },
+        data: {
+          folder: duplicate.folder ?? target.folder,
+          folders,
+          mailbox: duplicate.mailbox ?? target.path,
+          mailboxes,
+          imapUid:
+            duplicate.mailbox === null || duplicate.mailbox === target.path
+              ? message.uid
+              : duplicate.imapUid,
+        },
+      });
+      return "updated";
+    }
 
     const related = await tx.emailMessage.findMany({
       where: {
@@ -90,7 +157,7 @@ async function storeIncomingMessage(
           subject: parsed.subject ?? message.envelope?.subject ?? null,
           customerEmail: customer?.address ?? null,
           customerName: customer?.name ?? null,
-          lastMessageAt: receivedAt,
+          lastMessageAt: messageAt,
           unread,
         },
         select: { id: true },
@@ -122,8 +189,14 @@ async function storeIncomingMessage(
         subject: parsed.subject ?? message.envelope?.subject ?? null,
         bodyHtml: parsed.html ? sanitizeEmailHtml(parsed.html) : null,
         bodyText: parsed.text?.trim() || null,
-        direction: EmailDirection.INCOMING,
-        receivedAt,
+        direction,
+        folder: target.folder,
+        folders: [target.folder],
+        mailbox: target.path,
+        mailboxes: [target.path],
+        imapUid: message.uid,
+        receivedAt: outgoing ? null : messageAt,
+        sentAt: outgoing ? messageAt : null,
         attachments: {
           create: parsed.attachments
             .filter((attachment) => !attachment.related)
@@ -136,19 +209,99 @@ async function storeIncomingMessage(
       },
     });
 
+    const currentThread = await tx.emailThread.findUnique({
+      where: { id: threadId },
+      select: { lastMessageAt: true },
+    });
+    const isLatest = !currentThread?.lastMessageAt || messageAt >= currentThread.lastMessageAt;
     await tx.emailThread.update({
       where: { id: threadId },
       data: {
-        subject: parsed.subject ?? message.envelope?.subject ?? undefined,
-        customerEmail: customer?.address ?? undefined,
-        customerName: customer?.name ?? undefined,
-        lastMessageAt: receivedAt,
+        subject: isLatest
+          ? (parsed.subject ?? message.envelope?.subject ?? undefined)
+          : undefined,
+        customerEmail: isLatest ? (customer?.address ?? undefined) : undefined,
+        customerName: isLatest ? (customer?.name ?? undefined) : undefined,
+        lastMessageAt: isLatest ? messageAt : undefined,
         unread: unread ? true : undefined,
       },
     });
 
-    return true;
+    return "imported";
   });
+}
+
+async function syncMailbox(
+  client: ImapFlow,
+  target: MailboxTarget,
+  accountEmail: string,
+  initialLimit: number,
+) {
+  const mailbox = await client.mailboxOpen(target.path, { readOnly: true });
+  const state = await prisma.emailSyncState.findUnique({ where: { mailbox: target.path } });
+  const sameMailbox = state?.uidValidity === mailbox.uidValidity;
+
+  if (mailbox.exists === 0) {
+    await prisma.emailSyncState.upsert({
+      where: { mailbox: target.path },
+      create: { mailbox: target.path, uidValidity: mailbox.uidValidity, lastUid: 0 },
+      update: { uidValidity: mailbox.uidValidity, lastUid: 0 },
+    });
+    return { imported: 0, updated: 0, skipped: 0 };
+  }
+
+  let messages: FetchMessageObject[];
+  if (sameMailbox) {
+    const startUid = (state?.lastUid ?? 0) + 1;
+    messages =
+      startUid < mailbox.uidNext
+        ? await client.fetchAll(
+            `${startUid}:*`,
+            { uid: true, flags: true, internalDate: true, size: true, envelope: true },
+            { uid: true },
+          )
+        : [];
+  } else {
+    const firstSequence = Math.max(1, mailbox.exists - initialLimit + 1);
+    messages = await client.fetchAll(
+      `${firstSequence}:*`,
+      { uid: true, flags: true, internalDate: true, size: true, envelope: true },
+    );
+  }
+  messages.sort((left, right) => left.uid - right.uid);
+
+  let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+  for (const message of messages) {
+    const { parsed, messageId } = await parseFetchedMessage(
+      client,
+      message,
+      mailbox.uidValidity,
+      target.path,
+    );
+    try {
+      const result = await storeMailboxMessage(parsed, message, messageId, target, accountEmail);
+      if (result === "imported") imported++;
+      else if (result === "updated") updated++;
+      else skipped++;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        skipped++;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const lastUid = messages.at(-1)?.uid ?? state?.lastUid ?? mailbox.uidNext - 1;
+  await prisma.emailSyncState.upsert({
+    where: { mailbox: target.path },
+    create: { mailbox: target.path, uidValidity: mailbox.uidValidity, lastUid },
+    update: { uidValidity: mailbox.uidValidity, lastUid },
+  });
+
+  return { imported, updated, skipped };
 }
 
 export async function syncInbox(): Promise<SyncResult> {
@@ -166,60 +319,25 @@ export async function syncInbox(): Promise<SyncResult> {
 
   try {
     await client.connect();
-    const mailbox = await client.mailboxOpen(MAILBOX, { readOnly: true });
-    const state = await prisma.emailSyncState.findUnique({ where: { mailbox: MAILBOX } });
-    const sameMailbox = state?.uidValidity === mailbox.uidValidity;
-
-    if (mailbox.exists === 0) {
-      await prisma.emailSyncState.upsert({
-        where: { mailbox: MAILBOX },
-        create: { mailbox: MAILBOX, uidValidity: mailbox.uidValidity, lastUid: 0 },
-        update: { uidValidity: mailbox.uidValidity, lastUid: 0 },
-      });
-      return { imported: 0, skipped: 0 };
-    }
-
-    const startUid = sameMailbox
-      ? (state?.lastUid ?? 0) + 1
-      : Math.max(1, mailbox.uidNext - INITIAL_SYNC_LIMIT);
-
-    if (startUid >= mailbox.uidNext) return { imported: 0, skipped: 0 };
-
-    const messages = await client.fetchAll(
-      `${startUid}:*`,
-      { uid: true, flags: true, internalDate: true, size: true, envelope: true },
-      { uid: true },
-    );
-    messages.sort((a, b) => a.uid - b.uid);
-
+    const targets = mailboxTargets(await client.list());
+    const initialLimit = getEmailInitialSyncLimit();
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
-    for (const message of messages) {
-      const { parsed, messageId } = await parseFetchedMessage(client, message, mailbox.uidValidity);
-      try {
-        const stored = await storeIncomingMessage(parsed, message, messageId);
-        if (stored) {
-          imported++;
-        } else {
-          skipped++;
-        }
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          skipped++;
-          continue;
-        }
-        throw error;
-      }
+
+    for (const target of targets) {
+      const result = await syncMailbox(client, target, config.user, initialLimit);
+      imported += result.imported;
+      updated += result.updated;
+      skipped += result.skipped;
     }
 
-    const lastUid = messages.at(-1)?.uid ?? mailbox.uidNext - 1;
-    await prisma.emailSyncState.upsert({
-      where: { mailbox: MAILBOX },
-      create: { mailbox: MAILBOX, uidValidity: mailbox.uidValidity, lastUid },
-      update: { uidValidity: mailbox.uidValidity, lastUid },
-    });
-
-    return { imported, skipped };
+    return {
+      imported,
+      updated,
+      skipped,
+      folders: [...new Set(targets.map((target) => target.folder))],
+    };
   } finally {
     if (client.usable) {
       await client.logout().catch(() => client.close());

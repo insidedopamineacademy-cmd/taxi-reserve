@@ -82,6 +82,8 @@ export async function sendThreadReply(threadId: string, body: string) {
         subject,
         bodyText: cleanBody,
         direction: EmailDirection.OUTGOING,
+        folder: "SENT",
+        folders: ["SENT"],
         sentAt,
       },
     }),

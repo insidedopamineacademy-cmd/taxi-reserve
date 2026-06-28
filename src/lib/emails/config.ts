@@ -48,3 +48,9 @@ export function getSmtpConfig(): MailConnectionConfig {
     secure: smtpPort === 465,
   };
 }
+
+export function getEmailInitialSyncLimit() {
+  const configured = Number(process.env.EMAIL_INITIAL_SYNC_LIMIT ?? "100");
+  if (!Number.isInteger(configured) || configured < 1) return 100;
+  return Math.min(configured, 5000);
+}

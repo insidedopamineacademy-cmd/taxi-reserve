@@ -16,6 +16,8 @@ type Message = {
   bodyHtml: string | null;
   bodyText: string | null;
   direction: "INCOMING" | "OUTGOING";
+  folder: string | null;
+  folders: string[];
   receivedAt: Date | null;
   sentAt: Date | null;
   createdAt: Date;
@@ -33,6 +35,7 @@ export default function EmailMessageCard({ message }: { message: Message }) {
   const outgoing = message.direction === "OUTGOING";
   const date = message.sentAt ?? message.receivedAt ?? message.createdAt;
   const sender = message.fromName || message.fromEmail || (outgoing ? "Taxi Reserve" : "Unknown sender");
+  const folderText = message.folders.length ? message.folders.join(" · ") : message.folder;
 
   return (
     <article
@@ -42,7 +45,19 @@ export default function EmailMessageCard({ message }: { message: Message }) {
     >
       <header className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words font-semibold text-white">{sender}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="break-words font-semibold text-white">{sender}</p>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+              outgoing ? "bg-yellow-400/15 text-yellow-200" : "bg-sky-400/15 text-sky-200"
+            }`}>
+              {outgoing ? "Outgoing" : "Incoming"}
+            </span>
+            {folderText ? (
+              <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] uppercase tracking-wide text-neutral-400">
+                {folderText}
+              </span>
+            ) : null}
+          </div>
           <p className="break-all text-xs text-neutral-400">
             {outgoing ? `To: ${message.toEmails || "Unknown"}` : message.fromEmail}
           </p>
