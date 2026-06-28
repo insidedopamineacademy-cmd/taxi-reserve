@@ -5,8 +5,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import EmailMessageCard from "@/components/emails/EmailMessageCard";
 import InboxAccessDenied from "@/components/emails/InboxAccessDenied";
+import InboxSetupState from "@/components/emails/InboxSetupState";
 import MarkThreadRead from "@/components/emails/MarkThreadRead";
 import ReplyComposer from "@/components/emails/ReplyComposer";
+import {
+  isEmailInboxMissingTableError,
+  isEmailInboxSchemaReady,
+} from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -16,19 +21,26 @@ export default async function EmailThreadPage({ params }: { params: Promise<{ th
   const access = await getEmailInboxAccess();
   if (!access.authenticated) redirect("/login");
   if (!access.allowed) return <InboxAccessDenied />;
+  if (!(await isEmailInboxSchemaReady())) return <InboxSetupState />;
 
   const { threadId } = await params;
-  const thread = await prisma.emailThread.findUnique({
-    where: { id: threadId },
-    include: {
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: MESSAGE_LIMIT,
-        include: { attachments: { orderBy: { createdAt: "asc" } } },
+  let thread;
+  try {
+    thread = await prisma.emailThread.findUnique({
+      where: { id: threadId },
+      include: {
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: MESSAGE_LIMIT,
+          include: { attachments: { orderBy: { createdAt: "asc" } } },
+        },
+        _count: { select: { messages: true } },
       },
-      _count: { select: { messages: true } },
-    },
-  });
+    });
+  } catch (error) {
+    if (isEmailInboxMissingTableError(error)) return <InboxSetupState />;
+    throw error;
+  }
   if (!thread) notFound();
 
   const messages = [...thread.messages].reverse();

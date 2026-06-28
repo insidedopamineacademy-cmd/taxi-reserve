@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { EmailConfigError } from "@/lib/emails/config";
+import { isEmailInboxSchemaReady } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { EmailSendInputError, sendThreadReply } from "@/lib/emails/send";
 
@@ -10,6 +11,10 @@ export async function POST(request: Request) {
   const access = await getEmailInboxAccess();
   if (!access.allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!(await isEmailInboxSchemaReady())) {
+    return NextResponse.json({ error: "Inbox database setup is incomplete." }, { status: 503 });
   }
 
   let input: unknown;

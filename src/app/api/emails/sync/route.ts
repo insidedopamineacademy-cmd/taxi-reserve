@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { EmailConfigError } from "@/lib/emails/config";
+import { isEmailInboxSchemaReady } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { syncInbox } from "@/lib/emails/sync";
 
@@ -13,6 +14,9 @@ export async function POST() {
   }
 
   try {
+    if (!(await isEmailInboxSchemaReady())) {
+      return NextResponse.json({ error: "Inbox database setup is incomplete." }, { status: 503 });
+    }
     return NextResponse.json(await syncInbox());
   } catch (error) {
     if (error instanceof EmailConfigError) {

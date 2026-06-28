@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isEmailInboxSchemaReady } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +12,9 @@ export async function POST(
   const access = await getEmailInboxAccess();
   if (!access.allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!(await isEmailInboxSchemaReady())) {
+    return NextResponse.json({ error: "Inbox database setup is incomplete." }, { status: 503 });
   }
 
   const { threadId } = await params;

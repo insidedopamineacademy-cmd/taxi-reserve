@@ -5,8 +5,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import InboxAccessDenied from "@/components/emails/InboxAccessDenied";
+import InboxSetupState from "@/components/emails/InboxSetupState";
 import SyncButton from "@/components/emails/SyncButton";
 import { emailPreview } from "@/lib/emails/content";
+import {
+  isEmailInboxMissingTableError,
+  isEmailInboxSchemaReady,
+} from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -37,6 +42,7 @@ export default async function EmailsPage({ searchParams }: { searchParams?: Prom
   const access = await getEmailInboxAccess();
   if (!access.authenticated) redirect("/login");
   if (!access.allowed) return <InboxAccessDenied />;
+  if (!(await isEmailInboxSchemaReady())) return <InboxSetupState />;
 
   const params = (await searchParams) ?? {};
   const q = params.q?.trim().slice(0, 100) ?? "";
@@ -59,22 +65,29 @@ export default async function EmailsPage({ searchParams }: { searchParams?: Prom
     ...(filter === "unread" ? { unread: true } : {}),
   };
 
-  const [threads, total] = await Promise.all([
-    prisma.emailThread.findMany({
-      where,
-      orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { bodyText: true, bodyHtml: true, fromName: true, fromEmail: true },
+  let threads;
+  let total;
+  try {
+    [threads, total] = await Promise.all([
+      prisma.emailThread.findMany({
+        where,
+        orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: {
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { bodyText: true, bodyHtml: true, fromName: true, fromEmail: true },
+          },
         },
-      },
-    }),
-    prisma.emailThread.count({ where }),
-  ]);
+      }),
+      prisma.emailThread.count({ where }),
+    ]);
+  } catch (error) {
+    if (isEmailInboxMissingTableError(error)) return <InboxSetupState />;
+    throw error;
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (

@@ -2,14 +2,14 @@
 export const revalidate = 0;
 
 import Link from "next/link";
+import { getUnreadEmailCountSafely } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
-import { prisma } from "@/lib/prisma";
 
 export default async function Home() {
   const inboxAccess = await getEmailInboxAccess();
   const email = inboxAccess.email ?? "";
   const unreadEmails = inboxAccess.allowed
-    ? await prisma.emailThread.count({ where: { unread: true } })
+    ? await getUnreadEmailCountSafely()
     : 0;
 
   return (
