@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { PhoneActions } from "@/components/PhoneActions";
 import {
   nextReservationStatusCode,
   normalizeReservationStatusCode,
@@ -529,7 +530,7 @@ export default function ReservationsList({
                     {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
                     <Field label="Pax" value={r.pax} />
                     {typeof r.priceEuro === "number" && <Field label="Price" value={`${r.priceEuro}€`} />}
-                    {r.phone && <Field label="Phone" value={r.phone} />}
+                    <PhoneActions phone={r.phone} />
                     {r.flight && <Field label="Flight" value={r.flight} />}
                     {statusLabel && <Field label="Status" value={statusLabel} />}
                     {r.notes && (

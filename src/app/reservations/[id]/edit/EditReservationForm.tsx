@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PhoneActions } from "@/components/PhoneActions";
 import {
   RESERVATION_STATUS_OPTIONS,
   normalizeReservationStatusCode,
@@ -170,15 +171,22 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
           />
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Phone</span>
+        <div className="block">
+          <label htmlFor="reservation-phone" className="mb-1 block text-sm text-gray-300">
+            Phone
+          </label>
           <input
+            id="reservation-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
             className={inputClass}
             value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
             placeholder="+34 600 000 000"
           />
-        </label>
+          <PhoneActions phone={form.phone} showNumber={false} className="mt-2" />
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
