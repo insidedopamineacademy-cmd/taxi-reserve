@@ -25,6 +25,39 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/*
+ * Normalize native date/time controls on iOS Safari. Keeping this global makes
+ * current forms and future date/time fields share the same usable tap target.
+ */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: 16px;
+  line-height: 1.2;
+  box-sizing: border-box;
+  display: block;
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  min-height: 1.2em;
+  margin: 0;
+  text-align: left;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  display: block;
+  opacity: 1;
+}
+
 .email-html p,
 .email-html div,
 .email-html blockquote,
