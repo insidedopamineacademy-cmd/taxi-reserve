@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
 
 type Body = { ids: string[] };
 
@@ -38,6 +39,15 @@ export async function POST(req: Request) {
     },
     data: { isDeleted: true },
   });
+
+  if (result.count > 0) {
+    await logActivity({
+      action: "reservation_deleted",
+      entityType: "reservation",
+      userEmail: email,
+      metadata: { deletionType: "soft_bulk", count: result.count },
+    });
+  }
 
   return NextResponse.json({ ok: true, deleted: result.count });
 }

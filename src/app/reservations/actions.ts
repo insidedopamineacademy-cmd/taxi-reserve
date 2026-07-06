@@ -9,6 +9,7 @@ import {
   type EditableReservationStatusCode,
   type ReservationStatusLabel,
 } from "@/lib/reservationStatus";
+import { logActivity } from "@/lib/activityLog";
 
 export type ReservationStatus = ReservationStatusLabel;
 
@@ -68,5 +69,12 @@ export async function updateReservationField(
   }
 
   await prisma.reservation.update({ where: { id }, data });
+  await logActivity({
+    action: "reservation_updated",
+    entityType: "reservation",
+    entityId: id,
+    userEmail: email,
+    metadata: { changedFields: Object.keys(data), source: "inline_edit" },
+  });
   return { ok: true };
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activityLog";
 
 export async function POST(req: Request) {
   const { name, email, password } = await req.json().catch(() => ({}));
@@ -26,6 +27,13 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.create({
     data: { name: displayName || null, email: normalizedEmail, password: hash },
+  });
+
+  await logActivity({
+    action: "user_registered",
+    entityType: "user",
+    entityId: user.id,
+    userEmail: user.email,
   });
 
   return NextResponse.json({ id: user.id, email: user.email });

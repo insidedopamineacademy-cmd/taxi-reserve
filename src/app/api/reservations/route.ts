@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ResStatus } from "@prisma/client"; // <- Prisma enum (names may differ in your schema)
 import { parseReservationStatusCode } from "@/lib/reservationStatus";
+import { logActivity } from "@/lib/activityLog";
 
 /* ------------------------------------------------------------------ */
 /* Time parsing – bulletproof                                          */
@@ -132,6 +133,17 @@ export async function POST(req: Request) {
         notes: true,
         status: true,
         userEmail: true,
+      },
+    });
+
+    await logActivity({
+      action: "reservation_created",
+      entityType: "reservation",
+      entityId: created.id,
+      userEmail: email,
+      metadata: {
+        status: created.status,
+        pax: created.pax,
       },
     });
 

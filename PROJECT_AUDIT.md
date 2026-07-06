@@ -1,6 +1,6 @@
 # Taxi Reserve — Project Audit and Handoff
 
-Last audited: 2026-07-02
+Last audited: 2026-07-06
 
 ## Project name and purpose
 
@@ -25,6 +25,7 @@ src/
     (auth)/                 Login and registration pages
     api/                    Auth, reservation, user, admin, and email endpoints
     emails/                 Inbox list and thread detail pages
+    activity-log/           Protected, server-rendered activity history
     reservations/           Active, new, edit, deleted, and server-action flows
     settings/               Password-change UI
     globals.css             Global theme and native-control hardening
@@ -38,6 +39,7 @@ src/
   lib/
     emails/                 IMAP/SMTP configuration, sync, send, health, and helpers
     auth.ts                 NextAuth credentials and JWT configuration
+    activityLog.ts          Best-effort structured activity writer
     parseStartAt.ts         Local-wall-time/UTC conversion and date display helpers
     phoneActions.ts         Phone normalization for call and WhatsApp links
     prisma.ts               Shared Prisma client
@@ -65,6 +67,7 @@ src/middleware.ts           Route-level NextAuth protection
 | `/emails/[threadId]` | Thread history, mark-read behavior, and reply composer | Authenticated and email allowlisted |
 | `/settings` | Change the signed-in user's password | Authenticated |
 | `/admin` | User-count/list view | Admin role |
+| `/activity-log` | Searchable, filterable activity history | Authenticated; own rows for users, all rows for admins |
 
 ## Main components
 
@@ -100,8 +103,19 @@ src/middleware.ts           Route-level NextAuth protection
 - NextAuth uses the Credentials provider and JWT sessions. `src/lib/auth.ts` looks up a normalized email, compares a password hash, and copies the database role into the JWT and session.
 - `src/middleware.ts` sends unauthenticated users to `/login` for reservation, email, settings, and admin pages; `/admin` additionally requires the `ADMIN` token role.
 - Sensitive pages and APIs also perform server-side session checks. Reservation reads and writes are scoped to `session.user.email`; the edit page verifies ownership and excludes deleted records.
+- `/activity-log` repeats authorization at query time: normal users are constrained to their normalized session email and only admins receive an unscoped query.
 - Inbox access requires both authentication and membership in `EMAIL_INBOX_ALLOWED_USERS`.
 - Do not weaken the server-side checks in favor of middleware-only authorization.
+
+## Activity logging
+
+- The additive `ActivityLog` model stores an action, entity type, optional entity ID, normalized user email, optional structured JSON metadata, and creation time. Individual indexes support the primary audit filters.
+- `src/lib/activityLog.ts` is deliberately best-effort. It catches and reports database failures so logging cannot turn a successful reservation or authentication action into an application error.
+- Tracked actions are `reservation_created`, `reservation_updated`, `reservation_deleted`, `user_registered`, `user_login`, `user_logout`, `admin_login`, and `admin_viewed_users`.
+- Reservation metadata records only operational summaries such as changed field names, status, passenger count, deletion type/count, restore context, or view context. Authentication metadata is limited to role where applicable.
+- Passwords, password hashes, credentials, auth secrets, tokens, session payloads, phone numbers, reservation notes, and address text are not copied into activity metadata.
+- The app has no dedicated reservation-details route. The edit page can be prefetched and reservation-card expansion is client-only, so `reservation_viewed` is intentionally not emitted. Client-only phone copying is also not logged.
+- Admin user deletion remains disabled by the existing API, so `admin_deleted_user` is not emitted.
 
 ## Reservation data flow
 
@@ -157,6 +171,7 @@ Never commit real values. Configure production secrets in the deployment platfor
 ## Known protected areas
 
 - Prisma schema and generated assumptions
+- Activity-log migration history, write helper, and per-user/admin query boundaries
 - Migration files and migration history
 - Neon/PostgreSQL production data
 - Local-time to UTC conversion and date serialization
@@ -189,6 +204,8 @@ Never commit real values. Configure production secrets in the deployment platfor
 - [ ] Search, sort, change status, soft-delete, restore, and confirm permanent-delete warnings using non-production test data.
 - [ ] Verify Call, WhatsApp, and Copy on an iPhone and desktop browser.
 - [ ] Sign in, refresh an authenticated route, sign out, and verify protected-route redirects; verify admin and inbox access restrictions.
+- [ ] Verify `/activity-log` search, entity filter, sorting, responsive cards, user ownership scoping, and admin-wide visibility.
+- [ ] Confirm logged actions contain no credentials, tokens, phone numbers, notes, or address text.
 - [ ] If inbox is configured, browse folders, search, sync, open a thread, mark it read, and send a test reply from a non-production mailbox.
 - [ ] Inspect production responses for the configured security headers.
 

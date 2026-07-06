@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { parseReservationStatusCode } from "@/lib/reservationStatus";
+import { logActivity } from "@/lib/activityLog";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -93,6 +94,14 @@ export async function PATCH(req: Request, { params }: RouteContext) {
 
   await prisma.reservation.update({ where: { id }, data });
 
+  await logActivity({
+    action: "reservation_updated",
+    entityType: "reservation",
+    entityId: id,
+    userEmail: email,
+    metadata: { changedFields: Object.keys(data) },
+  });
+
   revalidatePath("/reservations");
   return NextResponse.json({ ok: true });
 }
@@ -106,6 +115,14 @@ export async function DELETE(_req: Request, { params }: RouteContext) {
   await prisma.reservation.update({
     where: { id },
     data: { isDeleted: true },
+  });
+
+  await logActivity({
+    action: "reservation_deleted",
+    entityType: "reservation",
+    entityId: id,
+    userEmail: email,
+    metadata: { deletionType: "soft" },
   });
 
   revalidatePath("/reservations");

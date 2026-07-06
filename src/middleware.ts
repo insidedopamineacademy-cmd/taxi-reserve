@@ -19,5 +19,6 @@ export const config = {
     "/emails/:path*",
     "/settings/:path*",
     "/admin/:path*",
+    "/activity-log/:path*",
   ],
 };

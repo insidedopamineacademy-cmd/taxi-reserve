@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
 
 export async function DELETE() {
   const session = await getServerSession(authOptions);
@@ -18,6 +19,15 @@ export async function DELETE() {
         isDeleted: true,
       },
     });
+
+    if (result.count > 0) {
+      await logActivity({
+        action: "reservation_deleted",
+        entityType: "reservation",
+        userEmail: email,
+        metadata: { deletionType: "permanent_bulk", count: result.count },
+      });
+    }
 
     return NextResponse.json({ ok: true, deleted: result.count });
   } catch (error) {

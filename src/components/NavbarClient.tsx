@@ -25,11 +25,12 @@ export default function NavbarClient({ userEmail, canAccessInbox }: Props) {
           AppReserve
         </Link>
 
-        <div className="hidden sm:flex items-center gap-6">
+        <div className="hidden lg:flex items-center gap-4">
           <Link href="/reservations" className="hover:text-yellow-400">Reservations</Link>
           {canAccessInbox ? <Link href="/emails" className="hover:text-yellow-400">Inbox</Link> : null}
           <Link href="/reservations/new" className="hover:text-yellow-400">New</Link>
           <Link href="/reservations/deleted" className="hover:text-yellow-400">Deleted</Link>
+          {userEmail ? <Link href="/activity-log" className="hover:text-yellow-400">Activity Log</Link> : null}
 
           {userEmail ? (
             <UserMenu email={userEmail} />
@@ -46,18 +47,26 @@ export default function NavbarClient({ userEmail, canAccessInbox }: Props) {
           )}
         </div>
 
-        <button className="sm:hidden" onClick={() => setOpen((value) => !value)} aria-label="Menu">
+        <button
+          type="button"
+          className="lg:hidden"
+          onClick={() => setOpen((value) => !value)}
+          aria-label="Toggle navigation menu"
+          aria-expanded={open}
+          aria-controls="mobile-navigation"
+        >
           ☰
         </button>
       </div>
 
       {open ? (
-        <div className="sm:hidden border-t border-white/10 px-4 pb-3">
+        <div id="mobile-navigation" className="lg:hidden border-t border-white/10 px-4 pb-3">
           <div className="flex flex-col gap-3 pt-3">
             <Link href="/reservations" onClick={() => setOpen(false)}>Reservations</Link>
             {canAccessInbox ? <Link href="/emails" onClick={() => setOpen(false)}>Inbox</Link> : null}
             <Link href="/reservations/new" onClick={() => setOpen(false)}>New</Link>
             <Link href="/reservations/deleted" onClick={() => setOpen(false)}>Deleted</Link>
+            {userEmail ? <Link href="/activity-log" onClick={() => setOpen(false)}>Activity Log</Link> : null}
 
             {userEmail ? (
               <UserMenu email={userEmail} />
