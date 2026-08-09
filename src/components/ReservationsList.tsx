@@ -23,6 +23,8 @@ type Reservation = {
   flight?: string | null;
   notes?: string | null;
   status?: string | null;
+  driverName?: string;
+  commissionAmount?: string;
 };
 
 type Props = {
@@ -33,6 +35,7 @@ type Props = {
   showRestore?: boolean;
   showSoftDelete?: boolean;
   showSort?: boolean;
+  showDriverShortcut?: boolean;
 };
 
 /* ---------- Helpers ---------- */
@@ -101,6 +104,10 @@ function buildWhatsAppShareLink(r: Reservation) {
     `Status: ${reservationStatusLabel(r.status)}`,
     typeof r.priceEuro === "number" && `Price: ${r.priceEuro} EUR`,
   ]);
+  addShareSection(lines, "🚕 DRIVER", [
+    r.driverName && `Driver: ${r.driverName}`,
+    r.commissionAmount && `Commission: €${r.commissionAmount}`,
+  ]);
 
   return `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
 }
@@ -141,6 +148,7 @@ function reservationMatchesSearch(
     r.dropoffText,
     r.flight,
     r.notes,
+    r.driverName,
     typeof r.priceEuro === "number" ? String(r.priceEuro) : null,
     reservationStatusLabel(r.status),
     date,
@@ -264,6 +272,7 @@ export default function ReservationsList({
   showRestore = false,
   showSoftDelete = true,
   showSort = true,
+  showDriverShortcut = false,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -441,9 +450,20 @@ export default function ReservationsList({
               >
                 {/* Header row */}
                 <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-baseline gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="text-base font-semibold">{date}</div>
                     <div className="text-sm text-neutral-400">{time}</div>
+                    {showDriverShortcut ? (
+                      <Link
+                        href={`/reservations/${r.id}/edit#driver-commission`}
+                        className="inline-flex h-8 max-w-full items-center rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 text-xs font-medium text-yellow-200 hover:bg-yellow-500/15"
+                        title={r.driverName ? `Edit driver assignment: ${r.driverName}` : "Assign driver"}
+                      >
+                        <span className="truncate">
+                          {r.driverName ? `Driver: ${r.driverName}` : "Assign Driver"}
+                        </span>
+                      </Link>
+                    ) : null}
                   </div>
 
                   <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2">
@@ -533,6 +553,10 @@ export default function ReservationsList({
                     <PhoneActions phone={r.phone} />
                     {r.flight && <Field label="Flight" value={r.flight} />}
                     {statusLabel && <Field label="Status" value={statusLabel} />}
+                    {r.driverName && <Field label="Driver" value={r.driverName} />}
+                    {r.commissionAmount && (
+                      <Field label="Commission" value={`€${r.commissionAmount}`} />
+                    )}
                     {r.notes && (
                       <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
                     )}

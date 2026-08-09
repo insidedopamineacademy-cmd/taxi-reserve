@@ -28,7 +28,14 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Pro
 
         <div className="hidden lg:flex items-center gap-4">
           <Link href="/reservations" className="hover:text-yellow-400">Reservations</Link>
-          {isAdmin ? <Link href="/drivers" className="hover:text-yellow-400">Drivers</Link> : null}
+          {isAdmin ? (
+            <>
+              <Link href="/drivers/overview" className="hover:text-yellow-400">Overview</Link>
+              <Link href="/drivers" className="hover:text-yellow-400">Drivers</Link>
+              <Link href="/commissions" className="hover:text-yellow-400">Commissions</Link>
+              <Link href="/payments" className="hover:text-yellow-400">Payments</Link>
+            </>
+          ) : null}
           {canAccessInbox ? <Link href="/emails" className="hover:text-yellow-400">Inbox</Link> : null}
           <Link href="/reservations/new" className="hover:text-yellow-400">New</Link>
           <Link href="/reservations/deleted" className="hover:text-yellow-400">Deleted</Link>
@@ -65,7 +72,14 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Pro
         <div id="mobile-navigation" className="lg:hidden border-t border-white/10 px-4 pb-3">
           <div className="flex flex-col gap-3 pt-3">
             <Link href="/reservations" onClick={() => setOpen(false)}>Reservations</Link>
-            {isAdmin ? <Link href="/drivers" onClick={() => setOpen(false)}>Drivers</Link> : null}
+            {isAdmin ? (
+              <>
+                <Link href="/drivers/overview" onClick={() => setOpen(false)}>Overview</Link>
+                <Link href="/drivers" onClick={() => setOpen(false)}>Drivers</Link>
+                <Link href="/commissions" onClick={() => setOpen(false)}>Commissions</Link>
+                <Link href="/payments" onClick={() => setOpen(false)}>Payments</Link>
+              </>
+            ) : null}
             {canAccessInbox ? <Link href="/emails" onClick={() => setOpen(false)}>Inbox</Link> : null}
             <Link href="/reservations/new" onClick={() => setOpen(false)}>New</Link>
             <Link href="/reservations/deleted" onClick={() => setOpen(false)}>Deleted</Link>

@@ -9,6 +9,12 @@ export type DriverFinancialSummary = {
   balance: Prisma.Decimal;
 };
 
+export type DriverFinancePosition = {
+  totalCommissionDue: Prisma.Decimal;
+  driverCredits: Prisma.Decimal;
+  netPosition: Prisma.Decimal;
+};
+
 function decimalOrZero(value: Prisma.Decimal | null | undefined) {
   return value ?? new Prisma.Decimal(0);
 }
@@ -96,6 +102,27 @@ export function combineDriverFinancialSummaries(
   }
 
   return calculateDriverFinancialSummary(totalCommissions, totalPayments);
+}
+
+export function calculateDriverFinancePosition(
+  summaries: Iterable<DriverFinancialSummary>,
+): DriverFinancePosition {
+  let totalCommissionDue = new Prisma.Decimal(0);
+  let driverCredits = new Prisma.Decimal(0);
+
+  for (const summary of summaries) {
+    if (summary.balance.greaterThan(0)) {
+      totalCommissionDue = totalCommissionDue.plus(summary.balance);
+    } else if (summary.balance.lessThan(0)) {
+      driverCredits = driverCredits.plus(summary.balance.abs());
+    }
+  }
+
+  return {
+    totalCommissionDue,
+    driverCredits,
+    netPosition: totalCommissionDue.minus(driverCredits),
+  };
 }
 
 export function formatEuro(amount: Prisma.Decimal) {

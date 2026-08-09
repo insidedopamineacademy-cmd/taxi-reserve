@@ -75,6 +75,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     revalidatePath("/drivers");
     revalidatePath(`/drivers/${driverId}`);
+    revalidatePath("/drivers/overview");
+    revalidatePath("/payments");
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {
     console.error("Driver payment creation failed:", error);

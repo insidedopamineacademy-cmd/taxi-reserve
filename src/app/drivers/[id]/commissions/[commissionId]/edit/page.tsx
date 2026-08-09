@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { notFound } from "next/navigation";
 import CommissionForm from "@/components/drivers/CommissionForm";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
+import { resolveCommissionRoute } from "@/lib/drivers/commissionRoute";
 import { formatFinancialDateInput } from "@/lib/drivers/financialValidation";
 import { prisma } from "@/lib/prisma";
 
@@ -19,6 +20,15 @@ export default async function EditCommissionPage({ params }: PageProps) {
       commissionAmount: true,
       entryDate: true,
       notes: true,
+      manualPickupText: true,
+      manualDropoffText: true,
+      reservation: {
+        select: {
+          id: true,
+          pickupText: true,
+          dropoffText: true,
+        },
+      },
       driver: {
         select: { id: true, name: true, licenseNumber: true },
       },
@@ -26,6 +36,7 @@ export default async function EditCommissionPage({ params }: PageProps) {
   });
 
   if (!commission) notFound();
+  const route = resolveCommissionRoute(commission);
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-6 sm:px-6">
@@ -44,6 +55,10 @@ export default async function EditCommissionPage({ params }: PageProps) {
             amount: commission.commissionAmount.toFixed(2),
             entryDate: formatFinancialDateInput(commission.entryDate),
             notes: commission.notes ?? "",
+            manualPickupText: route.pickupText ?? "",
+            manualDropoffText: route.dropoffText ?? "",
+            routeSource: route.source,
+            reservationId: route.reservationId,
           }}
         />
       </section>

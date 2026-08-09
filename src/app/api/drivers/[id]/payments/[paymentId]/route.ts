@@ -15,6 +15,8 @@ type RouteContext = { params: Promise<{ id: string; paymentId: string }> };
 function revalidateDriverLedger(driverId: string) {
   revalidatePath("/drivers");
   revalidatePath(`/drivers/${driverId}`);
+  revalidatePath("/drivers/overview");
+  revalidatePath("/payments");
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {

@@ -93,14 +93,16 @@ model Driver {
 }
 
 model CommissionEntry {
-  id               String   @id @default(cuid())
-  driverId         String
-  reservationId    String?  @unique
-  commissionAmount Decimal  @db.Decimal(10, 2)
-  entryDate        DateTime
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  driverId          String
+  reservationId     String?  @unique
+  manualPickupText  String?
+  manualDropoffText String?
+  commissionAmount  Decimal  @db.Decimal(10, 2)
+  entryDate         DateTime
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   driver      Driver       @relation(fields: [driverId], references: [id], onDelete: Restrict)
   reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)

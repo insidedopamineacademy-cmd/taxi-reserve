@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MANUAL_COMMISSION_ROUTE_MAX_LENGTH } from "@/lib/drivers/commissionRoute";
 
 type CommissionFormProps = {
   mode: "create" | "edit";
@@ -12,6 +13,10 @@ type CommissionFormProps = {
     amount: string;
     entryDate: string;
     notes: string;
+    manualPickupText: string;
+    manualDropoffText: string;
+    routeSource: "manual" | "reservation";
+    reservationId?: string | null;
   };
 };
 
@@ -20,6 +25,8 @@ export default function CommissionForm({ mode, driver, initial }: CommissionForm
   const [amount, setAmount] = useState(initial.amount);
   const [entryDate, setEntryDate] = useState(initial.entryDate);
   const [notes, setNotes] = useState(initial.notes);
+  const [manualPickupText, setManualPickupText] = useState(initial.manualPickupText);
+  const [manualDropoffText, setManualDropoffText] = useState(initial.manualDropoffText);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +50,16 @@ export default function CommissionForm({ mode, driver, initial }: CommissionForm
       setError("Notes must be 2000 characters or fewer.");
       return;
     }
+    if (
+      initial.routeSource === "manual" &&
+      (manualPickupText.trim().length > MANUAL_COMMISSION_ROUTE_MAX_LENGTH ||
+        manualDropoffText.trim().length > MANUAL_COMMISSION_ROUTE_MAX_LENGTH)
+    ) {
+      setError(
+        `Pickup and drop-off must be ${MANUAL_COMMISSION_ROUTE_MAX_LENGTH} characters or fewer.`,
+      );
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -55,7 +72,14 @@ export default function CommissionForm({ mode, driver, initial }: CommissionForm
       const response = await fetch(endpoint, {
         method: mode === "create" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, entryDate, notes }),
+        body: JSON.stringify({
+          amount,
+          entryDate,
+          notes,
+          ...(initial.routeSource === "manual"
+            ? { manualPickupText, manualDropoffText }
+            : {}),
+        }),
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
 
@@ -101,6 +125,49 @@ export default function CommissionForm({ mode, driver, initial }: CommissionForm
           className={`${inputClass} [color-scheme:dark]`}
         />
       </label>
+
+      {initial.routeSource === "reservation" ? (
+        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+            Reservation route
+          </p>
+          <p className="mt-2 break-words text-sm text-neutral-200">
+            {initial.manualPickupText || "Pickup not set"}
+            <span className="mx-2 text-neutral-500">→</span>
+            {initial.manualDropoffText || "Drop-off not set"}
+          </p>
+          {initial.reservationId ? (
+            <p className="mt-1 break-all text-xs text-neutral-500">
+              Reservation {initial.reservationId}. Route addresses are edited on the reservation.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label>
+            <span className={labelClass}>Pickup (optional)</span>
+            <input
+              type="text"
+              value={manualPickupText}
+              onChange={(event) => setManualPickupText(event.target.value)}
+              maxLength={MANUAL_COMMISSION_ROUTE_MAX_LENGTH}
+              className={inputClass}
+              placeholder="Pickup location"
+            />
+          </label>
+          <label>
+            <span className={labelClass}>Drop-off (optional)</span>
+            <input
+              type="text"
+              value={manualDropoffText}
+              onChange={(event) => setManualDropoffText(event.target.value)}
+              maxLength={MANUAL_COMMISSION_ROUTE_MAX_LENGTH}
+              className={inputClass}
+              placeholder="Drop-off location"
+            />
+          </label>
+        </div>
+      )}
 
       <label>
         <span className={labelClass}>Notes (optional)</span>

@@ -8,6 +8,10 @@ import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import FinancialEntryDeleteButton from "@/components/drivers/FinancialEntryDeleteButton";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
 import {
+  formatCommissionRoute,
+  resolveCommissionRoute,
+} from "@/lib/drivers/commissionRoute";
+import {
   formatEuro,
   getDriverFinancialSummary,
 } from "@/lib/drivers/financials";
@@ -48,6 +52,8 @@ export default async function DriverDetailPage({ params }: PageProps) {
           commissionAmount: true,
           entryDate: true,
           notes: true,
+          manualPickupText: true,
+          manualDropoffText: true,
           reservation: {
             select: {
               id: true,
@@ -100,6 +106,12 @@ export default async function DriverDetailPage({ params }: PageProps) {
             </dl>
           </div>
           <div className="flex flex-wrap items-start gap-2">
+            <Link
+              href={`/api/drivers/${driver.id}/ledger-pdf`}
+              className="inline-flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-neutral-200 hover:bg-white/10"
+            >
+              Download Ledger PDF
+            </Link>
             <Link
               href={`/drivers/${driver.id}/edit`}
               className="inline-flex h-10 items-center rounded-md bg-yellow-500 px-3 text-sm font-semibold text-black hover:bg-yellow-400"
@@ -180,50 +192,53 @@ export default async function DriverDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <ol className="mt-3 grid gap-3">
-              {driver.commissionEntries.map((entry) => (
-                <li key={entry.id} className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm text-neutral-300">
-                        {formatFinancialDateDisplay(entry.entryDate)}
+              {driver.commissionEntries.map((entry) => {
+                const route = resolveCommissionRoute(entry);
+
+                return (
+                  <li key={entry.id} className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-neutral-300">
+                          {formatFinancialDateDisplay(entry.entryDate)}
+                        </p>
+                        {entry.reservation ? (
+                          <div className="mt-1 text-xs text-neutral-500">
+                            <p className="break-all">Reservation {entry.reservation.id}</p>
+                            <p className="mt-1 break-words">{formatCommissionRoute(route)}</p>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-xs text-neutral-500">
+                            <p>Manual commission</p>
+                            <p className="mt-1 break-words">{formatCommissionRoute(route)}</p>
+                          </div>
+                        )}
+                      </div>
+                      <p className="shrink-0 font-semibold text-white">
+                        {formatEuro(entry.commissionAmount)}
                       </p>
-                      {entry.reservation ? (
-                        <div className="mt-1 text-xs text-neutral-500">
-                          <p className="break-all">Reservation {entry.reservation.id}</p>
-                          <p className="mt-1 break-words">
-                            {entry.reservation.pickupText || "Pickup not set"}
-                            <span className="mx-1">→</span>
-                            {entry.reservation.dropoffText || "Drop-off not set"}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-neutral-500">Manual commission</p>
-                      )}
                     </div>
-                    <p className="shrink-0 font-semibold text-white">
-                      {formatEuro(entry.commissionAmount)}
-                    </p>
-                  </div>
-                  {entry.notes ? (
-                    <p className="mt-3 border-t border-white/10 pt-3 text-sm text-neutral-400">
-                      {entry.notes}
-                    </p>
-                  ) : null}
-                  <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-white/10 pt-3">
-                    <Link
-                      href={`/drivers/${driver.id}/commissions/${entry.id}/edit`}
-                      className="inline-flex h-9 items-center rounded-md border border-white/10 px-3 text-xs font-medium text-neutral-200 hover:bg-white/5"
-                    >
-                      Edit
-                    </Link>
-                    <FinancialEntryDeleteButton
-                      driverId={driver.id}
-                      entryId={entry.id}
-                      kind="commission"
-                    />
-                  </div>
-                </li>
-              ))}
+                    {entry.notes ? (
+                      <p className="mt-3 border-t border-white/10 pt-3 text-sm text-neutral-400">
+                        {entry.notes}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-white/10 pt-3">
+                      <Link
+                        href={`/drivers/${driver.id}/commissions/${entry.id}/edit`}
+                        className="inline-flex h-9 items-center rounded-md border border-white/10 px-3 text-xs font-medium text-neutral-200 hover:bg-white/5"
+                      >
+                        Edit
+                      </Link>
+                      <FinancialEntryDeleteButton
+                        driverId={driver.id}
+                        entryId={entry.id}
+                        kind="commission"
+                      />
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>

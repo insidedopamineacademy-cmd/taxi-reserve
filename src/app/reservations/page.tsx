@@ -27,6 +27,11 @@ const reservationListSelect = {
   flight: true,
   notes: true,
   status: true,
+  driver: { select: { name: true } },
+  commissionEntries: {
+    take: 1,
+    select: { commissionAmount: true },
+  },
 } satisfies Prisma.ReservationSelect;
 
 export default async function ReservationsPage({
@@ -37,6 +42,7 @@ export default async function ReservationsPage({
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) redirect("/login");
+  const isAdmin = session?.user?.role === "ADMIN";
 
   const params = (await searchParams) ?? {};
   const baseWhere: Prisma.ReservationWhereInput = { userEmail: email, isDeleted: false };
@@ -64,24 +70,31 @@ export default async function ReservationsPage({
     select: reservationListSelect,
   });
 
-  const items = reservations.map((r) => ({
-    id: r.id,
-    startAt: r.startAt.getTime(), // epoch ms for client
-    endAt: r.endAt ? r.endAt.getTime() : null,
-    pickupText: r.pickupText,
-    dropoffText: r.dropoffText,
-    pax: r.pax,
-    priceEuro: r.priceEuro,
-    phone: r.phone,
-    flight: r.flight,
-    notes: r.notes,
-    status: r.status,
-  }));
+  const items = reservations.map((r) => {
+    const linkedCommission = r.commissionEntries[0];
+    return {
+      id: r.id,
+      startAt: r.startAt.getTime(), // epoch ms for client
+      endAt: r.endAt ? r.endAt.getTime() : null,
+      pickupText: r.pickupText,
+      dropoffText: r.dropoffText,
+      pax: r.pax,
+      priceEuro: r.priceEuro,
+      phone: r.phone,
+      flight: r.flight,
+      notes: r.notes,
+      status: r.status,
+      ...(isAdmin && r.driver ? { driverName: r.driver.name } : {}),
+      ...(isAdmin && linkedCommission
+        ? { commissionAmount: linkedCommission.commissionAmount.toFixed(2) }
+        : {}),
+    };
+  });
 
   return (
     <div className="mx-auto max-w-2xl p-4">
       <h1 className="mb-4 text-2xl font-semibold">Reservations</h1>
-      <ReservationsListView items={items} />
+      <ReservationsListView items={items} showDriverShortcut={isAdmin} />
     </div>
   );
 }

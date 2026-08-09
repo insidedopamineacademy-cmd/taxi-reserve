@@ -77,6 +77,9 @@ export async function POST(request: Request) {
     });
 
     revalidatePath("/drivers");
+    revalidatePath("/drivers/overview");
+    revalidatePath("/commissions");
+    revalidatePath("/payments");
     return NextResponse.json({ driver }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

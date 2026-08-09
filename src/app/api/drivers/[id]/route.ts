@@ -141,6 +141,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     revalidatePath("/drivers");
     revalidatePath(`/drivers/${driver.id}`);
     revalidatePath(`/drivers/${driver.id}/edit`);
+    revalidatePath("/drivers/overview");
+    revalidatePath("/commissions");
+    revalidatePath("/payments");
 
     return NextResponse.json({ driver });
   } catch (error) {

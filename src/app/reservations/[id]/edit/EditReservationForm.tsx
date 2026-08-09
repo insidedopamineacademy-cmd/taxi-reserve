@@ -72,11 +72,13 @@ export default function EditReservationForm({
     commissionAmount: driverAdmin?.commissionAmount ?? "",
   });
 
-  // 🔧 unify input styles so all controls align (same height/padding across iOS/desktop)
   const inputClass =
-    "w-full h-11 rounded-md border border-gray-600 bg-gray-800 px-3 text-gray-100 placeholder-gray-400 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500/30 appearance-none";
+    "h-12 w-full appearance-none rounded-md border border-white/10 bg-black/30 px-3 text-base text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-white/25 focus:ring-2 focus:ring-white/10 disabled:cursor-not-allowed disabled:opacity-60";
   const textareaClass =
-    "w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-gray-100 placeholder-gray-400 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500/30 min-h-[120px]";
+    "min-h-40 w-full resize-y rounded-md border border-white/10 bg-black/30 px-3 py-3 text-base text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-white/25 focus:ring-2 focus:ring-white/10";
+  const addressClass =
+    "min-h-20 w-full resize-y rounded-md border border-white/10 bg-black/30 px-3 py-3 text-base text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-white/25 focus:ring-2 focus:ring-white/10";
+  const labelClass = "mb-1.5 block text-sm font-medium text-neutral-200";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -163,153 +165,203 @@ export default function EditReservationForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">From</span>
-          <input
-            className={inputClass}
-            value={form.pickupText}
-            onChange={(e) => setForm({ ...form, pickupText: e.target.value })}
-            placeholder="Pickup location"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">To</span>
-          <input
-            className={inputClass}
-            value={form.dropoffText}
-            onChange={(e) => setForm({ ...form, dropoffText: e.target.value })}
-            placeholder="Drop-off location"
-          />
-        </label>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Start</span>
-          <input
-            type="datetime-local"
-            className={inputClass}
-            value={form.startAt}
-            onChange={(e) => setForm({ ...form, startAt: e.target.value })}
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">End (optional)</span>
-          <input
-            type="datetime-local"
-            className={inputClass}
-            value={form.endAt}
-            onChange={(e) => setForm({ ...form, endAt: e.target.value })}
-          />
-        </label>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Pax</span>
-          <input
-            type="number"
-            min={1}
-            max={99}
-            className={inputClass}
-            value={form.pax}
-            onChange={(e) => setForm({ ...form, pax: e.target.value })}
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Price (€)</span>
-          <input
-            type="number"
-            step="0.01"
-            className={inputClass}
-            value={String(form.priceEuro ?? "")}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                priceEuro:
-                  e.target.value === "" ? "" : Number(e.target.value),
-              })
-            }
-          />
-        </label>
-
-        <div className="block">
-          <label htmlFor="reservation-phone" className="mb-1 block text-sm text-gray-300">
-            Phone
-          </label>
-          <input
-            id="reservation-phone"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            className={inputClass}
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            placeholder="+34 600 000 000"
-          />
-          <PhoneActions phone={form.phone} showNumber={false} className="mt-2" />
+    <form onSubmit={onSubmit} className="space-y-5">
+      <section
+        aria-labelledby="ride-details-heading"
+        className="rounded-xl border border-white/10 bg-[#0e1426] p-4 sm:p-5"
+      >
+        <div className="mb-5">
+          <h2 id="ride-details-heading" className="text-lg font-semibold text-white">
+            Ride Details
+          </h2>
+          <p className="mt-1 text-sm text-neutral-400">
+            Route and schedule for this reservation.
+          </p>
         </div>
-      </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Flight</span>
-          <input
-            className={inputClass}
-            value={form.flight}
-            onChange={(e) => setForm({ ...form, flight: e.target.value })}
-            placeholder="VY1234"
-          />
-        </label>
+        <div className="grid gap-4">
+          <label className="block min-w-0">
+            <span className={labelClass}>Pickup</span>
+            <textarea
+              rows={2}
+              className={addressClass}
+              value={form.pickupText}
+              onChange={(e) => setForm({ ...form, pickupText: e.target.value })}
+              placeholder="Pickup location"
+            />
+          </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm text-gray-300">Status</span>
-          <select
-            className={inputClass}
-            value={form.status}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                status: normalizeReservationStatusCode(e.target.value),
-              })
-            }
-          >
-            {RESERVATION_STATUS_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+          <label className="block min-w-0">
+            <span className={labelClass}>Drop-off</span>
+            <textarea
+              rows={2}
+              className={addressClass}
+              value={form.dropoffText}
+              onChange={(e) => setForm({ ...form, dropoffText: e.target.value })}
+              placeholder="Drop-off location"
+            />
+          </label>
 
-      <label className="block">
-        <span className="mb-1 block text-sm text-gray-300">Notes</span>
-        <textarea
-          rows={4}
-          className={textareaClass}
-          value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          placeholder="Anything important..."
-        />
-      </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block min-w-0">
+              <span className={labelClass}>Start date &amp; time</span>
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={form.startAt}
+                onChange={(e) => setForm({ ...form, startAt: e.target.value })}
+              />
+            </label>
+
+            <label className="block min-w-0">
+              <span className={labelClass}>End date &amp; time (optional)</span>
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={form.endAt}
+                onChange={(e) => setForm({ ...form, endAt: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="passenger-journey-heading"
+        className="rounded-xl border border-white/10 bg-[#0e1426] p-4 sm:p-5"
+      >
+        <div className="mb-5">
+          <h2 id="passenger-journey-heading" className="text-lg font-semibold text-white">
+            Passenger &amp; Journey
+          </h2>
+          <p className="mt-1 text-sm text-neutral-400">
+            Passenger count and journey contact details.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>Passenger count</span>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              className={inputClass}
+              value={form.pax}
+              onChange={(e) => setForm({ ...form, pax: e.target.value })}
+            />
+          </label>
+
+          <label className="block min-w-0">
+            <span className={labelClass}>Flight</span>
+            <input
+              className={inputClass}
+              value={form.flight}
+              onChange={(e) => setForm({ ...form, flight: e.target.value })}
+              placeholder="VY1234"
+            />
+          </label>
+
+          <div className="min-w-0 sm:col-span-2">
+            <label htmlFor="reservation-phone" className={labelClass}>
+              Phone
+            </label>
+            <input
+              id="reservation-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              className={inputClass}
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="+34 600 000 000"
+            />
+            <PhoneActions phone={form.phone} showNumber={false} className="mt-2" />
+          </div>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="booking-operations-heading"
+        className="rounded-xl border border-white/10 bg-[#0e1426] p-4 sm:p-5"
+      >
+        <div className="mb-5">
+          <h2 id="booking-operations-heading" className="text-lg font-semibold text-white">
+            Booking &amp; Operations
+          </h2>
+          <p className="mt-1 text-sm text-neutral-400">
+            Commercial status and operational notes.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>Price (€)</span>
+            <input
+              type="number"
+              step="0.01"
+              className={inputClass}
+              value={String(form.priceEuro ?? "")}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  priceEuro:
+                    e.target.value === "" ? "" : Number(e.target.value),
+                })
+              }
+            />
+          </label>
+
+          <label className="block min-w-0">
+            <span className={labelClass}>Status</span>
+            <select
+              className={inputClass}
+              value={form.status}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  status: normalizeReservationStatusCode(e.target.value),
+                })
+              }
+            >
+              {RESERVATION_STATUS_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block min-w-0 sm:col-span-2">
+            <span className={labelClass}>Notes</span>
+            <textarea
+              rows={6}
+              className={textareaClass}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Anything important..."
+            />
+          </label>
+        </div>
+      </section>
 
       {driverAdmin ? (
-        <section className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
-          <div className="mb-3">
-            <h2 className="font-medium text-gray-100">Driver and commission</h2>
-            <p className="mt-1 text-xs text-gray-400">
+        <section
+          id="driver-commission"
+          aria-labelledby="driver-commission-heading"
+          className="scroll-mt-24 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 sm:p-5"
+        >
+          <div className="mb-5">
+            <h2 id="driver-commission-heading" className="text-lg font-semibold text-white">
+              Driver &amp; Commission
+            </h2>
+            <p className="mt-1 text-sm text-neutral-400">
               Admin-only financial assignment for this reservation.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm text-gray-300">Assigned driver</span>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block min-w-0">
+              <span className={labelClass}>Assigned driver</span>
               <select
                 className={inputClass}
                 value={form.driverId}
@@ -336,8 +388,8 @@ export default function EditReservationForm({
               </select>
             </label>
 
-            <label className="block">
-              <span className="mb-1 block text-sm text-gray-300">Commission (€)</span>
+            <label className="block min-w-0">
+              <span className={labelClass}>Commission (€)</span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -353,27 +405,27 @@ export default function EditReservationForm({
             </label>
           </div>
           {driverAdmin.drivers.length === 0 ? (
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-neutral-400">
               No active drivers are currently available for assignment.
             </p>
           ) : null}
         </section>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="submit"
-          disabled={saving}
-          className="h-10 rounded-md border border-gray-600 bg-gray-800 px-4 text-gray-100 hover:bg-gray-700 disabled:opacity-60"
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
+      <div className="flex flex-col-reverse gap-3 rounded-xl border border-white/10 bg-[#0e1426] p-3 sm:flex-row sm:justify-end">
         <button
           type="button"
           onClick={() => history.back()}
-          className="h-10 rounded-md border border-gray-700 bg-transparent px-4 text-gray-200 hover:bg-gray-800/60"
+          className="h-12 rounded-md border border-white/10 bg-transparent px-5 text-sm font-medium text-neutral-200 hover:bg-white/5 sm:w-auto"
         >
           Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-12 rounded-md bg-yellow-500 px-5 text-sm font-semibold text-black hover:bg-yellow-400 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+        >
+          {saving ? "Saving..." : "Save Changes"}
         </button>
       </div>
     </form>

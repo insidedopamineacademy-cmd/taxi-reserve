@@ -62,22 +62,12 @@ export default async function Home() {
               </Link>
 
               <Link
-                href="/drivers"
+                href="/api/drivers/full-ledger-pdf"
                 className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
               >
-                <h3 className="font-medium text-white">Commissions</h3>
+                <h3 className="font-medium text-white">Download Full Ledger PDF</h3>
                 <p className="mt-1 text-sm text-neutral-300">
-                  Manage driver commissions.
-                </p>
-              </Link>
-
-              <Link
-                href="/drivers"
-                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-              >
-                <h3 className="font-medium text-white">Payments</h3>
-                <p className="mt-1 text-sm text-neutral-300">
-                  Record driver payments.
+                  Download all driver ledgers.
                 </p>
               </Link>
             </>

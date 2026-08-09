@@ -7,7 +7,9 @@ export default withAuth({
     authorized: ({ token, req }) => {
       if (
         req.nextUrl.pathname.startsWith("/admin") ||
-        req.nextUrl.pathname.startsWith("/drivers")
+        req.nextUrl.pathname.startsWith("/drivers") ||
+        req.nextUrl.pathname.startsWith("/commissions") ||
+        req.nextUrl.pathname.startsWith("/payments")
       ) {
         return token?.role === "ADMIN";
       }
@@ -23,6 +25,8 @@ export const config = {
     "/settings/:path*",
     "/admin/:path*",
     "/drivers/:path*",
+    "/commissions/:path*",
+    "/payments/:path*",
     "/activity-log/:path*",
   ],
 };

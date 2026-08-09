@@ -7,6 +7,7 @@ import {
   parseFinancialNotes,
   parsePositiveMoney,
 } from "@/lib/drivers/financialValidation";
+import { parseManualCommissionRouteText } from "@/lib/drivers/commissionRoute";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string; commissionId: string }> };
@@ -14,6 +15,8 @@ type RouteContext = { params: Promise<{ id: string; commissionId: string }> };
 function revalidateDriverLedger(driverId: string) {
   revalidatePath("/drivers");
   revalidatePath(`/drivers/${driverId}`);
+  revalidatePath("/drivers/overview");
+  revalidatePath("/commissions");
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -33,6 +36,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       commissionAmount: true,
       entryDate: true,
       notes: true,
+      reservationId: true,
+      manualPickupText: true,
+      manualDropoffText: true,
     },
   });
   if (!current) {
@@ -50,11 +56,31 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (!entryDate.ok) return NextResponse.json({ error: entryDate.error }, { status: 400 });
   const notes = parseFinancialNotes(input.notes);
   if (!notes.ok) return NextResponse.json({ error: notes.error }, { status: 400 });
+  const manualPickupText = current.reservationId
+    ? { ok: true as const, value: current.manualPickupText }
+    : parseManualCommissionRouteText(input.manualPickupText, "Pickup");
+  if (!manualPickupText.ok) {
+    return NextResponse.json({ error: manualPickupText.error }, { status: 400 });
+  }
+  const manualDropoffText = current.reservationId
+    ? { ok: true as const, value: current.manualDropoffText }
+    : parseManualCommissionRouteText(input.manualDropoffText, "Drop-off");
+  if (!manualDropoffText.ok) {
+    return NextResponse.json({ error: manualDropoffText.error }, { status: 400 });
+  }
 
   const changedFields: string[] = [];
   if (!current.commissionAmount.equals(amount.value)) changedFields.push("commissionAmount");
   if (current.entryDate.getTime() !== entryDate.value.getTime()) changedFields.push("entryDate");
   if (current.notes !== notes.value) changedFields.push("notes");
+  if (current.reservationId === null) {
+    if (current.manualPickupText !== manualPickupText.value) {
+      changedFields.push("manualPickupText");
+    }
+    if (current.manualDropoffText !== manualDropoffText.value) {
+      changedFields.push("manualDropoffText");
+    }
+  }
 
   if (changedFields.length === 0) {
     return NextResponse.json({ commission: { id: current.id, driverId } });
@@ -67,6 +93,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         commissionAmount: amount.value,
         entryDate: entryDate.value,
         notes: notes.value,
+        ...(current.reservationId === null
+          ? {
+              manualPickupText: manualPickupText.value,
+              manualDropoffText: manualDropoffText.value,
+            }
+          : {}),
       },
       select: { id: true, driverId: true },
     });

@@ -6,6 +6,7 @@ import { DriverStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import EditReservationForm from "./EditReservationForm";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -73,8 +74,21 @@ export default async function EditReservationPage({ params }: PageProps) {
       : undefined;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
-      <h1 className="text-xl font-semibold">Edit Reservation</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Edit Reservation</h1>
+          <p className="mt-1 break-all text-xs text-neutral-500">
+            Reservation {reservation.id}
+          </p>
+        </div>
+        <Link
+          href="/reservations"
+          className="inline-flex h-11 items-center justify-center self-start rounded-md border border-white/10 px-4 text-sm font-medium text-neutral-200 hover:bg-white/5 sm:self-auto"
+        >
+          Back to reservations
+        </Link>
+      </header>
       <EditReservationForm initial={initial} driverAdmin={driverAdmin} />
     </div>
   );

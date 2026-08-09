@@ -49,7 +49,14 @@ export default async function NewCommissionPage({ params }: PageProps) {
         <CommissionForm
           mode="create"
           driver={driver}
-          initial={{ amount: "", entryDate: currentFinancialDateInput(), notes: "" }}
+          initial={{
+            amount: "",
+            entryDate: currentFinancialDateInput(),
+            notes: "",
+            manualPickupText: "",
+            manualDropoffText: "",
+            routeSource: "manual",
+          }}
         />
       </section>
     </main>

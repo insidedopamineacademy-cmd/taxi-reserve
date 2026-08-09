@@ -352,6 +352,8 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   revalidatePath("/reservations");
   if (integrationResult) {
     revalidatePath("/drivers");
+    revalidatePath("/drivers/overview");
+    revalidatePath("/commissions");
     if (integrationResult.previousDriverId) {
       revalidatePath(`/drivers/${integrationResult.previousDriverId}`);
     }

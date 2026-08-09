@@ -8,6 +8,7 @@ import {
   parseFinancialNotes,
   parsePositiveMoney,
 } from "@/lib/drivers/financialValidation";
+import { parseManualCommissionRouteText } from "@/lib/drivers/commissionRoute";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -47,6 +48,17 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!entryDate.ok) return NextResponse.json({ error: entryDate.error }, { status: 400 });
   const notes = parseFinancialNotes(input.notes);
   if (!notes.ok) return NextResponse.json({ error: notes.error }, { status: 400 });
+  const manualPickupText = parseManualCommissionRouteText(input.manualPickupText, "Pickup");
+  if (!manualPickupText.ok) {
+    return NextResponse.json({ error: manualPickupText.error }, { status: 400 });
+  }
+  const manualDropoffText = parseManualCommissionRouteText(
+    input.manualDropoffText,
+    "Drop-off",
+  );
+  if (!manualDropoffText.ok) {
+    return NextResponse.json({ error: manualDropoffText.error }, { status: 400 });
+  }
 
   try {
     const commission = await prisma.commissionEntry.create({
@@ -56,6 +68,8 @@ export async function POST(request: Request, { params }: RouteContext) {
         commissionAmount: amount.value,
         entryDate: entryDate.value,
         notes: notes.value,
+        manualPickupText: manualPickupText.value,
+        manualDropoffText: manualDropoffText.value,
       },
       select: { id: true, driverId: true },
     });
@@ -70,6 +84,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     revalidatePath("/drivers");
     revalidatePath(`/drivers/${driverId}`);
+    revalidatePath("/drivers/overview");
+    revalidatePath("/commissions");
     return NextResponse.json({ commission }, { status: 201 });
   } catch (error) {
     console.error("Commission creation failed:", error);
