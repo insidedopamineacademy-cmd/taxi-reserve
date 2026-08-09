@@ -7,9 +7,10 @@ import UserMenu from "./UserMenu";
 type Props = {
   userEmail: string | null;
   canAccessInbox: boolean;
+  isAdmin: boolean;
 };
 
-export default function NavbarClient({ userEmail, canAccessInbox }: Props) {
+export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function NavbarClient({ userEmail, canAccessInbox }: Props) {
 
         <div className="hidden lg:flex items-center gap-4">
           <Link href="/reservations" className="hover:text-yellow-400">Reservations</Link>
+          {isAdmin ? <Link href="/drivers" className="hover:text-yellow-400">Drivers</Link> : null}
           {canAccessInbox ? <Link href="/emails" className="hover:text-yellow-400">Inbox</Link> : null}
           <Link href="/reservations/new" className="hover:text-yellow-400">New</Link>
           <Link href="/reservations/deleted" className="hover:text-yellow-400">Deleted</Link>
@@ -63,6 +65,7 @@ export default function NavbarClient({ userEmail, canAccessInbox }: Props) {
         <div id="mobile-navigation" className="lg:hidden border-t border-white/10 px-4 pb-3">
           <div className="flex flex-col gap-3 pt-3">
             <Link href="/reservations" onClick={() => setOpen(false)}>Reservations</Link>
+            {isAdmin ? <Link href="/drivers" onClick={() => setOpen(false)}>Drivers</Link> : null}
             {canAccessInbox ? <Link href="/emails" onClick={() => setOpen(false)}>Inbox</Link> : null}
             <Link href="/reservations/new" onClick={() => setOpen(false)}>New</Link>
             <Link href="/reservations/deleted" onClick={() => setOpen(false)}>Deleted</Link>

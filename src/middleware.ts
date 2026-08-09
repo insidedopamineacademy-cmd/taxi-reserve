@@ -5,7 +5,10 @@ export default withAuth({
   pages: { signIn: "/login" },
   callbacks: {
     authorized: ({ token, req }) => {
-      if (req.nextUrl.pathname.startsWith("/admin")) {
+      if (
+        req.nextUrl.pathname.startsWith("/admin") ||
+        req.nextUrl.pathname.startsWith("/drivers")
+      ) {
         return token?.role === "ADMIN";
       }
       return !!token;
@@ -19,6 +22,7 @@ export const config = {
     "/emails/:path*",
     "/settings/:path*",
     "/admin/:path*",
+    "/drivers/:path*",
     "/activity-log/:path*",
   ],
 };

@@ -1,13 +1,19 @@
 import NavbarClient from "@/components/NavbarClient";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 
 export default async function ServerNavbar() {
-  const access = await getEmailInboxAccess();
+  const [access, session] = await Promise.all([
+    getEmailInboxAccess(),
+    getServerSession(authOptions),
+  ]);
 
   return (
     <NavbarClient
       userEmail={access.email}
       canAccessInbox={access.allowed}
+      isAdmin={session?.user?.role === "ADMIN"}
     />
   );
 }

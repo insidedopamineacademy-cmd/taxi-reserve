@@ -23,6 +23,18 @@ type Initial = {
   status?: string | null;
 };
 
+type DriverAdmin = {
+  currentDriverId: string | null;
+  commissionAmount: string;
+  hasLinkedCommission: boolean;
+  drivers: Array<{
+    id: string;
+    name: string;
+    licenseNumber: string;
+    status: "ACTIVE" | "INACTIVE";
+  }>;
+};
+
 // --- Local helpers ---
 function toLocalInput(dt?: string | Date | null) {
   if (!dt) return "";
@@ -35,7 +47,13 @@ function localInputToUTC(v: string) {
   return new Date(v);
 }
 
-export default function EditReservationForm({ initial }: { initial: Initial }) {
+export default function EditReservationForm({
+  initial,
+  driverAdmin,
+}: {
+  initial: Initial;
+  driverAdmin?: DriverAdmin;
+}) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
@@ -50,6 +68,8 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
     flight: initial.flight ?? "",
     notes: initial.notes ?? "",
     status: normalizeReservationStatusCode(initial.status),
+    driverId: driverAdmin?.currentDriverId ?? "",
+    commissionAmount: driverAdmin?.commissionAmount ?? "",
   });
 
   // 🔧 unify input styles so all controls align (same height/padding across iOS/desktop)
@@ -63,7 +83,7 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
     if (saving) return;
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         pickupText: form.pickupText.trim() || null,
         dropoffText: form.dropoffText.trim() || null,
         startAt: localInputToUTC(form.startAt),
@@ -79,18 +99,65 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
         status: form.status,
       };
 
+      if (driverAdmin) {
+        const rawCommission = form.commissionAmount.trim();
+        const normalizedCommission =
+          rawCommission.includes(",") && !rawCommission.includes(".")
+            ? rawCommission.replace(",", ".")
+            : rawCommission;
+
+        if (!form.driverId && normalizedCommission) {
+          throw new Error("Select a driver before entering a commission.");
+        }
+        if (
+          normalizedCommission &&
+          (!/^\d+(?:\.\d{1,2})?$/.test(normalizedCommission) ||
+            /^0+(?:\.0{1,2})?$/.test(normalizedCommission))
+        ) {
+          throw new Error(
+            "Commission must be greater than zero with no more than 2 decimal places.",
+          );
+        }
+
+        const removesLinkedCommission =
+          driverAdmin.hasLinkedCommission &&
+          (!form.driverId || !normalizedCommission);
+        let confirmCommissionRemoval = false;
+
+        if (removesLinkedCommission) {
+          const message = !form.driverId
+            ? "Unassign this driver and remove the reservation-linked commission? Manual commissions and payments will not be affected."
+            : "Remove this reservation-linked commission? The driver assignment will remain.";
+          confirmCommissionRemoval = window.confirm(message);
+          if (!confirmCommissionRemoval) {
+            setForm({
+              ...form,
+              driverId: driverAdmin.currentDriverId ?? "",
+              commissionAmount: driverAdmin.commissionAmount,
+            });
+            setSaving(false);
+            return;
+          }
+        }
+
+        payload.driverId = form.driverId || null;
+        payload.commissionAmount = normalizedCommission || null;
+        payload.confirmCommissionRemoval = confirmCommissionRemoval;
+      }
+
       const res = await fetch(`/api/reservations/${initial.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Save failed");
+      const result = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(result.error || "Save failed");
       router.push("/reservations");
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("Could not save. Please try again.");
+      alert(err instanceof Error ? err.message : "Could not save. Please try again.");
       setSaving(false);
     }
   }
@@ -231,6 +298,67 @@ export default function EditReservationForm({ initial }: { initial: Initial }) {
           placeholder="Anything important..."
         />
       </label>
+
+      {driverAdmin ? (
+        <section className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+          <div className="mb-3">
+            <h2 className="font-medium text-gray-100">Driver and commission</h2>
+            <p className="mt-1 text-xs text-gray-400">
+              Admin-only financial assignment for this reservation.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-300">Assigned driver</span>
+              <select
+                className={inputClass}
+                value={form.driverId}
+                onChange={(event) => {
+                  const driverId = event.target.value;
+                  setForm({
+                    ...form,
+                    driverId,
+                    commissionAmount: driverId ? form.commissionAmount : "",
+                  });
+                }}
+              >
+                <option value="">None / Unassigned</option>
+                {driverAdmin.drivers.map((driver) => (
+                  <option
+                    key={driver.id}
+                    value={driver.id}
+                    disabled={driver.status === "INACTIVE"}
+                  >
+                    {driver.name} · {driver.licenseNumber}
+                    {driver.status === "INACTIVE" ? " (INACTIVE — current)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-300">Commission (€)</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                value={form.commissionAmount}
+                onChange={(event) =>
+                  setForm({ ...form, commissionAmount: event.target.value })
+                }
+                disabled={!form.driverId}
+                placeholder={form.driverId ? "Optional, e.g. 30.00" : "Select a driver first"}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          {driverAdmin.drivers.length === 0 ? (
+            <p className="mt-3 text-xs text-gray-400">
+              No active drivers are currently available for assignment.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <button

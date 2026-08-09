@@ -2,6 +2,7 @@
 export const revalidate = 0; // always fetch fresh data
 
 import { prisma } from "@/lib/prisma";
+import { DriverStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -35,10 +36,46 @@ export default async function EditReservationPage({ params }: PageProps) {
     endAt: reservation.endAt ? reservation.endAt.toISOString() : null,
   };
 
+  const driverAdmin =
+    session?.user?.role === "ADMIN"
+      ? await (async () => {
+          const [drivers, linkedCommission] = await Promise.all([
+            prisma.driver.findMany({
+              where: reservation.driverId
+                ? {
+                    OR: [
+                      { status: DriverStatus.ACTIVE },
+                      { id: reservation.driverId },
+                    ],
+                  }
+                : { status: DriverStatus.ACTIVE },
+              orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
+              select: {
+                id: true,
+                name: true,
+                licenseNumber: true,
+                status: true,
+              },
+            }),
+            prisma.commissionEntry.findUnique({
+              where: { reservationId: reservation.id },
+              select: { id: true, commissionAmount: true },
+            }),
+          ]);
+
+          return {
+            currentDriverId: reservation.driverId,
+            commissionAmount: linkedCommission?.commissionAmount.toFixed(2) ?? "",
+            hasLinkedCommission: Boolean(linkedCommission),
+            drivers,
+          };
+        })()
+      : undefined;
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
       <h1 className="text-xl font-semibold">Edit Reservation</h1>
-      <EditReservationForm initial={initial} />
+      <EditReservationForm initial={initial} driverAdmin={driverAdmin} />
     </div>
   );
 }

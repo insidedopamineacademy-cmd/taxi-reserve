@@ -24,6 +24,17 @@ enum EmailDirection {
   OUTGOING
 }
 
+enum DriverStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DriverPaymentMethod {
+  CASH
+  BANK
+  OTHER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -42,6 +53,9 @@ model Reservation {
   userEmail String
   user      User   @relation(fields: [userEmail], references: [email])
 
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
   startAt     DateTime
   endAt       DateTime?
   pickupText  String?
@@ -59,7 +73,54 @@ model Reservation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reminders Reminder[]
+  reminders         Reminder[]
+  commissionEntries CommissionEntry[]
+
+  @@index([driverId])
+}
+
+model Driver {
+  id            String       @id @default(cuid())
+  name          String
+  licenseNumber String       @unique
+  status        DriverStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  reservations      Reservation[]
+  commissionEntries CommissionEntry[]
+  payments          DriverPayment[]
+}
+
+model CommissionEntry {
+  id               String   @id @default(cuid())
+  driverId         String
+  reservationId    String?  @unique
+  commissionAmount Decimal  @db.Decimal(10, 2)
+  entryDate        DateTime
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  driver      Driver       @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, entryDate])
+}
+
+model DriverPayment {
+  id          String              @id @default(cuid())
+  driverId    String
+  paymentDate DateTime
+  amount      Decimal             @db.Decimal(10, 2)
+  method      DriverPaymentMethod
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@index([driverId, paymentDate])
 }
 
 model Reminder {
