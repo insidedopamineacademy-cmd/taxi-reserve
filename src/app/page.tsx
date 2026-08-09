@@ -2,12 +2,18 @@
 export const revalidate = 0;
 
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { getUnreadEmailCountSafely } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 
 export default async function Home() {
-  const inboxAccess = await getEmailInboxAccess();
+  const [inboxAccess, session] = await Promise.all([
+    getEmailInboxAccess(),
+    getServerSession(authOptions),
+  ]);
   const email = inboxAccess.email ?? "";
+  const isAdmin = session?.user?.role === "ADMIN";
   const unreadEmails = inboxAccess.allowed
     ? await getUnreadEmailCountSafely()
     : 0;
@@ -42,6 +48,40 @@ export default async function Home() {
               Create a new booking fast.
             </p>
           </Link>
+
+          {isAdmin ? (
+            <>
+              <Link
+                href="/drivers"
+                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
+              >
+                <h3 className="font-medium text-white">Drivers</h3>
+                <p className="mt-1 text-sm text-neutral-300">
+                  Manage drivers and ledgers.
+                </p>
+              </Link>
+
+              <Link
+                href="/drivers"
+                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
+              >
+                <h3 className="font-medium text-white">Commissions</h3>
+                <p className="mt-1 text-sm text-neutral-300">
+                  Manage driver commissions.
+                </p>
+              </Link>
+
+              <Link
+                href="/drivers"
+                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
+              >
+                <h3 className="font-medium text-white">Payments</h3>
+                <p className="mt-1 text-sm text-neutral-300">
+                  Record driver payments.
+                </p>
+              </Link>
+            </>
+          ) : null}
 
           {inboxAccess.allowed ? (
             <Link
