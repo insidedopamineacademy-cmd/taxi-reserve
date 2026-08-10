@@ -9,6 +9,8 @@ type DriverListItem = {
   id: string;
   name: string;
   licenseNumber: string;
+  vehicleType: "VAN" | "SEDAN" | null;
+  subscriptionExempt: boolean;
   status: "ACTIVE" | "INACTIVE";
   balance: string;
 };
@@ -78,6 +80,16 @@ export default function DriversList({ items }: { items: DriverListItem[] }) {
                   </Link>
                   <p className="mt-1 break-all text-sm text-neutral-400">
                     License {driver.licenseNumber}
+                  </p>
+                  <p
+                    className={
+                      driver.vehicleType
+                        ? "mt-1 text-xs text-neutral-500"
+                        : "mt-1 text-xs font-medium text-yellow-300"
+                    }
+                  >
+                    Vehicle {driver.vehicleType ?? "Not set - configuration required"}
+                    {driver.subscriptionExempt ? " · Subscription exempt" : ""}
                   </p>
                 </div>
                 <DriverStatusBadge status={driver.status} />

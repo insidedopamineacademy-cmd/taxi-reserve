@@ -1,4 +1,4 @@
-import { DriverStatus, Prisma } from "@prisma/client";
+import { DriverStatus, DriverVehicleType, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activityLog";
@@ -9,6 +9,13 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 function parseStatus(value: unknown) {
   if (value === DriverStatus.ACTIVE || value === DriverStatus.INACTIVE) return value;
+  return null;
+}
+
+function parseVehicleType(value: unknown) {
+  if (value === DriverVehicleType.VAN || value === DriverVehicleType.SEDAN) {
+    return value;
+  }
   return null;
 }
 
@@ -31,7 +38,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const current = await prisma.driver.findUnique({
     where: { id },
-    select: { id: true, name: true, licenseNumber: true, status: true },
+    select: {
+      id: true,
+      name: true,
+      licenseNumber: true,
+      vehicleType: true,
+      subscriptionExempt: true,
+      status: true,
+    },
   });
   if (!current) {
     return NextResponse.json({ error: "Driver not found." }, { status: 404 });
@@ -43,7 +57,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const input = body as Record<string, unknown>;
-  const requestedFields = ["name", "licenseNumber", "status"].filter(
+  const requestedFields = [
+    "name",
+    "licenseNumber",
+    "vehicleType",
+    "subscriptionExempt",
+    "status",
+  ].filter(
     (field) => field in input,
   );
   if (requestedFields.length === 0) {
@@ -108,6 +128,33 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
   }
 
+  if ("vehicleType" in input) {
+    const vehicleType = parseVehicleType(input.vehicleType);
+    if (!vehicleType) {
+      return NextResponse.json(
+        { error: "Select a valid vehicle type." },
+        { status: 400 },
+      );
+    }
+    if (vehicleType !== current.vehicleType) {
+      data.vehicleType = vehicleType;
+      changedFields.push("vehicleType");
+    }
+  }
+
+  if ("subscriptionExempt" in input) {
+    if (typeof input.subscriptionExempt !== "boolean") {
+      return NextResponse.json(
+        { error: "Subscription exemption must be enabled or disabled." },
+        { status: 400 },
+      );
+    }
+    if (input.subscriptionExempt !== current.subscriptionExempt) {
+      data.subscriptionExempt = input.subscriptionExempt;
+      changedFields.push("subscriptionExempt");
+    }
+  }
+
   if (changedFields.length === 0) {
     return NextResponse.json({ driver: current });
   }
@@ -116,7 +163,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const driver = await prisma.driver.update({
       where: { id },
       data,
-      select: { id: true, name: true, licenseNumber: true, status: true },
+      select: {
+        id: true,
+        name: true,
+        licenseNumber: true,
+        vehicleType: true,
+        subscriptionExempt: true,
+        status: true,
+      },
     });
 
     const profileFields = changedFields.filter((field) => field !== "status");

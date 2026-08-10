@@ -1,4 +1,4 @@
-import { DriverStatus, Prisma } from "@prisma/client";
+import { DriverStatus, DriverVehicleType, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activityLog";
@@ -7,6 +7,13 @@ import { prisma } from "@/lib/prisma";
 
 function parseStatus(value: unknown) {
   if (value === DriverStatus.ACTIVE || value === DriverStatus.INACTIVE) return value;
+  return null;
+}
+
+function parseVehicleType(value: unknown) {
+  if (value === DriverVehicleType.VAN || value === DriverVehicleType.SEDAN) {
+    return value;
+  }
   return null;
 }
 
@@ -36,6 +43,9 @@ export async function POST(request: Request) {
   const licenseNumber =
     typeof input.licenseNumber === "string" ? input.licenseNumber.trim() : "";
   const status = input.status === undefined ? DriverStatus.ACTIVE : parseStatus(input.status);
+  const vehicleType = parseVehicleType(input.vehicleType);
+  const subscriptionExempt =
+    input.subscriptionExempt === undefined ? false : input.subscriptionExempt;
 
   if (!name) {
     return NextResponse.json({ error: "Enter the driver's name." }, { status: 400 });
@@ -55,6 +65,15 @@ export async function POST(request: Request) {
   if (!status) {
     return NextResponse.json({ error: "Select a valid driver status." }, { status: 400 });
   }
+  if (!vehicleType) {
+    return NextResponse.json({ error: "Select a valid vehicle type." }, { status: 400 });
+  }
+  if (typeof subscriptionExempt !== "boolean") {
+    return NextResponse.json(
+      { error: "Subscription exemption must be enabled or disabled." },
+      { status: 400 },
+    );
+  }
 
   const duplicate = await prisma.driver.findUnique({
     where: { licenseNumber },
@@ -64,8 +83,15 @@ export async function POST(request: Request) {
 
   try {
     const driver = await prisma.driver.create({
-      data: { name, licenseNumber, status },
-      select: { id: true, name: true, licenseNumber: true, status: true },
+      data: { name, licenseNumber, vehicleType, subscriptionExempt, status },
+      select: {
+        id: true,
+        name: true,
+        licenseNumber: true,
+        vehicleType: true,
+        subscriptionExempt: true,
+        status: true,
+      },
     });
 
     await logActivity({
@@ -73,7 +99,11 @@ export async function POST(request: Request) {
       entityType: "driver",
       entityId: driver.id,
       userEmail: access.email,
-      metadata: { status: driver.status },
+      metadata: {
+        status: driver.status,
+        vehicleType: driver.vehicleType,
+        subscriptionExempt: driver.subscriptionExempt,
+      },
     });
 
     revalidatePath("/drivers");

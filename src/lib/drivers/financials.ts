@@ -1,13 +1,14 @@
 import "server-only";
 
 import { Prisma } from "@prisma/client";
+import {
+  calculateDriverFinancialSummary,
+  type DriverFinancialSummary,
+} from "@/lib/drivers/financialMath";
 import { prisma } from "@/lib/prisma";
 
-export type DriverFinancialSummary = {
-  totalCommissions: Prisma.Decimal;
-  totalPayments: Prisma.Decimal;
-  balance: Prisma.Decimal;
-};
+export { calculateDriverFinancialSummary };
+export type { DriverFinancialSummary };
 
 export type DriverFinancePosition = {
   totalCommissionDue: Prisma.Decimal;
@@ -15,28 +16,10 @@ export type DriverFinancePosition = {
   netPosition: Prisma.Decimal;
 };
 
-function decimalOrZero(value: Prisma.Decimal | null | undefined) {
-  return value ?? new Prisma.Decimal(0);
-}
-
-export function calculateDriverFinancialSummary(
-  commissions: Prisma.Decimal | null | undefined,
-  payments: Prisma.Decimal | null | undefined,
-): DriverFinancialSummary {
-  const totalCommissions = decimalOrZero(commissions);
-  const totalPayments = decimalOrZero(payments);
-
-  return {
-    totalCommissions,
-    totalPayments,
-    balance: totalCommissions.minus(totalPayments),
-  };
-}
-
 export async function getDriverFinancialSummary(
   driverId: string,
 ): Promise<DriverFinancialSummary> {
-  const [commissions, payments] = await Promise.all([
+  const [commissions, payments, subscriptionCharges] = await Promise.all([
     prisma.commissionEntry.aggregate({
       where: { driverId },
       _sum: { commissionAmount: true },
@@ -45,11 +28,16 @@ export async function getDriverFinancialSummary(
       where: { driverId },
       _sum: { amount: true },
     }),
+    prisma.driverSubscriptionCharge.aggregate({
+      where: { driverId },
+      _sum: { amount: true },
+    }),
   ]);
 
   return calculateDriverFinancialSummary(
     commissions._sum.commissionAmount,
     payments._sum.amount,
+    subscriptionCharges._sum.amount,
   );
 }
 
@@ -57,13 +45,18 @@ export async function getDriverFinancialSummaries(driverIds: string[]) {
   const summaries = new Map<string, DriverFinancialSummary>();
   if (driverIds.length === 0) return summaries;
 
-  const [commissions, payments] = await Promise.all([
+  const [commissions, payments, subscriptionCharges] = await Promise.all([
     prisma.commissionEntry.groupBy({
       by: ["driverId"],
       where: { driverId: { in: driverIds } },
       _sum: { commissionAmount: true },
     }),
     prisma.driverPayment.groupBy({
+      by: ["driverId"],
+      where: { driverId: { in: driverIds } },
+      _sum: { amount: true },
+    }),
+    prisma.driverSubscriptionCharge.groupBy({
       by: ["driverId"],
       where: { driverId: { in: driverIds } },
       _sum: { amount: true },
@@ -76,6 +69,9 @@ export async function getDriverFinancialSummaries(driverIds: string[]) {
   const paymentsByDriver = new Map(
     payments.map((entry) => [entry.driverId, entry._sum.amount]),
   );
+  const subscriptionsByDriver = new Map(
+    subscriptionCharges.map((entry) => [entry.driverId, entry._sum.amount]),
+  );
 
   for (const driverId of driverIds) {
     summaries.set(
@@ -83,6 +79,7 @@ export async function getDriverFinancialSummaries(driverIds: string[]) {
       calculateDriverFinancialSummary(
         commissionsByDriver.get(driverId),
         paymentsByDriver.get(driverId),
+        subscriptionsByDriver.get(driverId),
       ),
     );
   }
@@ -95,13 +92,21 @@ export function combineDriverFinancialSummaries(
 ): DriverFinancialSummary {
   let totalCommissions = new Prisma.Decimal(0);
   let totalPayments = new Prisma.Decimal(0);
+  let totalSubscriptionCharges = new Prisma.Decimal(0);
 
   for (const summary of summaries) {
     totalCommissions = totalCommissions.plus(summary.totalCommissions);
     totalPayments = totalPayments.plus(summary.totalPayments);
+    totalSubscriptionCharges = totalSubscriptionCharges.plus(
+      summary.totalSubscriptionCharges,
+    );
   }
 
-  return calculateDriverFinancialSummary(totalCommissions, totalPayments);
+  return calculateDriverFinancialSummary(
+    totalCommissions,
+    totalPayments,
+    totalSubscriptionCharges,
+  );
 }
 
 export function calculateDriverFinancePosition(

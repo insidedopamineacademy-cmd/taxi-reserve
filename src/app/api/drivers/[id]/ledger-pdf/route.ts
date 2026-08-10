@@ -6,6 +6,7 @@ import { resolveCommissionRoute } from "@/lib/drivers/commissionRoute";
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { getDriverFinancialSummary } from "@/lib/drivers/financials";
 import { buildDriverLedgerPdf } from "@/lib/drivers/pdf";
+import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -69,6 +70,13 @@ export async function GET(_request: Request, { params }: RouteContext) {
           method: true,
         },
       },
+      subscriptionCharges: {
+        orderBy: [{ chargeMonth: "desc" }, { createdAt: "desc" }],
+        select: {
+          chargeMonth: true,
+          amount: true,
+        },
+      },
     },
   });
 
@@ -83,6 +91,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     generatedDate: generatedDate(),
     totalCommissions: summary.totalCommissions.toFixed(2),
     totalPayments: summary.totalPayments.toFixed(2),
+    totalSubscriptionCharges: summary.totalSubscriptionCharges.toFixed(2),
     balance: summary.balance.toFixed(2),
     commissions: driver.commissionEntries.map((commission) => {
       const route = resolveCommissionRoute(commission);
@@ -97,6 +106,10 @@ export async function GET(_request: Request, { params }: RouteContext) {
       date: formatFinancialDateDisplay(payment.paymentDate),
       method: paymentMethodLabel(payment.method),
       amount: payment.amount.toFixed(2),
+    })),
+    subscriptions: driver.subscriptionCharges.map((charge) => ({
+      month: formatSubscriptionMonthDisplay(charge.chargeMonth),
+      amount: charge.amount.toFixed(2),
     })),
   });
 

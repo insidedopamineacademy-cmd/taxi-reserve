@@ -20,6 +20,8 @@ export default async function DriversPage() {
       id: true,
       name: true,
       licenseNumber: true,
+      vehicleType: true,
+      subscriptionExempt: true,
       status: true,
     },
   });
@@ -51,7 +53,7 @@ export default async function DriversPage() {
         <h2 id="driver-financial-overview" className="sr-only">
           Driver financial overview
         </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
             <p className="text-sm text-neutral-400">Total commissions</p>
             <p className="mt-2 text-xl font-semibold text-white">
@@ -62,6 +64,12 @@ export default async function DriversPage() {
             <p className="text-sm text-neutral-400">Total payments</p>
             <p className="mt-2 text-xl font-semibold text-white">
               {formatEuro(overview.totalPayments)}
+            </p>
+          </article>
+          <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
+            <p className="text-sm text-neutral-400">Subscription charges</p>
+            <p className="mt-2 text-xl font-semibold text-white">
+              {formatEuro(overview.totalSubscriptionCharges)}
             </p>
           </article>
           <article className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">

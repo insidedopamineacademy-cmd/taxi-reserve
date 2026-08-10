@@ -49,7 +49,14 @@ export async function getDriverBalanceLines() {
 export async function getDriverFinanceOverview(now = new Date()) {
   const { weekStart, weekEnd, monthStart, monthEnd } = getMadridPaymentPeriods(now);
 
-  const [driverLines, weekPayments, monthPayments, recentCommissions, recentPayments] =
+  const [
+    driverLines,
+    weekPayments,
+    monthPayments,
+    monthSubscriptions,
+    recentCommissions,
+    recentPayments,
+  ] =
     await Promise.all([
       getDriverBalanceLines(),
       prisma.driverPayment.aggregate({
@@ -58,6 +65,10 @@ export async function getDriverFinanceOverview(now = new Date()) {
       }),
       prisma.driverPayment.aggregate({
         where: { paymentDate: { gte: monthStart, lt: monthEnd } },
+        _sum: { amount: true },
+      }),
+      prisma.driverSubscriptionCharge.aggregate({
+        where: { chargeMonth: { gte: monthStart, lt: monthEnd } },
         _sum: { amount: true },
       }),
       prisma.commissionEntry.findMany({
@@ -96,6 +107,8 @@ export async function getDriverFinanceOverview(now = new Date()) {
     ...position,
     collectedThisWeek: weekPayments._sum.amount ?? new Prisma.Decimal(0),
     collectedThisMonth: monthPayments._sum.amount ?? new Prisma.Decimal(0),
+    subscriptionChargesThisMonth:
+      monthSubscriptions._sum.amount ?? new Prisma.Decimal(0),
     activeDrivers: driverLines.filter((line) => line.status === "ACTIVE").length,
     recentCommissions,
     recentPayments,

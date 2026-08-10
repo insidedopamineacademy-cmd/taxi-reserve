@@ -6,6 +6,7 @@ import { resolveCommissionRoute } from "@/lib/drivers/commissionRoute";
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { getDriverFinancialSummaries } from "@/lib/drivers/financials";
 import { buildFullDriverLedgerPdf } from "@/lib/drivers/pdf";
+import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
 
 function generatedDateTime() {
@@ -58,6 +59,13 @@ export async function GET() {
           method: true,
         },
       },
+      subscriptionCharges: {
+        orderBy: [{ chargeMonth: "desc" }, { createdAt: "desc" }],
+        select: {
+          chargeMonth: true,
+          amount: true,
+        },
+      },
     },
   });
   const summaries = await getDriverFinancialSummaries(
@@ -74,6 +82,7 @@ export async function GET() {
         status: driver.status,
         totalCommissions: summary.totalCommissions.toFixed(2),
         totalPayments: summary.totalPayments.toFixed(2),
+        totalSubscriptionCharges: summary.totalSubscriptionCharges.toFixed(2),
         balance: summary.balance.toFixed(2),
         commissions: driver.commissionEntries.map((commission) => {
           const route = resolveCommissionRoute(commission);
@@ -89,6 +98,10 @@ export async function GET() {
           date: formatFinancialDateDisplay(payment.paymentDate),
           method: paymentMethodLabel(payment.method),
           amount: payment.amount.toFixed(2),
+        })),
+        subscriptions: driver.subscriptionCharges.map((charge) => ({
+          month: formatSubscriptionMonthDisplay(charge.chargeMonth),
+          amount: charge.amount.toFixed(2),
         })),
       };
     }),

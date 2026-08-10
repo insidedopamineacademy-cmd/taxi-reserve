@@ -27,6 +27,10 @@ export default async function DriverFinanceOverviewPage() {
     { label: "Net Position", value: formatEuro(overview.netPosition) },
     { label: "Collected This Week", value: formatEuro(overview.collectedThisWeek) },
     { label: "Collected This Month", value: formatEuro(overview.collectedThisMonth) },
+    {
+      label: "Subscriptions This Month",
+      value: formatEuro(overview.subscriptionChargesThisMonth),
+    },
     { label: "Active Drivers", value: String(overview.activeDrivers) },
   ];
 

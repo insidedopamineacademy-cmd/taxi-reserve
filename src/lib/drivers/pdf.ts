@@ -347,6 +347,11 @@ type PdfPaymentHistoryEntry = {
   amount: string;
 };
 
+type PdfSubscriptionHistoryEntry = {
+  month: string;
+  amount: string;
+};
+
 function commissionEntryHeight(
   writer: ReportWriter,
   commission: PdfCommissionHistoryEntry,
@@ -447,15 +452,59 @@ function drawPaymentHistory(
   }
 }
 
+function subscriptionEntryHeight(
+  writer: ReportWriter,
+  subscription: PdfSubscriptionHistoryEntry,
+) {
+  return entryHeaderLayout(
+    writer,
+    subscription.month,
+    formatPdfMoney(subscription.amount),
+  ).height + 18;
+}
+
+function drawSubscriptionHistory(
+  writer: ReportWriter,
+  subscriptions: PdfSubscriptionHistoryEntry[],
+) {
+  ensureSpace(
+    writer,
+    32 +
+      (subscriptions[0]
+        ? subscriptionEntryHeight(writer, subscriptions[0])
+        : 14),
+  );
+  drawSectionTitle(writer, "Subscription History");
+
+  if (subscriptions.length === 0) {
+    drawWrappedText(writer, "No subscription charges recorded.", {
+      color: MUTED_COLOR,
+    });
+    return;
+  }
+
+  for (const subscription of subscriptions) {
+    ensureSpace(writer, subscriptionEntryHeight(writer, subscription));
+    drawEntryHeader(
+      writer,
+      subscription.month,
+      formatPdfMoney(subscription.amount),
+    );
+    drawEntryDivider(writer);
+  }
+}
+
 export type DriverLedgerPdfInput = {
   driverName: string;
   licenseNumber: string;
   generatedDate: string;
   totalCommissions: string;
   totalPayments: string;
+  totalSubscriptionCharges: string;
   balance: string;
   commissions: PdfCommissionHistoryEntry[];
   payments: PdfPaymentHistoryEntry[];
+  subscriptions: PdfSubscriptionHistoryEntry[];
 };
 
 export async function buildDriverLedgerPdf(input: DriverLedgerPdfInput) {
@@ -467,6 +516,10 @@ export async function buildDriverLedgerPdf(input: DriverLedgerPdfInput) {
   drawMetrics(writer, [
     { label: "Total commissions", value: formatPdfMoney(input.totalCommissions) },
     { label: "Total payments", value: formatPdfMoney(input.totalPayments) },
+    {
+      label: "Subscription charges",
+      value: formatPdfMoney(input.totalSubscriptionCharges),
+    },
     { label: "Current balance", value: formatPdfMoney(input.balance) },
   ]);
 
@@ -474,6 +527,9 @@ export async function buildDriverLedgerPdf(input: DriverLedgerPdfInput) {
 
   writer.y -= 10;
   drawPaymentHistory(writer, input.payments);
+
+  writer.y -= 10;
+  drawSubscriptionHistory(writer, input.subscriptions);
 
   return finishReport(writer);
 }
@@ -486,14 +542,16 @@ export type FullDriverLedgerPdfInput = {
     status: "ACTIVE" | "INACTIVE";
     totalCommissions: string;
     totalPayments: string;
+    totalSubscriptionCharges: string;
     balance: string;
     commissions: PdfCommissionHistoryEntry[];
     payments: PdfPaymentHistoryEntry[];
+    subscriptions: PdfSubscriptionHistoryEntry[];
   }>;
 };
 
 export async function buildFullDriverLedgerPdf(input: FullDriverLedgerPdfInput) {
-  const writer = await createReport("Full Driver Commission Ledger");
+  const writer = await createReport("Full Driver Ledger");
   drawMetadata(writer, "Generated", input.generatedAt);
   drawMetadata(writer, "Drivers", String(input.drivers.length));
   writer.y -= 10;
@@ -534,12 +592,18 @@ export async function buildFullDriverLedgerPdf(input: FullDriverLedgerPdfInput) 
     drawMetrics(writer, [
       { label: "Total commissions", value: formatPdfMoney(driver.totalCommissions) },
       { label: "Total payments", value: formatPdfMoney(driver.totalPayments) },
+      {
+        label: "Subscription charges",
+        value: formatPdfMoney(driver.totalSubscriptionCharges),
+      },
       { label: "Current balance", value: formatPdfMoney(driver.balance) },
     ]);
 
     drawCommissionHistory(writer, driver.commissions);
     writer.y -= 10;
     drawPaymentHistory(writer, driver.payments);
+    writer.y -= 10;
+    drawSubscriptionHistory(writer, driver.subscriptions);
   });
 
   return finishReport(writer);
@@ -553,6 +617,7 @@ export type DueCommissionsPdfInput = {
     licenseNumber: string;
     totalCommissions: string;
     totalPayments: string;
+    totalSubscriptionCharges: string;
     balance: string;
   }>;
 };
@@ -575,7 +640,7 @@ export async function buildDueCommissionsPdf(input: DueCommissionsPdfInput) {
     for (const driver of input.drivers) {
       const balance = formatPdfMoney(driver.balance);
       const license = `License: ${driver.licenseNumber}`;
-      const totals = `Commissions: ${formatPdfMoney(driver.totalCommissions)} | Payments: ${formatPdfMoney(driver.totalPayments)}`;
+      const totals = `Commissions: ${formatPdfMoney(driver.totalCommissions)} | Payments: ${formatPdfMoney(driver.totalPayments)} | Subscriptions: ${formatPdfMoney(driver.totalSubscriptionCharges)}`;
       const entryHeight =
         entryHeaderLayout(writer, driver.name, balance).height +
         wrapText(license, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13 +

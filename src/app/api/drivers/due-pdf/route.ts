@@ -37,6 +37,7 @@ export async function GET() {
       licenseNumber: line.licenseNumber,
       totalCommissions: line.summary.totalCommissions.toFixed(2),
       totalPayments: line.summary.totalPayments.toFixed(2),
+      totalSubscriptionCharges: line.summary.totalSubscriptionCharges.toFixed(2),
       balance: line.summary.balance.toFixed(2),
     })),
   });

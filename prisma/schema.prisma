@@ -35,6 +35,11 @@ enum DriverPaymentMethod {
   OTHER
 }
 
+enum DriverVehicleType {
+  VAN
+  SEDAN
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -80,16 +85,19 @@ model Reservation {
 }
 
 model Driver {
-  id            String       @id @default(cuid())
-  name          String
-  licenseNumber String       @unique
-  status        DriverStatus @default(ACTIVE)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                 String             @id @default(cuid())
+  name               String
+  licenseNumber      String             @unique
+  vehicleType        DriverVehicleType?
+  subscriptionExempt Boolean            @default(false)
+  status             DriverStatus       @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  reservations      Reservation[]
-  commissionEntries CommissionEntry[]
-  payments          DriverPayment[]
+  reservations        Reservation[]
+  commissionEntries   CommissionEntry[]
+  payments            DriverPayment[]
+  subscriptionCharges DriverSubscriptionCharge[]
 }
 
 model CommissionEntry {
@@ -123,6 +131,20 @@ model DriverPayment {
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
   @@index([driverId, paymentDate])
+}
+
+model DriverSubscriptionCharge {
+  id          String   @id @default(cuid())
+  driverId    String
+  chargeMonth DateTime @db.Date
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@unique([driverId, chargeMonth])
+  @@index([chargeMonth])
 }
 
 model Reminder {

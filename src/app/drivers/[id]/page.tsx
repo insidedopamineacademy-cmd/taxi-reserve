@@ -16,6 +16,7 @@ import {
   getDriverFinancialSummary,
 } from "@/lib/drivers/financials";
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
+import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -42,6 +43,8 @@ export default async function DriverDetailPage({ params }: PageProps) {
       id: true,
       name: true,
       licenseNumber: true,
+      vehicleType: true,
+      subscriptionExempt: true,
       status: true,
       createdAt: true,
       commissionEntries: {
@@ -74,6 +77,16 @@ export default async function DriverDetailPage({ params }: PageProps) {
           notes: true,
         },
       },
+      subscriptionCharges: {
+        orderBy: [{ chargeMonth: "desc" }, { createdAt: "desc" }],
+        take: 100,
+        select: {
+          id: true,
+          chargeMonth: true,
+          amount: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -98,6 +111,28 @@ export default async function DriverDetailPage({ params }: PageProps) {
               <div>
                 <dt className="text-neutral-500">License number</dt>
                 <dd className="mt-1 break-all text-neutral-200">{driver.licenseNumber}</dd>
+              </div>
+              <div>
+                <dt className="text-neutral-500">Vehicle type</dt>
+                <dd
+                  className={
+                    driver.vehicleType
+                      ? "mt-1 text-neutral-200"
+                      : "mt-1 font-medium text-yellow-300"
+                  }
+                >
+                  {driver.vehicleType ?? "Not set - edit required"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-neutral-500">Subscription</dt>
+                <dd className="mt-1 text-neutral-200">
+                  {driver.subscriptionExempt
+                    ? "Exempt"
+                    : driver.vehicleType
+                      ? "Monthly charge enabled"
+                      : "Waiting for vehicle type"}
+                </dd>
               </div>
               <div>
                 <dt className="text-neutral-500">Created</dt>
@@ -159,7 +194,7 @@ export default async function DriverDetailPage({ params }: PageProps) {
         <h2 id="financial-summary" className="text-lg font-semibold text-white">
           Financial summary
         </h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
             <p className="text-sm text-neutral-400">Total commissions</p>
             <p className="mt-2 text-2xl font-semibold text-white">
@@ -170,6 +205,12 @@ export default async function DriverDetailPage({ params }: PageProps) {
             <p className="text-sm text-neutral-400">Total payments</p>
             <p className="mt-2 text-2xl font-semibold text-white">
               {formatEuro(summary.totalPayments)}
+            </p>
+          </article>
+          <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
+            <p className="text-sm text-neutral-400">Subscription charges</p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {formatEuro(summary.totalSubscriptionCharges)}
             </p>
           </article>
           <article className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
@@ -292,6 +333,40 @@ export default async function DriverDetailPage({ params }: PageProps) {
           )}
         </section>
       </div>
+
+      <section aria-labelledby="subscription-history" className="mt-6">
+        <h2 id="subscription-history" className="text-lg font-semibold text-white">
+          Subscription history
+        </h2>
+        {driver.subscriptionCharges.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-white/10 bg-[#0e1426] p-8 text-center text-sm text-neutral-400">
+            No subscription charges recorded yet.
+          </div>
+        ) : (
+          <ol className="mt-3 grid gap-3 sm:grid-cols-2">
+            {driver.subscriptionCharges.map((charge) => (
+              <li
+                key={charge.id}
+                className="rounded-xl border border-white/10 bg-[#0e1426] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-neutral-200">
+                      {formatSubscriptionMonthDisplay(charge.chargeMonth)}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Created {formatDate(charge.createdAt)}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-semibold text-white">
+                    {formatEuro(charge.amount)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
     </main>
   );
 }

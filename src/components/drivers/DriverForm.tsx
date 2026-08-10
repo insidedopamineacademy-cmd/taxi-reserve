@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type DriverStatus = "ACTIVE" | "INACTIVE";
+type DriverVehicleType = "VAN" | "SEDAN";
 
 type DriverFormProps = {
   mode: "create" | "edit";
@@ -12,6 +13,8 @@ type DriverFormProps = {
     id: string;
     name: string;
     licenseNumber: string;
+    vehicleType: DriverVehicleType | null;
+    subscriptionExempt: boolean;
     status: DriverStatus;
   };
 };
@@ -20,6 +23,12 @@ export default function DriverForm({ mode, initial }: DriverFormProps) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
   const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? "");
+  const [vehicleType, setVehicleType] = useState<DriverVehicleType | "">(
+    initial?.vehicleType ?? "",
+  );
+  const [subscriptionExempt, setSubscriptionExempt] = useState(
+    initial?.subscriptionExempt ?? false,
+  );
   const [status, setStatus] = useState<DriverStatus>(initial?.status ?? "ACTIVE");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +52,10 @@ export default function DriverForm({ mode, initial }: DriverFormProps) {
       setError("Enter the driver's license number.");
       return;
     }
+    if (!vehicleType) {
+      setError("Select the driver's vehicle type.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -56,6 +69,8 @@ export default function DriverForm({ mode, initial }: DriverFormProps) {
           body: JSON.stringify({
             name: trimmedName,
             licenseNumber: trimmedLicenseNumber,
+            vehicleType,
+            subscriptionExempt,
             status,
           }),
         },
@@ -104,6 +119,27 @@ export default function DriverForm({ mode, initial }: DriverFormProps) {
       </label>
 
       <label>
+        <span className={labelClass}>Vehicle type</span>
+        <select
+          value={vehicleType}
+          onChange={(event) =>
+            setVehicleType(event.target.value as DriverVehicleType | "")
+          }
+          required
+          className={inputClass}
+        >
+          <option value="">Select vehicle type</option>
+          <option value="VAN">VAN</option>
+          <option value="SEDAN">SEDAN</option>
+        </select>
+        {mode === "edit" && !initial?.vehicleType ? (
+          <span className="mt-1 block text-xs text-yellow-300">
+            Required before this driver can receive monthly subscription charges.
+          </span>
+        ) : null}
+      </label>
+
+      <label>
         <span className={labelClass}>Status</span>
         <select
           value={status}
@@ -113,6 +149,23 @@ export default function DriverForm({ mode, initial }: DriverFormProps) {
           <option value="ACTIVE">ACTIVE</option>
           <option value="INACTIVE">INACTIVE</option>
         </select>
+      </label>
+
+      <label className="flex items-start gap-3 rounded-md border border-white/10 bg-black/20 p-3">
+        <input
+          type="checkbox"
+          checked={subscriptionExempt}
+          onChange={(event) => setSubscriptionExempt(event.target.checked)}
+          className="mt-0.5 h-5 w-5 rounded border-neutral-600 bg-neutral-950 accent-yellow-500"
+        />
+        <span>
+          <span className="block text-sm font-medium text-neutral-200">
+            Subscription Exempt
+          </span>
+          <span className="mt-0.5 block text-xs text-neutral-400">
+            Exempt drivers do not receive future monthly subscription charges.
+          </span>
+        </span>
       </label>
 
       {error ? (

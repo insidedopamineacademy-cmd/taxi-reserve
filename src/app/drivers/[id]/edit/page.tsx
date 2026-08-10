@@ -17,6 +17,8 @@ export default async function EditDriverPage({ params }: PageProps) {
       id: true,
       name: true,
       licenseNumber: true,
+      vehicleType: true,
+      subscriptionExempt: true,
       status: true,
     },
   });

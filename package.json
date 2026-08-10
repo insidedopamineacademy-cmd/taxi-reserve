@@ -12,6 +12,7 @@
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:validate": "dotenv -e .env.local -- prisma validate",
     "prisma:studio": "dotenv -e .env.local -- prisma studio",
+    "test:driver-subscriptions": "node --conditions=react-server --experimental-transform-types scripts/test-driver-subscriptions.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
