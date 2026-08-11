@@ -3,7 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 
-export default async function ServerNavbar() {
+type Props = {
+  assistantEnabled: boolean;
+};
+
+export default async function ServerNavbar({ assistantEnabled }: Props) {
   const [access, session] = await Promise.all([
     getEmailInboxAccess(),
     getServerSession(authOptions),
@@ -14,6 +18,7 @@ export default async function ServerNavbar() {
       userEmail={access.email}
       canAccessInbox={access.allowed}
       isAdmin={session?.user?.role === "ADMIN"}
+      assistantEnabled={assistantEnabled && Boolean(access.email)}
     />
   );
 }

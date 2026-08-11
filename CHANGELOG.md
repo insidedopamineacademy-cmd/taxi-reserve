@@ -2,6 +2,40 @@
 
 Notable project changes are recorded here in reverse chronological order.
 
+## Unreleased
+
+### Added
+
+- Added the feature-flagged Phase 1B Taxi Reserve Assistant frontend shell for authenticated navigation, with the supplied portrait launcher, responsive modal UI, typed message parts, reservation-card presentation, composer interaction architecture, focus restoration, and pinned transcript scrolling.
+- Added a development-only, no-live-data fixture preview for empty, conversation, thinking, searching, reservation-card, long-content, error/retry, and stopped-response states.
+- Added dependency-free Phase 1B.1 tests and a physical-device QA runbook for mobile viewport, keyboard, safe-area, scroll, input, and accessibility verification.
+- Added the authenticated `POST /api/assistant/chat` foundation with a lazy server-only official OpenAI Responses client, bounded request validation, hard timeout/cancellation propagation, request IDs, safe errors, and privacy-conscious metadata logs.
+- Added deterministic owner-scoped reservation read services, minimized role-aware AI DTOs, strict `search_reservations` and `get_reservation` schemas, and a shared Europe/Madrid calendar boundary module.
+- Added dependency-free Phase 1C.1 trusted-boundary tests covering authorization, search filters, result limits, strict tool schemas, DST-aware dates, transport validation, aborts, timeouts, errors, and server-only configuration.
+- Added the Phase 1C.2 Responses function-tool loop with a hardcoded two-tool reservation registry, server-revalidated arguments, server-provided Madrid context, four-call limit, and permission-safe minimized outputs.
+- Added a typed application-owned assistant SSE protocol for status, coalesced text deltas, structured reservation cards, completion, and safe errors.
+- Added deterministic Phase 1C.2 tool-loop and streaming-state suites covering ambiguity, no/inaccessible results, unknown/malformed calls, authorization boundaries, prompt injection data, call limits, interrupted streams, Stop, Retry, context limits, and duplicate cards.
+- Added the Phase 1D ADMIN-only `search_drivers`, `get_driver_ledger_summary`, and `get_driver_transactions` tools to the existing hardcoded loop, with strict closed schemas, permission-safe USER failures, bounded cursors, explicit read projections, and minimized AI DTOs.
+- Added application-owned driver, financial-summary, and transaction stream events plus narrow-screen cards, existing driver/reservation deep links, long-content fixtures, and duplicate-event protection.
+- Added deterministic Phase 1D finance and tool-loop suites covering canonical Decimal totals, due/settled/credit classification, subscription-exempt history, driver ambiguity, civil-date periods, typed transactions, pagination, authorization-before-fetch, exact registry boundaries, and absence of repository writes.
+- Added Phase 1E per-canonical-user admission control with one active generation, a rolling configurable request cap, stable `RATE_LIMITED`/`Retry-After` responses, cancellation-safe lease release, and an optional server-side email rollout allowlist.
+- Added centralized assistant input/output cost ceilings, provider token-usage/result-count telemetry, privacy-preserving hashed OpenAI safety identifiers, hardened no-store response headers, and a production hardening suite.
+- Added the Phase 1E release runbook with deployment configuration, controlled rollout, read-only smoke/evaluation cases, monitoring, kill switch, rollback, and physical-device release gate.
+
+### Changed
+
+- Hardened the assistant as a mobile full-screen workspace with coalesced Visual Viewport enhancement, offset-aware sizing, rotation recovery, four-sided safe areas, iOS-safe body locking, and keyboard-aware bottom padding.
+- Added explicit idle/submitting/generating/failed request states, synchronous duplicate-submit protection, mobile multiline Return behavior, composition tracking, stable transcript anchoring, and memoized message rendering.
+- Reused the shared Madrid date helper for driver financial date derivation without changing persisted financial-date semantics.
+- Connected the persistent mobile provider to the real authenticated endpoint while retaining Phase 1B.1 keyboard, viewport, draft, duplicate-send, and pinned-scroll behavior.
+- Wired Stop to browser/server/OpenAI cancellation and Retry to the same failed turn without duplicating its user bubble or structured results.
+- Reused the shared ADMIN predicate, canonical driver financial summaries, and existing Madrid financial periods for Phase 1D; authoritative money remains server-calculated Decimal strings in EUR.
+- Updated Next within 15.x, NextAuth within 4.x, Mailparser within 3.x, and only compatible direct/transitive security patches; final npm audit is zero advisories and the credential/JWT and inbox/reply architectures remain unchanged.
+
+### Safety
+
+- The assistant still defaults to off. Phase 1E sends only owner-scoped reservation DTOs and ADMIN-authorized minimized driver/finance DTOs through the same five approved read-only tools, exposes no unrestricted Prisma/SQL access, adds no write tool, changes no Prisma schema, and does not redesign the Phase 1B.1 mobile shell.
+
 ## 2026-08-10
 
 ### Added

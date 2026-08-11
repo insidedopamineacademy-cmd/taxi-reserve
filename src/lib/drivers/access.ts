@@ -3,6 +3,7 @@ import "server-only";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { isDriverAdminRole } from "@/lib/drivers/access-core";
 
 export async function getDriverAdminAccess() {
   const session = await getServerSession(authOptions);
@@ -12,7 +13,7 @@ export async function getDriverAdminAccess() {
     session,
     email,
     authenticated: Boolean(email),
-    authorized: Boolean(email && session?.user?.role === "ADMIN"),
+    authorized: Boolean(email && isDriverAdminRole(session?.user?.role)),
   };
 }
 

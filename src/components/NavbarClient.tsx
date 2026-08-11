@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import UserMenu from "./UserMenu";
+import { AssistantLauncher } from "./assistant/AssistantLauncher";
 
 type Props = {
   userEmail: string | null;
   canAccessInbox: boolean;
   isAdmin: boolean;
+  assistantEnabled: boolean;
 };
 
-export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Props) {
+export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assistantEnabled }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -18,6 +20,23 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Pro
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
+
+  const mobileMenuButton = (
+    <button
+      type="button"
+      className={
+        assistantEnabled
+          ? "inline-flex size-11 items-center justify-center rounded-md text-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300"
+          : "lg:hidden"
+      }
+      onClick={() => setOpen((value) => !value)}
+      aria-label="Toggle navigation menu"
+      aria-expanded={open}
+      aria-controls="mobile-navigation"
+    >
+      ☰
+    </button>
+  );
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-[#0b1324] text-white shadow-md">
@@ -56,16 +75,14 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Pro
           )}
         </div>
 
-        <button
-          type="button"
-          className="lg:hidden"
-          onClick={() => setOpen((value) => !value)}
-          aria-label="Toggle navigation menu"
-          aria-expanded={open}
-          aria-controls="mobile-navigation"
-        >
-          ☰
-        </button>
+        {assistantEnabled ? (
+          <div className="flex items-center gap-2 lg:hidden">
+            <AssistantLauncher variant="mobile" onBeforeOpen={() => setOpen(false)} />
+            {mobileMenuButton}
+          </div>
+        ) : (
+          mobileMenuButton
+        )}
       </div>
 
       {open ? (
@@ -102,6 +119,8 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin }: Pro
           </div>
         </div>
       ) : null}
+
+      {assistantEnabled ? <AssistantLauncher variant="desktop" /> : null}
     </nav>
   );
 }

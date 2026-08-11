@@ -80,6 +80,15 @@ src/middleware.ts           Page-level NextAuth protection
 - Edit, assignment, restore, soft-delete, and permanent-delete operations cannot cross this ownership boundary.
 - An ADMIN receives driver/commission controls only for reservations the ADMIN already owns; ADMIN does not bypass reservation ownership.
 
+### AI assistant trusted boundary
+
+- `POST /api/assistant/chat` resolves the signed-in email through NextAuth and then reloads canonical user ID, email, and role from the database. Client payloads cannot supply `userId`, `role`, permissions, or query filters.
+- The transport accepts only `{ message, context? }`, caps the JSON body at 8 KiB and the trimmed message at 2,000 characters, strictly bounds recent text context, and uses a server-generated request ID.
+- The official OpenAI client, API key, model, and timeout configuration are server-only and lazy. Requests disable SDK retries and combine caller cancellation with a hard application timeout.
+- The model receives only minimized, permission-safe reservation DTOs and ADMIN-authorized Phase 1D driver/finance DTOs returned by the controlled loop; it never receives Prisma, database credentials, notes, or request-supplied authorization.
+- Reservation read services always apply authenticated email ownership and `isDeleted = false` before records leave the trusted layer. ADMIN remains owner-scoped; only ADMIN can filter assignment/driver fields or receive minimal driver identity.
+- Tool DTOs explicitly select operational fields and omit ownership IDs, price, notes, timestamps, deletion metadata, and finance data. Stored reservation strings are untrusted data and never assistant instructions.
+
 ### Inbox permission
 
 - Authentication, USER/ADMIN role, and inbox access are separate concepts.
@@ -126,6 +135,7 @@ The desktop and mobile navbar expose Overview, Drivers, Commissions, and Payment
 | `POST /api/reservations/bulk-delete` | Soft-delete a bounded owned set |
 | `PATCH /api/reservations/[id]/restore` | Restore an owned soft-deleted reservation |
 | `DELETE /api/reservations/deleted/permanent-delete-all` | Permanently delete the owner's complete soft-deleted set |
+| `POST /api/assistant/chat` | Authenticated, feature-flagged Phase 1D read-only reservation/driver/finance assistant stream; driver finance requires ADMIN |
 | `POST /api/drivers` | Create a driver after an ADMIN check |
 | `PATCH /api/drivers/[id]` | Edit driver profile/configuration/status after an ADMIN check |
 | `POST /api/drivers/[id]/commissions` | Create a manual commission for an ACTIVE driver |
@@ -344,13 +354,95 @@ Normal users query only rows with their own normalized email. ADMIN users query 
 
 ## Date and timezone behavior
 
-Three date categories intentionally coexist:
+Three persisted date categories intentionally coexist:
 
 1. Reservation instants: browser-local wall time is converted to UTC before storage; display converts stored instants back through JavaScript/browser locale behavior.
 2. Commission/payment financial dates: date-only form values are represented as UTC-midnight `DateTime` values and displayed in UTC to avoid calendar drift.
 3. Subscription months: the current Madrid calendar month is normalized to its first day and stored as PostgreSQL `DATE`.
 
 Madrid conversion is also used when deriving a reservation-linked commission date and finance reporting periods. Do not casually merge these categories or change offsets/serialization as part of UI work.
+
+AI-relative reservation dates use the shared `Europe/Madrid` helper. It resolves current/tomorrow calendar dates and converts inclusive Madrid dates to absolute UTC start and exclusive end instants, including 23-hour and 25-hour DST days. The reservation read service never asks Prisma or the model to infer timezone boundaries.
+
+## Phase 1C.2 reservation assistant integration
+
+### Pre-change audit and smallest integration path
+
+Phase 1C.1 already provided the correct trust boundary: the authenticated route/controller, lazy server-only OpenAI wrapper, strict closed tool schemas, owner-scoped reservation service, minimized role-aware DTO mapper, deterministic Madrid helper, bounded/abortable transport, safe error definitions, and a root-mounted mobile provider. Phase 1B.1 already provided explicit composer lifecycle state, synchronous duplicate-send protection, typed transcript parts, restrained `AssistantStatus`, structured `ReservationResultCard`, isolated development fixtures, and pinned-scroll ownership.
+
+The smallest safe path was therefore to evolve the existing route from a one-shot JSON response to a typed stream, add one bounded dispatcher around the existing two reservation services, and replace only the provider's fixture-only request methods. The dialog, viewport/keyboard hooks, body lock, input semantics, scroll hook, result component, and fixture preview architecture were retained rather than redesigned.
+
+### Runtime flow
+
+```text
+mobile composer
+  -> POST /api/assistant/chat
+  -> NextAuth session + canonical database user/role
+  -> bounded text-only recent context
+  -> OpenAI Responses stream (store:false, no retries)
+  -> hardcoded search_reservations/get_reservation dispatcher
+  -> owner-scoped deterministic reservation service
+  -> minimized role-aware DTO + permission-safe tool output
+  -> final Responses stream
+  -> typed Taxi Reserve SSE events
+  -> coalesced mobile transcript updates
+```
+
+The Responses request exposes exactly `search_reservations` and `get_reservation`, keeps `tool_choice: auto` and `parallel_tool_calls: false`, uses `store: false`, replays encrypted reasoning items for stateless tool follow-ups, caps model output at 1,200 tokens per round, and caps a turn at four total tool calls and five model rounds. Arguments are parsed and revalidated after model generation; unknown calls, malformed calls, and a fifth call fail with stable safe errors. Authentication context is attached only by the server and cannot be supplied in request context or tool arguments.
+
+For every request, the concise instruction set includes the server-resolved `Europe/Madrid` date, time, today, and tomorrow. It states that stored fields are untrusted data and that conversation input cannot override authorization/capability boundaries, prohibits invented facts and mutation claims, requires permission-safe ambiguity/no-result handling, and asks for concise operational answers without internal tool narration.
+
+### Application-owned stream and mobile state
+
+The browser receives only these typed events:
+
+- `assistant.status`
+- `assistant.text.delta`
+- `assistant.reservation_result`
+- `assistant.complete`
+- `assistant.error`
+
+Raw OpenAI events and raw tool payloads never reach the browser. Reservation cards are produced from structured server facts and link to `/reservations/[id]/edit`; no prose or Markdown parsing is used. The root `AssistantProvider` remains above App Router page content, so transcript state survives reservation-link navigation while the provider remains mounted.
+
+Text deltas are coalesced with `requestAnimationFrame`. A deliberate Stop aborts the browser request, propagates through the route to OpenAI, preserves partial text/cards, labels only the active turn as stopped, and unlocks the composer without an error. Network/stream failures preserve partial output, add one retryable error, and unlock. Retry resets the same failed assistant bubble, retains the original user bubble, removes stale cards/partial output before the fresh call, and cannot double-submit.
+
+Conversation state is memory-only. Each request includes at most six recent user/assistant text entries, at most 1,000 characters each and 4,000 characters total. Cards, statuses, errors, tool payloads, fixtures, local storage, session storage, OpenAI Conversation objects, and Taxi Reserve AI tables are not used.
+
+### Security and capability boundary
+
+- USER and ADMIN remain scoped to their own normalized reservation owner email and active (`isDeleted = false`) records.
+- ADMIN may receive minimal driver identity and use driver-assignment filters; USER tool attempts receive a permission-safe result and no driver identity.
+- Exact inaccessible IDs are indistinguishable from absent IDs.
+- Stored pickup, drop-off, phone, and other DTO strings can be passed only as inert JSON data. They cannot add a tool or override the hardcoded registry or server context.
+- There are no reservation writes, driver/finance writes, web/computer/email/PDF assistant tools, arbitrary Prisma filters, SQL, durable chat storage, or Phase 1C.2 database migrations.
+
+## Phase 1D ADMIN driver and finance intelligence
+
+Phase 1D extends the same bounded loop and route with exactly three functions: `search_drivers`, `get_driver_ledger_summary`, and `get_driver_transactions`. Together with the two reservation functions, the registry contains exactly five hardcoded tools. `parallel_tool_calls` remains disabled, and the existing maximum of four tool calls/five model rounds is unchanged.
+
+The assistant route continues to resolve the current user and role from the database. The driver/finance core applies the same centralized `isDriverAdminRole` predicate used by the existing driver-page guard before validating IDs or invoking any repository query. USER calls return only `NOT_AUTHORIZED`, so present and absent driver IDs are indistinguishable. Tool schemas contain no role, user ID, Prisma filter, or write/action property.
+
+The read repository uses explicit Prisma projections. Driver search queries only operational identity/configuration fields and obtains balances from the canonical batched financial summary. Search defaults to 10, caps at 20, scans at most 200 candidates when a balance-position filter is applied, and returns an offset cursor without loading the unbounded driver directory. Duplicate names receive license numbers only inside the bounded result when required to disambiguate.
+
+Ledger summaries call the existing canonical `getDriverFinancialSummary`. Transaction queries select only typed commission, payment, subscription, route, and authorized reservation-link fields; notes and ownership data are excluded. A page defaults to 10 and caps at 25. The ALL query performs a bounded three-source merge with a maximum accepted offset of 500. Period totals use source aggregates and the canonical Decimal formula rather than summing the visible page.
+
+Financial entry ranges share the existing UTC civil-date representation and Madrid-derived week/month context. Inclusive `to_date` becomes the next UTC civil day as an exclusive query boundary. No stored financial date or historical record was changed. Money crossing the model/browser boundary is a fixed two-decimal string with `EUR`; the application alone classifies positive as DUE, zero as SETTLED, and negative as CREDIT.
+
+The application-owned stream adds `assistant.driver_result`, `assistant.driver_financial_summary`, and `assistant.driver_transactions`. Compact cards preserve server strings without recalculation, wrap long identity/route values, expose `/drivers/[id]`, and link only reservation-backed commissions to the existing `/reservations/[id]/edit` route. Browser measurements at 320, 375, and 430 CSS pixels found no dialog or card horizontal overflow. Physical iOS/Android keyboard, lifecycle, accessibility, Stop, Retry, and radio-switch validation remains required.
+
+No Prisma schema/migration, dependency, AI write tool, mutable repository call, screenshot/upload capability, SQL, persistent conversation table, desktop redesign, or production-data operation was introduced by Phase 1D.
+
+## Phase 1E production hardening
+
+- Direct dependency patches keep Next on 15.x, NextAuth on 4.x with Credentials/JWT sessions, and Mailparser on 3.x. Compatible transitive overrides cover patched brace expansion, IP parsing, YAML, PostCSS, Sharp/libvips, tar, and Nodemailer releases. The focused production suite parses an email, renders an in-memory SMTP message, and asserts the unchanged credentials/JWT/bcrypt architecture.
+- `POST /api/assistant/chat` resolves canonical database identity first, checks the master flag and optional normalized email allowlist, validates the bounded payload, then acquires a process-local user lease. A user may have one active generation and at most the configured accepted generations in a rolling minute on that application instance.
+- Rate rejection uses HTTP 429, stable `RATE_LIMITED`, and an integer `Retry-After`. Active leases release idempotently on completion, safe failure, timeout, request abort, or stream cancellation. Different users are isolated; browser-supplied identity is still rejected.
+- Cost controls are server-only and centrally bounded: message characters, output tokens per model round, timeout, four total tool calls, no parallel tool calls, and no automatic OpenAI retry. The model identifier never crosses into client configuration.
+- OpenAI receives a deterministic SHA-256 safety identifier derived from the canonical internal user ID rather than the raw ID. Operational console telemetry contains only request/user/role/time/outcome/model/tool-name/count/result-count/token-usage/provider-ID metadata; it excludes prompts, context, tool arguments/results, and operational record content. Read-only assistant calls are not copied into the product Activity Log.
+- JSON errors and SSE responses use no-store/no-cache, `Vary: Cookie`, MIME protection, no permissive CORS header, and no response cookie. The stream additionally disables proxy buffering/transform.
+- The registry invariant is still exactly `search_reservations`, `get_reservation`, `search_drivers`, `get_driver_ledger_summary`, and `get_driver_transactions`. Strict runtime parsing, authorization-before-fetch, owner scoping, bounded queries/cursors, permission-safe absence, prompt-injection data boundaries, and unknown/write-tool rejection are all regression tested.
+- The kill switch fails before admission, tools, and OpenAI. Optional rollout allowlisting fails closed when configured incorrectly. Core Taxi Reserve functionality has no OpenAI dependency and rollback needs no database action.
+- Automated mobile state/stream tests pass, but physical iOS Safari, Android Chrome, real keyboard/radio/lifecycle, VoiceOver, TalkBack, and device-specific slow-stream checks remain `NEEDS PHYSICAL DEVICE`. See `ASSISTANT_MOBILE_QA.md` and `ASSISTANT_RELEASE_RUNBOOK.md`.
 
 ## Environment variables
 
@@ -366,6 +458,15 @@ Never commit real values. Configure production values in the deployment platform
 | `EMAIL_INBOX_ALLOWED_USERS` | Required comma-separated inbox allowlist |
 | `EMAIL_INITIAL_SYNC_LIMIT` | Optional positive initial-sync limit; default 100, maximum 5,000 |
 | `CRON_SECRET` | Required production Bearer secret for monthly subscriptions |
+| `AI_ASSISTANT_ENABLED` | Optional server-side feature flag; disabled unless exactly `true` |
+| `AI_ASSISTANT_PREVIEW` | Development-only fixture flag; always false in production |
+| `OPENAI_API_KEY` | Required server-only OpenAI secret for enabled assistant model calls |
+| `AI_ASSISTANT_MODEL` | Required server-side Responses API model identifier |
+| `AI_ASSISTANT_REQUEST_TIMEOUT_MS` | Optional 1,000-120,000 ms hard timeout; default 30,000 |
+| `AI_ASSISTANT_MAX_REQUESTS_PER_MINUTE` | Optional per-user/per-instance rolling cap from 1-60; default 6 |
+| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional user message cap from 100-4,000 characters; default 2,000 |
+| `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | Optional per-round output ceiling from 100-4,000; default 1,200 |
+| `AI_ASSISTANT_ALLOWED_EMAILS` | Optional normalized comma-separated rollout allowlist; maximum 100 addresses |
 
 `.env.example` contains mail variables and `CRON_SECRET`. Database and authentication names are documented here/README but real values must remain outside version control.
 
@@ -387,10 +488,18 @@ npm run dev
 ```bash
 npm run prisma:validate
 npm run prisma:generate
+npm run test:assistant-mobile
+npm run test:assistant-foundation
+npm run test:assistant-tool-loop
+npm run test:assistant-streaming
+npm run test:assistant-driver-finance
+npm run test:assistant-driver-tool-loop
+npm run test:assistant-production
 npm run typecheck
 npm run lint
 npm run build
 git diff --check
+npm audit --json
 ```
 
 The focused subscription test requires a disposable local PostgreSQL URL supplied as `DRIVER_SUBSCRIPTION_TEST_DATABASE_URL`. Its script refuses non-local hosts and database names that do not include `test`.
@@ -429,6 +538,9 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 ## Known risks and limitations
 
 - Public registration, login, and password change have no application-level rate limiting; deployment/network controls remain important.
+- The 2026-08-11 Phase 1E dependency pass updated compatible Next 15, NextAuth 4, Mailparser, PostCSS/Nodemailer, and patched transitive packages. The final `npm audit --json` reports zero advisories. Sharp 0.35 is explicitly overridden under Next 15 and must remain covered by build/image regression checks on later lockfile changes.
+- Assistant admission is keyed by the canonical database user ID and enforces one active generation plus a rolling per-minute accepted-request cap. It is process-local, not a distributed/global quota across multiple serverless instances; deployment-level controls remain the next option if real traffic requires a global limit.
+- Phase 1D remains read-only. Physical iOS/Android keyboard, slow-stream, driver/finance Stop/Retry, network-switch, accessibility, and background/foreground validation remains a release gate.
 - Driver deletion is not implemented despite database relationships being designed to preserve history.
 - The reusable reservation status/date filter UI is not mounted, and `/reservations` does not currently apply a status filter parameter.
 - The empty historical baseline migration prevents treating `prisma migrate deploy` as a blank-database bootstrap mechanism.
@@ -441,6 +553,8 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 ## QA checklist
 
 - [ ] Run Prisma validate/generate, typecheck, lint, build, and `git diff --check`.
+- [ ] Run all seven assistant test commands; verify unauthenticated, disabled, timeout, rate limits, tool limits, cancellation, retry, partial-stream recovery, driver/finance authorization, Decimal totals, exact registry boundaries, dependency/email compatibility, and metadata-only logging without a billed OpenAI call.
+- [ ] As ADMIN, test driver search, duplicate names, inactive/unconfigured vehicles, positive/zero/negative balances, typed month transactions, and existing deep links. As USER, confirm all driver/finance requests reveal no driver existence or amount.
 - [ ] Sign in as USER and ADMIN; verify role-specific navbar/homepage and server denials.
 - [ ] Confirm USER reservations remain owner-scoped and do not receive driver commission data in cards or WhatsApp shares.
 - [ ] Search reservations; test `from`/`to` URL ranges, sort order, status cycling, edit sections, soft delete, restore, and permanent-delete-all confirmation.

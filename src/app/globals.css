@@ -99,3 +99,159 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   padding: 0.4rem;
   vertical-align: top;
 }
+
+.assistant-dialog {
+  --assistant-viewport-height: 100dvh;
+  --assistant-viewport-width: 100vw;
+  --assistant-viewport-offset-top: 0px;
+  --assistant-viewport-offset-left: 0px;
+  position: fixed;
+  inset: auto;
+  top: var(--assistant-viewport-offset-top);
+  left: var(--assistant-viewport-offset-left);
+  width: 100vw;
+  width: var(--assistant-viewport-width);
+  max-width: none;
+  height: 100vh;
+  height: var(--assistant-viewport-height);
+  max-height: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.assistant-dialog::backdrop {
+  background: rgb(2 6 15 / 72%);
+  backdrop-filter: blur(3px);
+}
+
+.assistant-panel {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.assistant-header {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
+.assistant-fixture-controls {
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+.assistant-composer {
+  padding-bottom: max(0rem, env(safe-area-inset-bottom));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+.assistant-dialog[data-keyboard-visible="true"] .assistant-composer {
+  padding-bottom: 0;
+}
+
+.assistant-transcript {
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  scrollbar-color: rgb(100 116 139 / 65%) transparent;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overflow-anchor: none;
+  touch-action: pan-y;
+}
+
+.assistant-message-copy {
+  overflow-wrap: anywhere;
+}
+
+@keyframes assistant-status-pulse {
+  0%,
+  100% {
+    opacity: 0.48;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.assistant-status-pulse {
+  animation: assistant-status-pulse 1.25s ease-in-out infinite;
+}
+
+.assistant-dialog button,
+.assistant-dialog a {
+  touch-action: manipulation;
+}
+
+.assistant-launcher-mobile {
+  display: inline-flex;
+}
+
+.assistant-launcher-desktop {
+  display: none;
+}
+
+@media (min-width: 768px) and (min-height: 600px) and (hover: hover) and (pointer: fine) {
+  .assistant-dialog {
+    inset: auto 1rem 1rem auto;
+    width: min(420px, calc(100vw - 2rem));
+    height: min(720px, calc(var(--assistant-viewport-height) - 80px));
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 1.25rem;
+    box-shadow: 0 24px 80px rgb(0 0 0 / 58%);
+  }
+
+  .assistant-panel {
+    border-radius: inherit;
+  }
+
+  .assistant-header {
+    padding-top: 0.75rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .assistant-fixture-controls {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .assistant-composer {
+    padding-bottom: 0;
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .assistant-transcript {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .assistant-launcher-mobile {
+    display: none;
+  }
+
+  .assistant-launcher-desktop {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-launcher,
+  .assistant-status-pulse {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

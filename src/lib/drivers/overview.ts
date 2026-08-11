@@ -6,23 +6,10 @@ import {
   calculateDriverFinancePosition,
   getDriverFinancialSummaries,
 } from "@/lib/drivers/financials";
-import { financialDateFromMadridInstant } from "@/lib/drivers/financialValidation";
+import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 
 export function getMadridPaymentPeriods(now = new Date()) {
-  const today = financialDateFromMadridInstant(now);
-  const mondayOffset = (today.getUTCDay() + 6) % 7;
-  const weekStart = new Date(today);
-  weekStart.setUTCDate(today.getUTCDate() - mondayOffset);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
-
-  const monthStart = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
-  );
-  const monthEnd = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1),
-  );
-
+  const { weekStart, weekEnd, monthStart, monthEnd } = getMadridFinancialPeriods(now);
   return { weekStart, weekEnd, monthStart, monthEnd };
 }
 

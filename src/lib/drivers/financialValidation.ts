@@ -1,6 +1,14 @@
 import "server-only";
 
 import { DriverPaymentMethod, Prisma } from "@prisma/client";
+import {
+  formatMadridDate,
+  madridCalendarDateAsUtc,
+} from "@/lib/time/madrid";
+import {
+  formatFinancialCivilDate,
+  parseFinancialCivilDate,
+} from "@/lib/drivers/financialDateCore";
 
 type ValidationResult<T> =
   | { ok: true; value: T }
@@ -46,20 +54,10 @@ export function parseFinancialDate(
   value: unknown,
   label: string,
 ): ValidationResult<Date> {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return { ok: false, error: `${label} is required.` };
-  }
-
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const valid =
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day;
-
-  return valid
+  const date = parseFinancialCivilDate(value);
+  return date
     ? { ok: true, value: date }
-    : { ok: false, error: `${label} must be a valid date.` };
+    : { ok: false, error: `${label} must be a valid date in YYYY-MM-DD format.` };
 }
 
 export function parseFinancialNotes(value: unknown): ValidationResult<string | null> {
@@ -94,7 +92,7 @@ export function parsePaymentMethod(value: unknown): ValidationResult<DriverPayme
 }
 
 export function formatFinancialDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return formatFinancialCivilDate(date);
 }
 
 export function formatFinancialDateDisplay(date: Date) {
@@ -105,31 +103,9 @@ export function formatFinancialDateDisplay(date: Date) {
 }
 
 export function currentFinancialDateInput(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+  return formatMadridDate(now);
 }
 
 export function financialDateFromMadridInstant(instant: Date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(instant);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-
-  return new Date(
-    Date.UTC(
-      Number(values.get("year")),
-      Number(values.get("month")) - 1,
-      Number(values.get("day")),
-    ),
-  );
+  return madridCalendarDateAsUtc(instant);
 }
