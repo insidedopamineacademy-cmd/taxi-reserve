@@ -38,6 +38,16 @@ export type AssistantReservationResult = {
 export type AssistantDriverResult = AssistantDriverCardData & { fixture?: boolean };
 export type AssistantDriverFinancialSummary = AssistantDriverFinancialSummaryCardData & { fixture?: boolean };
 export type AssistantDriverTransactions = AssistantDriverTransactionsCardData & { fixture?: boolean };
+export type AssistantActionPreview = AssistantActionPreviewData & {
+  fixture?: boolean;
+  clientError?: string;
+};
+export type AssistantReservationDraft = AssistantReservationDraftData & {
+  fixture?: boolean;
+};
+export type AssistantDriverImportDraft = AssistantDriverImportDraftData & {
+  fixture?: boolean;
+};
 
 export type AssistantMessagePart =
   | { type: "text"; text: string }
@@ -46,6 +56,9 @@ export type AssistantMessagePart =
   | { type: "driver"; driver: AssistantDriverResult }
   | { type: "driver-financial-summary"; summary: AssistantDriverFinancialSummary }
   | { type: "driver-transactions"; transactions: AssistantDriverTransactions }
+  | { type: "action-preview"; action: AssistantActionPreview }
+  | { type: "reservation-draft"; draft: AssistantReservationDraft }
+  | { type: "driver-import-draft"; draft: AssistantDriverImportDraft }
   | {
       type: "error";
       kind: AssistantErrorKind;
@@ -67,13 +80,19 @@ export type AssistantPreviewScenario =
   | "thinking"
   | "searching"
   | "reservation"
+  | "reservation-creation"
   | "driver-finance"
+  | "driver-import"
+  | "action-preview"
   | "long-response"
   | "long-conversation"
   | "error"
   | "stopped";
 import type {
+  AssistantActionPreviewData,
   AssistantDriverCardData,
   AssistantDriverFinancialSummaryCardData,
   AssistantDriverTransactionsCardData,
+  AssistantReservationDraftData,
+  AssistantDriverImportDraftData,
 } from "../../lib/assistant/stream-protocol.ts";

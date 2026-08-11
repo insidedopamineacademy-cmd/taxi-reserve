@@ -31,6 +31,8 @@ export function AssistantDialog() {
     submitMessage,
     stopMessage,
     retryMessage,
+    confirmAction,
+    cancelAction,
   } = useAssistant();
 
   useAssistantBodyLock();
@@ -100,6 +102,8 @@ export function AssistantDialog() {
             composerRef.current?.focus();
           }}
           onRetry={retryMessage}
+          onConfirmAction={confirmAction}
+          onCancelAction={cancelAction}
         />
         <AssistantComposer
           ref={composerRef}

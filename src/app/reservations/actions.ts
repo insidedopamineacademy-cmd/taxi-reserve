@@ -10,6 +10,13 @@ import {
   type ReservationStatusLabel,
 } from "@/lib/reservationStatus";
 import { logActivity } from "@/lib/activityLog";
+import {
+  parseReservationUiUpdate,
+  reservationUpdateChangedFields,
+  ReservationUpdateInputError,
+} from "@/lib/reservations/update-core";
+import { updateOwnedReservation } from "@/lib/reservations/update-service";
+import { createPrismaReservationUpdateRepository } from "@/lib/reservations/update-prisma";
 
 export type ReservationStatus = ReservationStatusLabel;
 
@@ -43,18 +50,19 @@ export async function updateReservationField(
   });
   if (!owned) throw new Error("Not found");
 
+  const sharedInput: Record<string, unknown> = {};
+  if ("notes" in patch) sharedInput.notes = patch.notes;
+  if ("pax" in patch) sharedInput.pax = patch.pax;
+  let reservationPatch;
+  try {
+    reservationPatch = parseReservationUiUpdate(sharedInput);
+  } catch (error) {
+    if (error instanceof ReservationUpdateInputError && error.field === "passengers") {
+      throw new Error("Invalid pax");
+    }
+    throw error;
+  }
   const data: Record<string, unknown> = {};
-
-  if ("notes" in patch) {
-    const text = (patch.notes ?? "").toString().slice(0, 2000);
-    data.notes = text.length ? text : null;
-  }
-
-  if ("pax" in patch) {
-    const n = Number(patch.pax);
-    if (!Number.isFinite(n) || n < 1 || n > 99) throw new Error("Invalid pax");
-    data.pax = n;
-  }
 
   if ("driver" in patch) {
     const v = (patch.driver ?? "").toString().trim();
@@ -68,13 +76,26 @@ export async function updateReservationField(
     data.status = asDb;
   }
 
-  await prisma.reservation.update({ where: { id }, data });
+  await prisma.$transaction(async (tx) => {
+    if (Object.keys(reservationPatch).length > 0) {
+      await updateOwnedReservation(
+        { reservationId: id, ownerEmail: email, patch: reservationPatch },
+        createPrismaReservationUpdateRepository(tx),
+      );
+    }
+    if (Object.keys(data).length > 0) {
+      await tx.reservation.update({ where: { id }, data });
+    }
+  });
   await logActivity({
     action: "reservation_updated",
     entityType: "reservation",
     entityId: id,
     userEmail: email,
-    metadata: { changedFields: Object.keys(data), source: "inline_edit" },
+    metadata: {
+      changedFields: [...reservationUpdateChangedFields(reservationPatch), ...Object.keys(data)],
+      source: "inline_edit",
+    },
   });
   return { ok: true };
 }

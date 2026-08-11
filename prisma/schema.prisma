@@ -40,6 +40,34 @@ enum DriverVehicleType {
   SEDAN
 }
 
+enum AiActionType {
+  UPDATE_RESERVATION
+  ASSIGN_DRIVER
+  CLEAR_DRIVER
+  UPDATE_RESERVATION_COMMISSION
+  ADD_MANUAL_COMMISSION
+  RECORD_DRIVER_PAYMENT
+  CREATE_RESERVATION
+  IMPORT_DRIVERS
+}
+
+enum AiActionRisk {
+  READ
+  WRITE
+  FINANCIAL_WRITE
+  DESTRUCTIVE
+}
+
+enum AiActionStatus {
+  PENDING
+  EXECUTING
+  EXECUTED
+  CANCELLED
+  EXPIRED
+  FAILED
+  CONFLICTED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -49,8 +77,50 @@ model User {
   createdAt DateTime @default(now())
 
   // Relations
-  reservations Reservation[]
-  reminders    Reminder[]
+  reservations     Reservation[]
+  reminders        Reminder[]
+  aiPendingActions AiPendingAction[]
+  aiWorkflowDrafts AiWorkflowDraft[]
+}
+
+model AiWorkflowDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  kind        String   @db.VarChar(40)
+  payloadJson Json
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([expiresAt])
+}
+
+model AiPendingAction {
+  id                String         @id @default(cuid())
+  userId            String
+  actionType        AiActionType
+  riskLevel         AiActionRisk
+  status            AiActionStatus @default(PENDING)
+  payloadJson       Json
+  previewJson       Json
+  preconditionJson  Json
+  confirmationLabel String         @db.VarChar(120)
+  idempotencyKey    String         @unique
+  expiresAt         DateTime
+  confirmedAt       DateTime?
+  executedAt        DateTime?
+  resultJson        Json?
+  failureCode       String?        @db.VarChar(64)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
 }
 
 model Reservation {

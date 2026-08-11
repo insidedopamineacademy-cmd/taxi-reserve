@@ -4,11 +4,11 @@ import { DriverPaymentMethod, Prisma } from "@prisma/client";
 import {
   formatMadridDate,
   madridCalendarDateAsUtc,
-} from "@/lib/time/madrid";
+} from "../time/madrid.ts";
 import {
   formatFinancialCivilDate,
   parseFinancialCivilDate,
-} from "@/lib/drivers/financialDateCore";
+} from "./financialDateCore.ts";
 
 type ValidationResult<T> =
   | { ok: true; value: T }

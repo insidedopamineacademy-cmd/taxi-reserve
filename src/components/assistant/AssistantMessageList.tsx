@@ -20,6 +20,8 @@ type Props = {
   requestState: AssistantRequestState;
   onPromptSelect: (prompt: string) => void;
   onRetry: () => void;
+  onConfirmAction: (actionId: string) => void;
+  onCancelAction: (actionId: string) => void;
 };
 
 export function AssistantMessageList({
@@ -27,6 +29,8 @@ export function AssistantMessageList({
   requestState,
   onPromptSelect,
   onRetry,
+  onConfirmAction,
+  onCancelAction,
 }: Props) {
   const { scrollRef, contentRef, isNearBottom, measure, scrollToLatest } =
     useAssistantScroll(messages);
@@ -75,6 +79,8 @@ export function AssistantMessageList({
                     message={message}
                     showAssistantAvatar={showAssistantAvatar}
                     onRetry={onRetry}
+                    onConfirmAction={onConfirmAction}
+                    onCancelAction={onCancelAction}
                   />
                 );
               })}

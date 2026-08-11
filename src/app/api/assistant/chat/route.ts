@@ -19,11 +19,33 @@ import {
   getVisibleReservation,
   searchVisibleReservations,
 } from "@/lib/reservations/assistant-read-service";
+import { prepareReservationUpdateAction } from "@/lib/reservations/assistant-update-service";
+import {
+  prepareAssignDriverAction,
+  prepareClearDriverAction,
+} from "@/lib/reservations/assistant-driver-assignment-service";
+import {
+  prepareAssignDriverWithCommissionAction,
+  prepareClearDriverAndCommissionAction,
+  prepareUpdateReservationCommissionAction,
+} from "@/lib/reservations/assistant-commission-aware-assignment-service";
 import {
   getAssistantDriverLedgerSummary,
   getAssistantDriverTransactions,
   searchAssistantDrivers,
 } from "@/lib/drivers/assistant-finance-service";
+import {
+  getCurrentReservationDraft,
+  parseReservationTextAction,
+  prepareCreateReservationAction,
+  updateReservationDraftAction,
+} from "@/lib/reservations/assistant-creation-service";
+import {
+  getCurrentDriverImportDraft,
+  parseDriverListTextAction,
+  prepareDriverImportAction,
+  updateDriverImportDraftAction,
+} from "@/lib/drivers/assistant-import-service";
 
 export async function POST(request: Request) {
   return handleAssistantChatRequest(request, {
@@ -39,6 +61,20 @@ export async function POST(request: Request) {
         searchDrivers: searchAssistantDrivers,
         getDriverLedgerSummary: getAssistantDriverLedgerSummary,
         getDriverTransactions: getAssistantDriverTransactions,
+        prepareUpdateReservation: prepareReservationUpdateAction,
+        prepareAssignDriver: prepareAssignDriverAction,
+        prepareClearDriver: prepareClearDriverAction,
+        prepareAssignDriverWithCommission: prepareAssignDriverWithCommissionAction,
+        prepareUpdateReservationCommission: prepareUpdateReservationCommissionAction,
+        prepareClearDriverAndCommission: prepareClearDriverAndCommissionAction,
+        parseReservationText: parseReservationTextAction,
+        updateReservationDraft: updateReservationDraftAction,
+        prepareCreateReservation: prepareCreateReservationAction,
+        getCurrentReservationDraft,
+        parseDriverListText: parseDriverListTextAction,
+        updateDriverImportDraft: updateDriverImportDraftAction,
+        prepareDriverImport: prepareDriverImportAction,
+        getCurrentDriverImportDraft,
         getMaxOutputTokens: getAssistantMaxOutputTokens,
         getSafetyIdentifier: createAssistantSafetyIdentifier,
       });

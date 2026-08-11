@@ -7,15 +7,20 @@ import { ReservationResultCard } from "./ReservationResultCard";
 import { DriverResultCard } from "./DriverResultCard";
 import { DriverFinancialSummaryCard } from "./DriverFinancialSummaryCard";
 import { DriverTransactionsCard } from "./DriverTransactionsCard";
+import { AssistantActionPreviewCard } from "./AssistantActionPreviewCard";
+import { ReservationDraftCard } from "./ReservationDraftCard";
+import { DriverImportDraftCard } from "./DriverImportDraftCard";
 import type { AssistantMessage as AssistantMessageType } from "./types";
 
 type Props = {
   message: AssistantMessageType;
   showAssistantAvatar: boolean;
   onRetry: () => void;
+  onConfirmAction: (actionId: string) => void;
+  onCancelAction: (actionId: string) => void;
 };
 
-export const AssistantMessage = memo(function AssistantMessage({ message, showAssistantAvatar, onRetry }: Props) {
+export const AssistantMessage = memo(function AssistantMessage({ message, showAssistantAvatar, onRetry, onConfirmAction, onCancelAction }: Props) {
   const isUser = message.role === "user";
 
   return (
@@ -64,6 +69,25 @@ export const AssistantMessage = memo(function AssistantMessage({ message, showAs
 
           if (part.type === "driver-transactions") {
             return <DriverTransactionsCard key={key} transactions={part.transactions} />;
+          }
+
+          if (part.type === "action-preview") {
+            return (
+              <AssistantActionPreviewCard
+                key={key}
+                action={part.action}
+                onConfirm={onConfirmAction}
+                onCancel={onCancelAction}
+              />
+            );
+          }
+
+          if (part.type === "reservation-draft") {
+            return <ReservationDraftCard key={key} draft={part.draft} />;
+          }
+
+          if (part.type === "driver-import-draft") {
+            return <DriverImportDraftCard key={key} draft={part.draft} />;
           }
 
           if (part.type === "interrupted") {

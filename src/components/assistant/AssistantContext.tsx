@@ -22,6 +22,8 @@ export type AssistantContextValue = {
   submitMessage: () => void;
   stopMessage: () => void;
   retryMessage: () => void;
+  confirmAction: (actionId: string) => void;
+  cancelAction: (actionId: string) => void;
 };
 
 export const AssistantContext = createContext<AssistantContextValue | null>(null);

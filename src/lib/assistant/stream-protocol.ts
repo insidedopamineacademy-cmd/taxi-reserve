@@ -23,11 +23,17 @@ export type {
   AssistantDriverLedgerSummaryData as AssistantDriverFinancialSummaryCardData,
   AssistantDriverTransactionsData as AssistantDriverTransactionsCardData,
 } from "../drivers/assistant-finance-core.ts";
+export type { AiActionPublic as AssistantActionPreviewData } from "./actions/contracts.ts";
+import { parseAiActionPublic } from "./actions/contracts.ts";
 import type {
   AssistantDriverResultData,
   AssistantDriverLedgerSummaryData,
   AssistantDriverTransactionsData,
 } from "../drivers/assistant-finance-core.ts";
+import type { ReservationDraftPublic } from "../reservations/reservation-draft-core.ts";
+import type { DriverImportDraftPublic } from "../drivers/import-core.ts";
+export type { ReservationDraftPublic as AssistantReservationDraftData } from "../reservations/reservation-draft-core.ts";
+export type { DriverImportDraftPublic as AssistantDriverImportDraftData } from "../drivers/import-core.ts";
 
 export type AssistantStreamEvent =
   | {
@@ -49,6 +55,12 @@ export type AssistantStreamEvent =
       type: "assistant.driver_transactions";
       transactions: AssistantDriverTransactionsData;
     }
+  | {
+      type: "assistant.action_preview";
+      action: import("./actions/contracts.ts").AiActionPublic;
+    }
+  | { type: "assistant.reservation_draft"; draft: ReservationDraftPublic }
+  | { type: "assistant.driver_import_draft"; draft: DriverImportDraftPublic }
   | { type: "assistant.complete"; requestId: string }
   | {
       type: "assistant.error";
@@ -246,6 +258,138 @@ function isDriverTransactions(value: unknown): value is AssistantDriverTransacti
     (value.nextCursor === null || typeof value.nextCursor === "string");
 }
 
+function isDraftField(
+  value: unknown,
+  kind: "string" | "number",
+) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["state", "value", "alternatives", "confirmed", "message"])) {
+    return false;
+  }
+  if (
+    !["EXPLICIT", "INFERRED", "MISSING", "CONFLICT"].includes(String(value.state)) ||
+    typeof value.confirmed !== "boolean" ||
+    (value.message !== undefined && (typeof value.message !== "string" || value.message.length > 500)) ||
+    !Array.isArray(value.alternatives) ||
+    value.alternatives.length > 10
+  ) {
+    return false;
+  }
+  const validItem = (item: unknown) => kind === "string"
+    ? typeof item === "string" && item.length <= 2_000
+    : typeof item === "number" && Number.isFinite(item);
+  return (value.value === null || validItem(value.value)) && value.alternatives.every(validItem);
+}
+
+function isReservationDraft(value: unknown): value is ReservationDraftPublic {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "id",
+    "revision",
+    "fields",
+    "blockingFields",
+    "completeConfirmed",
+    "duplicateAcknowledged",
+    "readyToPrepare",
+    "question",
+  ])) return false;
+  if (
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    value.id.length > 100 ||
+    !Number.isInteger(value.revision) ||
+    (value.revision as number) < 1 ||
+    !Array.isArray(value.blockingFields) ||
+    value.blockingFields.length > 9 ||
+    !value.blockingFields.every((item) => typeof item === "string") ||
+    typeof value.completeConfirmed !== "boolean" ||
+    typeof value.duplicateAcknowledged !== "boolean" ||
+    typeof value.readyToPrepare !== "boolean" ||
+    typeof value.question !== "string" ||
+    value.question.length > 2_000 ||
+    !isRecord(value.fields) ||
+    !hasOnlyKeys(value.fields, [
+      "pickup",
+      "dropoff",
+      "phone",
+      "serviceDate",
+      "pickupTime",
+      "passengers",
+      "priceEuro",
+      "flight",
+      "notes",
+    ])
+  ) return false;
+  return isDraftField(value.fields.pickup, "string") &&
+    isDraftField(value.fields.dropoff, "string") &&
+    isDraftField(value.fields.phone, "string") &&
+    isDraftField(value.fields.serviceDate, "string") &&
+    isDraftField(value.fields.pickupTime, "string") &&
+    isDraftField(value.fields.passengers, "number") &&
+    isDraftField(value.fields.priceEuro, "number") &&
+    isDraftField(value.fields.flight, "string") &&
+    isDraftField(value.fields.notes, "string");
+}
+
+const DRIVER_IMPORT_STATES = [
+  "NEW",
+  "EXISTING_MATCH",
+  "EXISTING_UPDATE",
+  "DUPLICATE_IN_IMPORT",
+  "NEEDS_REVIEW",
+  "CONFLICT",
+] as const;
+
+function isDriverImportRow(value: unknown) {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "id", "name", "licenseNumber", "vehicleRaw", "vehicleType", "sourceNotes",
+    "possibleNames", "duplicateOccurrences", "state", "issues", "existing",
+  ])) return false;
+  if (
+    typeof value.id !== "string" || !value.id || value.id.length > 200 ||
+    (value.name !== null && (typeof value.name !== "string" || value.name.length > 200)) ||
+    (value.licenseNumber !== null && (typeof value.licenseNumber !== "string" || value.licenseNumber.length > 100)) ||
+    (value.vehicleRaw !== null && (typeof value.vehicleRaw !== "string" || value.vehicleRaw.length > 100)) ||
+    !isVehicleType(value.vehicleType) ||
+    !Array.isArray(value.sourceNotes) || value.sourceNotes.length > 10 ||
+    !value.sourceNotes.every((item) => typeof item === "string" && item.length <= 300) ||
+    !Array.isArray(value.possibleNames) || value.possibleNames.length > 6 ||
+    !value.possibleNames.every((item) => typeof item === "string" && item.length <= 200) ||
+    !Number.isInteger(value.duplicateOccurrences) || (value.duplicateOccurrences as number) < 0 ||
+    typeof value.state !== "string" || !DRIVER_IMPORT_STATES.includes(value.state as typeof DRIVER_IMPORT_STATES[number]) ||
+    !Array.isArray(value.issues) || value.issues.length > 10 ||
+    !value.issues.every((item) => typeof item === "string" && item.length <= 500)
+  ) return false;
+  if (value.existing === null) return true;
+  return isRecord(value.existing) && hasOnlyKeys(value.existing, [
+    "id", "name", "licenseNumber", "vehicleType", "status",
+  ]) &&
+    typeof value.existing.id === "string" && value.existing.id.length <= 200 &&
+    typeof value.existing.name === "string" && value.existing.name.length <= 200 &&
+    typeof value.existing.licenseNumber === "string" && value.existing.licenseNumber.length <= 100 &&
+    isVehicleType(value.existing.vehicleType) &&
+    isDriverStatus(value.existing.status);
+}
+
+function isDriverImportDraft(value: unknown): value is DriverImportDraftPublic {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "id", "revision", "counts", "duplicateRowsSkipped", "blockingCount",
+    "completeConfirmed", "readyToPrepare", "question", "rows",
+  ])) return false;
+  const counts = value.counts;
+  if (
+    typeof value.id !== "string" || !value.id || value.id.length > 200 ||
+    !Number.isInteger(value.revision) || (value.revision as number) < 1 ||
+    !isRecord(counts) || !hasOnlyKeys(counts, DRIVER_IMPORT_STATES) ||
+    !DRIVER_IMPORT_STATES.every((state) => Number.isInteger(counts[state]) && (counts[state] as number) >= 0) ||
+    !Number.isInteger(value.duplicateRowsSkipped) || (value.duplicateRowsSkipped as number) < 0 ||
+    !Number.isInteger(value.blockingCount) || (value.blockingCount as number) < 0 ||
+    typeof value.completeConfirmed !== "boolean" ||
+    typeof value.readyToPrepare !== "boolean" ||
+    typeof value.question !== "string" || value.question.length > 5_000 ||
+    !Array.isArray(value.rows) || value.rows.length > 48 || !value.rows.every(isDriverImportRow)
+  ) return false;
+  return true;
+}
+
 export function parseAssistantStreamEvent(value: unknown): AssistantStreamEvent {
   if (!isRecord(value) || typeof value.type !== "string") {
     throw new Error("Malformed assistant stream event");
@@ -283,6 +427,18 @@ export function parseAssistantStreamEvent(value: unknown): AssistantStreamEvent 
     }
   } else if (value.type === "assistant.driver_transactions") {
     if (hasOnlyKeys(value, ["type", "transactions"]) && isDriverTransactions(value.transactions)) {
+      return value as AssistantStreamEvent;
+    }
+  } else if (value.type === "assistant.action_preview") {
+    if (hasOnlyKeys(value, ["type", "action"])) {
+      return { type: value.type, action: parseAiActionPublic(value.action) };
+    }
+  } else if (value.type === "assistant.reservation_draft") {
+    if (hasOnlyKeys(value, ["type", "draft"]) && isReservationDraft(value.draft)) {
+      return value as AssistantStreamEvent;
+    }
+  } else if (value.type === "assistant.driver_import_draft") {
+    if (hasOnlyKeys(value, ["type", "draft"]) && isDriverImportDraft(value.draft)) {
       return value as AssistantStreamEvent;
     }
   } else if (value.type === "assistant.complete") {

@@ -47,7 +47,10 @@ function appendTextDelta(parts: AssistantMessagePart[], delta: string) {
     part.type === "reservation" ||
     part.type === "driver" ||
     part.type === "driver-financial-summary" ||
-    part.type === "driver-transactions",
+    part.type === "driver-transactions" ||
+    part.type === "reservation-draft" ||
+    part.type === "driver-import-draft" ||
+    part.type === "action-preview",
   );
   const insertAt = structuredIndex >= 0 ? structuredIndex : next.length;
   return [
@@ -180,6 +183,36 @@ export function applyAssistantStreamEvent(
     return alreadyPresent
       ? message
       : { ...message, parts: [...message.parts, { type: "driver-transactions", transactions: event.transactions }] };
+  }
+  if (event.type === "assistant.action_preview") {
+    const alreadyPresent = message.parts.some(
+      (part) =>
+        part.type === "action-preview" && part.action.actionId === event.action.actionId,
+    );
+    return alreadyPresent
+      ? message
+      : {
+          ...message,
+          parts: [...message.parts, { type: "action-preview", action: event.action }],
+        };
+  }
+  if (event.type === "assistant.reservation_draft") {
+    return {
+      ...message,
+      parts: [
+        ...message.parts.filter((part) => part.type !== "reservation-draft"),
+        { type: "reservation-draft", draft: event.draft },
+      ],
+    };
+  }
+  if (event.type === "assistant.driver_import_draft") {
+    return {
+      ...message,
+      parts: [
+        ...message.parts.filter((part) => part.type !== "driver-import-draft"),
+        { type: "driver-import-draft", draft: event.draft },
+      ],
+    };
   }
   if (event.type === "assistant.complete") {
     return { ...message, parts: withoutStatus(message.parts) };

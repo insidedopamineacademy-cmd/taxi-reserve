@@ -159,6 +159,18 @@ test("A: one driver match chains to the authoritative ledger summary", async () 
     "search_drivers",
     "get_driver_ledger_summary",
     "get_driver_transactions",
+    "prepare_update_reservation",
+    "prepare_assign_driver",
+    "prepare_clear_driver",
+    "prepare_assign_driver_with_commission",
+    "prepare_update_reservation_commission",
+    "prepare_clear_driver_and_commission",
+    "parse_reservation_text",
+    "update_reservation_draft",
+    "prepare_create_reservation",
+    "parse_driver_list_text",
+    "update_driver_import_draft",
+    "prepare_driver_import",
   ]);
   assert.equal(events.filter((event) => event.type === "assistant.driver_result").length, 1);
   assert.equal(events.filter((event) => event.type === "assistant.driver_financial_summary").length, 1);

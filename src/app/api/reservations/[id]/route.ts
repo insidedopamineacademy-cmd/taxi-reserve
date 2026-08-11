@@ -6,20 +6,33 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { parseReservationStatusCode } from "@/lib/reservationStatus";
 import { logActivity } from "@/lib/activityLog";
+import { parsePositiveMoney } from "@/lib/drivers/financialValidation";
 import {
-  financialDateFromMadridInstant,
-  parsePositiveMoney,
-} from "@/lib/drivers/financialValidation";
+  parseReservationUiUpdate,
+  reservationUpdateChangedFields,
+  ReservationUpdateInputError,
+} from "@/lib/reservations/update-core";
+import {
+  OwnedReservationConflictError,
+  OwnedReservationNotFoundError,
+  updateOwnedReservation,
+} from "@/lib/reservations/update-service";
+import { createPrismaReservationUpdateRepository } from "@/lib/reservations/update-prisma";
+import {
+  CommissionAwareAssignmentInputError,
+  CommissionAwareCommissionRequiredError,
+  CommissionAwareConflictError,
+  CommissionAwareDriverInactiveError,
+  CommissionAwareDriverNotFoundError,
+  CommissionAwareInconsistentStateError,
+  CommissionAwareReservationNotFoundError,
+  CommissionAwareUnexpectedCommissionError,
+  changeOwnedReservationDriverAndCommission,
+  type CommissionAwareAssignmentOperation,
+} from "@/lib/reservations/commission-aware-assignment-core";
+import { createPrismaCommissionAwareAssignmentRepository } from "@/lib/reservations/commission-aware-assignment-prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-function parseDate(value: unknown) {
-  if (typeof value !== "string" && typeof value !== "number" && !(value instanceof Date)) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
-}
 
 async function requireOwnedActiveReservation(id: string) {
   const session = await getServerSession(authOptions);
@@ -58,52 +71,23 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  let reservationPatch;
+  try {
+    reservationPatch = parseReservationUiUpdate(body as Record<string, unknown>);
+  } catch (error) {
+    if (error instanceof ReservationUpdateInputError) {
+      const field = error.field === "passengers" ? "pax" : error.field;
+      return NextResponse.json({ error: `Invalid ${field || "reservation update"}` }, { status: 400 });
+    }
+    throw error;
+  }
   const data: Prisma.ReservationUpdateInput = {};
-  let parsedStartAt: Date | undefined;
-
-  if ("pickupText" in body) {
-    data.pickupText = String(body.pickupText ?? "").slice(0, 500) || null;
-  }
-  if ("dropoffText" in body) {
-    data.dropoffText = String(body.dropoffText ?? "").slice(0, 500) || null;
-  }
-  if ("startAt" in body) {
-    const startAt = parseDate(body.startAt);
-    if (!startAt) return NextResponse.json({ error: "Invalid startAt" }, { status: 400 });
-    data.startAt = startAt;
-    parsedStartAt = startAt;
-  }
-  if ("endAt" in body) {
-    if (!body.endAt) {
-      data.endAt = null;
-    } else {
-      const endAt = parseDate(body.endAt);
-      if (!endAt) return NextResponse.json({ error: "Invalid endAt" }, { status: 400 });
-      data.endAt = endAt;
-    }
-  }
-  if ("pax" in body) {
-    const pax = Number(body.pax);
-    if (!Number.isFinite(pax) || pax < 1 || pax > 99) {
-      return NextResponse.json({ error: "Invalid pax" }, { status: 400 });
-    }
-    data.pax = pax;
-  }
   if ("priceEuro" in body) {
     const priceEuro = body.priceEuro === "" || body.priceEuro == null ? null : Number(body.priceEuro);
     if (priceEuro !== null && !Number.isFinite(priceEuro)) {
       return NextResponse.json({ error: "Invalid priceEuro" }, { status: 400 });
     }
     data.priceEuro = priceEuro;
-  }
-  if ("phone" in body) {
-    data.phone = String(body.phone ?? "").slice(0, 40) || null;
-  }
-  if ("flight" in body) {
-    data.flight = String(body.flight ?? "").slice(0, 40) || null;
-  }
-  if ("notes" in body) {
-    data.notes = String(body.notes ?? "").slice(0, 2000) || null;
   }
   if ("status" in body) {
     const status = parseReservationStatusCode(body.status);
@@ -179,25 +163,9 @@ export async function PATCH(req: Request, { params }: RouteContext) {
       integrationResult = await prisma.$transaction(async (tx) => {
         const current = await tx.reservation.findFirst({
           where: { id, userEmail: email, isDeleted: false },
-          select: { id: true, driverId: true, startAt: true },
+          select: { id: true, driverId: true },
         });
         if (!current) throw new ReservationIntegrationError("Not found", 404);
-
-        if (nextDriverId) {
-          const nextDriver = await tx.driver.findUnique({
-            where: { id: nextDriverId },
-            select: { id: true, status: true },
-          });
-          if (!nextDriver) {
-            throw new ReservationIntegrationError("Driver not found.", 400);
-          }
-          if (nextDriver.status !== "ACTIVE" && nextDriver.id !== current.driverId) {
-            throw new ReservationIntegrationError(
-              "Inactive drivers cannot receive new reservation assignments.",
-              400,
-            );
-          }
-        }
 
         const linkedCommission = await tx.commissionEntry.findUnique({
           where: { reservationId: id },
@@ -216,74 +184,93 @@ export async function PATCH(req: Request, { params }: RouteContext) {
           );
         }
 
-        const transactionData: Prisma.ReservationUpdateInput = { ...data };
-        if (current.driverId !== nextDriverId) {
-          transactionData.driver = nextDriverId
-            ? { connect: { id: nextDriverId } }
-            : { disconnect: true };
+        if (Object.keys(reservationPatch).length > 0) {
+          await updateOwnedReservation(
+            { reservationId: id, ownerEmail: email, patch: reservationPatch },
+            createPrismaReservationUpdateRepository(tx),
+          );
         }
 
-        await tx.reservation.update({ where: { id }, data: transactionData });
+        if (Object.keys(data).length > 0) {
+          await tx.reservation.update({ where: { id }, data });
+        }
+
+        let operation: CommissionAwareAssignmentOperation;
+        if (nextDriverId && commissionAmount) {
+          operation =
+            current.driverId === nextDriverId &&
+              linkedCommission?.driverId === nextDriverId
+              ? {
+                  kind: "UPDATE_COMMISSION",
+                  commissionAmount: commissionAmount.toFixed(2),
+                }
+              : {
+                  kind: "ASSIGN_WITH_COMMISSION",
+                  targetDriverId: nextDriverId,
+                  commissionAmount: commissionAmount.toFixed(2),
+                };
+        } else if (nextDriverId && linkedCommission) {
+          operation = {
+            kind: "ASSIGN_AND_REMOVE_COMMISSION",
+            targetDriverId: nextDriverId,
+          };
+        } else if (nextDriverId) {
+          operation = { kind: "ASSIGN_WITHOUT_COMMISSION", targetDriverId: nextDriverId };
+        } else if (linkedCommission) {
+          operation = { kind: "CLEAR_WITH_COMMISSION" };
+        } else {
+          operation = { kind: "CLEAR_WITHOUT_COMMISSION" };
+        }
+
+        const mutation = await changeOwnedReservationDriverAndCommission(
+          {
+            reservationId: id,
+            ownerEmail: email,
+            operation,
+          },
+          createPrismaCommissionAwareAssignmentRepository(tx),
+        );
 
         let commissionAction: IntegrationResult["commissionAction"] = null;
-        if (nextDriverId && commissionAmount) {
-          const changedFields: string[] = [];
-          if (linkedCommission?.driverId !== nextDriverId) changedFields.push("driverId");
-          if (
-            linkedCommission &&
-            !linkedCommission.commissionAmount.equals(commissionAmount)
-          ) {
-            changedFields.push("commissionAmount");
-          }
-
-          if (!linkedCommission || changedFields.length > 0) {
-            const commission = await tx.commissionEntry.upsert({
-              where: { reservationId: id },
-              create: {
-                driverId: nextDriverId,
-                reservationId: id,
-                commissionAmount,
-                entryDate: financialDateFromMadridInstant(
-                  parsedStartAt ?? current.startAt,
-                ),
-              },
-              update: {
-                driverId: nextDriverId,
-                commissionAmount,
-              },
-              select: { id: true },
-            });
-            commissionAction = {
-              type: linkedCommission ? "updated" : "created",
-              id: commission.id,
-              driverId: nextDriverId,
-              changedFields: linkedCommission
-                ? changedFields
-                : ["driverId", "commissionAmount", "reservationId"],
-            };
-          }
-        } else if (linkedCommission) {
-          await tx.commissionEntry.delete({ where: { id: linkedCommission.id } });
+        if (mutation.commissionMutation !== "NONE") {
+          const commission = mutation.after.linkedCommission ?? mutation.before.linkedCommission!;
+          const changedFields = mutation.commissionMutation === "CREATED"
+            ? ["driverId", "commissionAmount", "reservationId"]
+            : mutation.commissionMutation === "MOVED"
+              ? [
+                  "driverId",
+                  ...(mutation.before.linkedCommission?.commissionAmount !==
+                  mutation.after.linkedCommission?.commissionAmount
+                    ? ["commissionAmount"]
+                    : []),
+                ]
+              : mutation.commissionMutation === "UPDATED"
+                ? ["commissionAmount"]
+                : [];
           commissionAction = {
-            type: "removed",
-            id: linkedCommission.id,
-            driverId: linkedCommission.driverId,
-            changedFields: [],
+            type: mutation.commissionMutation === "CREATED"
+              ? "created"
+              : mutation.commissionMutation === "REMOVED"
+                ? "removed"
+                : "updated",
+            id: commission.id,
+            driverId: commission.driverId,
+            changedFields,
           };
         }
 
         const driverAction: IntegrationResult["driverAction"] =
-          current.driverId === nextDriverId
+          mutation.before.driverId === mutation.after.driverId
             ? null
-            : current.driverId === null
+            : mutation.before.driverId === null
               ? "assigned"
-              : nextDriverId === null
+              : mutation.after.driverId === null
                 ? "unassigned"
                 : "changed";
 
         return {
-          previousDriverId: current.driverId,
-          nextDriverId,
+          previousDriverId: mutation.before.driverId,
+          nextDriverId: mutation.after.driverId,
           driverAction,
           commissionAction,
         };
@@ -291,6 +278,32 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     } catch (error) {
       if (error instanceof ReservationIntegrationError) {
         return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      if (error instanceof OwnedReservationNotFoundError) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (error instanceof OwnedReservationConflictError) {
+        return NextResponse.json({ error: "Reservation changed. Refresh and try again." }, { status: 409 });
+      }
+      if (error instanceof CommissionAwareReservationNotFoundError) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (error instanceof CommissionAwareDriverNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (error instanceof CommissionAwareDriverInactiveError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (
+        error instanceof CommissionAwareConflictError ||
+        error instanceof CommissionAwareCommissionRequiredError ||
+        error instanceof CommissionAwareUnexpectedCommissionError ||
+        error instanceof CommissionAwareInconsistentStateError
+      ) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      if (error instanceof CommissionAwareAssignmentInputError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         return NextResponse.json(
@@ -306,16 +319,40 @@ export async function PATCH(req: Request, { params }: RouteContext) {
       );
     }
   } else {
-    await prisma.reservation.update({ where: { id }, data });
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (Object.keys(reservationPatch).length > 0) {
+          await updateOwnedReservation(
+            { reservationId: id, ownerEmail: email, patch: reservationPatch },
+            createPrismaReservationUpdateRepository(tx),
+          );
+        }
+        if (Object.keys(data).length > 0) {
+          await tx.reservation.update({ where: { id }, data });
+        }
+      });
+    } catch (error) {
+      if (error instanceof OwnedReservationNotFoundError) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (error instanceof OwnedReservationConflictError) {
+        return NextResponse.json({ error: "Reservation changed. Refresh and try again." }, { status: 409 });
+      }
+      throw error;
+    }
   }
 
-  if (!hasDriverIntegration || Object.keys(data).length > 0) {
+  const changedFields = [
+    ...reservationUpdateChangedFields(reservationPatch),
+    ...Object.keys(data),
+  ];
+  if (!hasDriverIntegration || changedFields.length > 0) {
     await logActivity({
       action: "reservation_updated",
       entityType: "reservation",
       entityId: id,
       userEmail: email,
-      metadata: { changedFields: Object.keys(data) },
+      metadata: { changedFields },
     });
   }
 

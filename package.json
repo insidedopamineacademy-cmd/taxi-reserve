@@ -23,6 +23,12 @@
     "test:assistant-driver-finance": "node --experimental-transform-types --test scripts/test-assistant-driver-finance.mts",
     "test:assistant-driver-tool-loop": "node --experimental-transform-types --test scripts/test-assistant-driver-tool-loop.mts",
     "test:assistant-production": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-production.mts",
+    "test:assistant-actions": "node --experimental-transform-types --test scripts/test-assistant-actions.mts",
+    "test:assistant-reservation-updates": "node --experimental-transform-types --test scripts/test-assistant-reservation-updates.mts",
+    "test:assistant-driver-actions": "node --experimental-transform-types --test scripts/test-assistant-driver-actions.mts",
+    "test:assistant-commission-actions": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-commission-aware-actions.mts",
+    "test:assistant-reservation-creation": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-reservation-creation.mts",
+    "test:assistant-driver-import": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-driver-import.mts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

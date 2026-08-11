@@ -23,6 +23,7 @@ import {
   AssistantSseDecoder,
   type AssistantStreamEvent,
 } from "../../lib/assistant/stream-protocol";
+import { parseAiActionPublic } from "../../lib/assistant/actions/contracts";
 import type {
   AssistantMessage,
   AssistantMessagePart,
@@ -69,6 +70,16 @@ function isAssistantStreamResponse(response: Response) {
     .get("content-type")
     ?.toLowerCase()
     .startsWith(ASSISTANT_STREAM_CONTENT_TYPE.split(";")[0]);
+}
+
+function actionCommandErrorMessage(code: unknown) {
+  if (code === "ACTION_FORBIDDEN") {
+    return "Your permissions changed. This action can no longer be confirmed.";
+  }
+  if (code === "ACTION_UNAVAILABLE") {
+    return "This action type is not available. Create a new proposal after it is enabled.";
+  }
+  return undefined;
 }
 
 async function readAssistantHttpError(response: Response) {
@@ -128,6 +139,7 @@ export function AssistantProvider({ children, previewMode }: Props) {
   const lastFailedTurnRef = useRef<AssistantFailedTurn | null>(null);
   const textBufferRef = useRef<{ assistantMessageId: string; text: string } | null>(null);
   const textFrameRef = useRef<number | null>(null);
+  const actionCommandLocksRef = useRef(new Set<string>());
 
   const updateRequestState = useCallback((state: AssistantRequestState) => {
     requestStateRef.current = state;
@@ -252,6 +264,12 @@ export function AssistantProvider({ children, previewMode }: Props) {
         setAnnouncement(event.label);
       } else if (event.type === "assistant.reservation_result") {
         setAnnouncement("Reservation result available");
+      } else if (event.type === "assistant.reservation_draft") {
+        setAnnouncement("Reservation draft updated");
+      } else if (event.type === "assistant.driver_import_draft") {
+        setAnnouncement("Driver import draft updated");
+      } else if (event.type === "assistant.action_preview") {
+        setAnnouncement("Action preview ready for confirmation");
       } else if (event.type === "assistant.complete") {
         lastFailedTurnRef.current = null;
         settleTurn(turn.assistantMessageId, "idle");
@@ -519,6 +537,141 @@ export function AssistantProvider({ children, previewMode }: Props) {
     void runLiveTurn(turn, false);
   }, [previewMode, runLiveTurn, updateRequestState]);
 
+  const updateAction = useCallback(
+    (
+      actionId: string,
+      update: (
+        action: Extract<AssistantMessagePart, { type: "action-preview" }>["action"],
+      ) => Extract<AssistantMessagePart, { type: "action-preview" }>["action"],
+    ) => {
+      setMessages((current) =>
+        current.map((message) => ({
+          ...message,
+          parts: message.parts.map((part) =>
+            part.type === "action-preview" && part.action.actionId === actionId
+              ? { ...part, action: update(part.action) }
+              : part,
+          ),
+        })),
+      );
+    },
+    [],
+  );
+
+  const runActionCommand = useCallback(
+    async (actionId: string, command: "confirm" | "cancel") => {
+      if (actionCommandLocksRef.current.has(actionId)) return;
+      actionCommandLocksRef.current.add(actionId);
+      updateAction(actionId, (action) => ({
+        ...action,
+        status: "EXECUTING",
+        clientError: undefined,
+        failure: undefined,
+      }));
+      setAnnouncement(command === "confirm" ? "Confirming action" : "Cancelling action");
+
+      try {
+        if (previewMode) {
+          await Promise.resolve();
+          updateAction(actionId, (action) =>
+            command === "confirm"
+              ? {
+                  ...action,
+                  status: "EXECUTED",
+                  result:
+                    action.actionType === "CREATE_RESERVATION"
+                      ? {
+                          title: "Reservation created",
+                          message: "21 Nov · 09:50 · Barcelona Airport T1 → Carrer de Llull 170",
+                          reference: {
+                            label: "Open reservation",
+                            href: "/reservations/fixture-reservation-001/edit",
+                          },
+                        }
+                      : action.actionType === "IMPORT_DRIVERS"
+                        ? {
+                            title: "Driver import complete",
+                            message: "Created: 18 · Updated: 4 · Duplicates skipped: 12",
+                            reference: { label: "Open Drivers", href: "/drivers" },
+                          }
+                      : {
+                          title: "Fixture action succeeded",
+                          message: "Development preview only. No operational data was changed.",
+                        },
+                }
+              : { ...action, status: "CANCELLED" },
+          );
+          setAnnouncement(
+            command === "confirm" ? "Fixture action succeeded" : "Fixture action cancelled",
+          );
+          return;
+        }
+
+        const response = await fetch(
+          `/api/assistant/actions/${encodeURIComponent(actionId)}/${command}`,
+          {
+            method: "POST",
+            headers: { accept: "application/json" },
+          },
+        );
+        const body = (await response.json().catch(() => null)) as
+          | { action?: unknown; code?: unknown }
+          | null;
+        if (!body?.action) {
+          throw new Error(
+            response.status === 401
+              ? "Sign in again before confirming this action."
+              : "The action response was invalid. Review it before trying again.",
+          );
+        }
+        const action = parseAiActionPublic(body.action);
+        if (action.actionId !== actionId) throw new Error("The action response did not match.");
+        updateAction(actionId, (current) => ({
+          ...action,
+          fixture: current.fixture,
+          clientError:
+            !response.ok && !action.failure
+              ? actionCommandErrorMessage(body.code)
+              : undefined,
+        }));
+        setAnnouncement(
+          action.status === "EXECUTED"
+            ? "Action succeeded"
+            : action.status === "CANCELLED"
+              ? "Action cancelled"
+              : action.failure?.message || "Action state updated",
+        );
+      } catch (error) {
+        updateAction(actionId, (action) => ({
+          ...action,
+          status: "PENDING",
+          clientError:
+            error instanceof Error
+              ? error.message
+              : "The action could not be reached. Review it before trying again.",
+        }));
+        setAnnouncement("Action request failed");
+      } finally {
+        actionCommandLocksRef.current.delete(actionId);
+      }
+    },
+    [previewMode, updateAction],
+  );
+
+  const confirmAction = useCallback(
+    (actionId: string) => {
+      void runActionCommand(actionId, "confirm");
+    },
+    [runActionCommand],
+  );
+
+  const cancelAction = useCallback(
+    (actionId: string) => {
+      void runActionCommand(actionId, "cancel");
+    },
+    [runActionCommand],
+  );
+
   const value = useMemo<AssistantContextValue>(
     () => ({
       isOpen,
@@ -535,6 +688,8 @@ export function AssistantProvider({ children, previewMode }: Props) {
       submitMessage,
       stopMessage,
       retryMessage,
+      confirmAction,
+      cancelAction,
     }),
     [
       announcement,
@@ -547,6 +702,8 @@ export function AssistantProvider({ children, previewMode }: Props) {
       previewMode,
       previewScenario,
       retryMessage,
+      confirmAction,
+      cancelAction,
       setPreviewScenario,
       stopMessage,
       submitMessage,
