@@ -106,7 +106,7 @@ The development server uses the standard Next.js port unless one is supplied. `n
 | `AI_ASSISTANT_MODEL` | Required server-side OpenAI model identifier; no public/client equivalent |
 | `AI_ASSISTANT_REQUEST_TIMEOUT_MS` | Optional hard request timeout from 1,000 to 120,000 ms; defaults to 30,000 |
 | `AI_ASSISTANT_MAX_REQUESTS_PER_MINUTE` | Optional per-user, per-instance accepted-generation cap from 1 to 60; defaults to 6 |
-| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional user-message cap from 100 to 4,000 characters; defaults to 2,000 |
+| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional user-message cap from 100 to 20,000 characters; defaults to 2,000 |
 | `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | Optional per-model-round ceiling from 100 to 4,000 tokens; defaults to 1,200 |
 | `AI_ASSISTANT_ALLOWED_EMAILS` | Optional comma-separated initial-rollout allowlist; when unset, all authenticated users remain eligible |
 

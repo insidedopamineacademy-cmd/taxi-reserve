@@ -46,7 +46,6 @@ import {
   parseParseDriverListTextArguments,
   parsePrepareDriverImportArguments,
   parseUpdateDriverImportDraftArguments,
-  type ParseDriverListTextArguments,
 } from "./tools/driver-import-contracts.ts";
 import {
   ASSISTANT_RESERVATION_MAX_LIMIT,
@@ -224,7 +223,7 @@ export type AssistantToolLoopDependencies = {
   ): Promise<ReservationDraftPublic | null> | ReservationDraftPublic | null;
   parseDriverListText?(
     context: ReservationAccessContext,
-    input: ParseDriverListTextArguments,
+    currentUserMessage: string,
   ): Promise<DriverImportDraftOperationResult>;
   updateDriverImportDraft?(
     context: ReservationAccessContext,
@@ -445,7 +444,7 @@ export function createAssistantInstructions(
     "Do not call prepare_create_reservation until the server draft says readyToPrepare=true and its exact values are available. A phrase such as 'looks good' may confirm the draft but can never execute creation. Confirmation remains the Confirm & Create application button.",
     "If prepare_create_reservation reports a likely duplicate, show the existing bounded result and ask whether to continue. Do not prepare again until the user explicitly acknowledges the duplicate.",
     "Screenshot, image, vision, OCR, upload, and attachment parsing are unavailable. This booking workflow accepts pasted text only.",
-    "Driver list import is ADMIN-only and accepts pasted TEXT only. Call parse_driver_list_text with the exact current user text. The server owns deduplication, existing-driver matching, and VAN/SEDAN classification; never override those results from model judgment.",
+    "Driver list import is ADMIN-only and accepts pasted TEXT only. For a pasted driver list, call parse_driver_list_text with an empty object. The server supplies the already validated current user message; never copy the list into tool arguments. The server owns deduplication, existing-driver matching, and VAN/SEDAN classification; never override those results from model judgment.",
     "Use update_driver_import_draft only for explicit corrections to a referenced row or an explicit completion confirmation. Unknown vehicle models and multiple-name rows remain blocked until the user chooses a supported single driver name/code and VAN or SEDAN.",
     "Source annotations such as 047, 048, VTC, PMR, MTL, night-driver text, conductor text, and raw vehicle models are review-only data and are never persisted to Driver.",
     "Do not call prepare_driver_import unless the server draft says readyToPrepare=true. The final Import Drivers action may create ACTIVE non-exempt drivers or update only a reviewed vehicleType. It never changes names, codes, status, subscription exemption, finance, or reservation assignments.",
@@ -1141,20 +1140,11 @@ export async function runReservationAssistantToolLoop(
           status: "searching",
           label: "Reading driver list…",
         });
-        const args = parseParseDriverListTextArguments(call.arguments);
-        if (args.driver_list_text.trim() !== input.message.trim()) {
-          input.observeToolResult?.(call.name, 0);
-          modelInput.push({
-            type: "function_call_output",
-            call_id: call.call_id,
-            output: toolOutput({ ok: false, error: "CURRENT_DRIVER_LIST_TEXT_REQUIRED" }),
-          });
-          continue;
-        }
+        parseParseDriverListTextArguments(call.arguments);
         if (!dependencies.parseDriverListText) {
           throw new AssistantTransportError("UNKNOWN_TOOL");
         }
-        const parsed = await dependencies.parseDriverListText(input.authContext, args);
+        const parsed = await dependencies.parseDriverListText(input.authContext, input.message);
         input.observeToolResult?.(call.name, parsed.kind === "DRAFT" ? parsed.draft.rows.length : 0);
         if (parsed.kind === "DRAFT") {
           input.emit({ type: "assistant.driver_import_draft", draft: parsed.draft });

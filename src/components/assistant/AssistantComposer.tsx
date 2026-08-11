@@ -177,7 +177,7 @@ export const AssistantComposer = forwardRef<HTMLTextAreaElement, Props>(
         <p id="assistant-composer-note" className="px-1 pb-2 pt-2 text-center text-[11px] leading-4 text-slate-500">
           {previewMode
             ? "Development fixtures only — no live data or actions"
-            : "Read-only reservation assistant — no changes are made"}
+            : "Taxi Reserve Assistant — changes require confirmation"}
         </p>
       </form>
     );

@@ -9,6 +9,7 @@ import {
   type AiWorkflowDraftRow,
 } from "../src/lib/assistant/workflow-drafts/core.ts";
 import { createDurableReservationDraftStore } from "../src/lib/reservations/reservation-draft-store.ts";
+import { createDurableDriverImportDraftStore } from "../src/lib/drivers/import-store.ts";
 import { extractReservationDraft } from "../src/lib/reservations/reservation-draft-core.ts";
 import {
   classifyDriverVehicle,
@@ -59,7 +60,15 @@ import {
   type AssistantModelResult,
   type AssistantToolLoopDependencies,
 } from "../src/lib/assistant/tool-loop.ts";
-import { parseAssistantStreamEvent, type AssistantStreamEvent } from "../src/lib/assistant/stream-protocol.ts";
+import {
+  encodeAssistantStreamEvent,
+  parseAssistantStreamEvent,
+  type AssistantStreamEvent,
+} from "../src/lib/assistant/stream-protocol.ts";
+import {
+  ASSISTANT_MAX_REQUEST_BYTES,
+  parseAssistantRequest,
+} from "../src/lib/assistant/transport.ts";
 
 const now = new Date("2026-08-12T10:00:00.000Z");
 const admin: AiCanonicalActor = {
@@ -109,6 +118,92 @@ const realRows = [
   "Usman Ali 4512 Corolla",
 ];
 const realList = realRows.join("\n");
+
+const productionFailureFixture = `Lista :
+
+Tamoor gondal vtc 0420MVW
+Muneeb vtc
+Sameer Khan:10445 CADDY
+Hamid VTC Mercedes Vito
+
+Farrakh Sahi 3071 Mercedes V
+Raja hadeed. 5063 ford 048
+Karan Camry 3381
+Raja Adnan 8717 Vito 047
+Inder camry 3135
+Raja Talha 1831 Vito 047
+Qaisar cheema 8268 vito 047& noche Sukh Sidhu conductor
+Joshua Decano 10427 talento pmr 047
+Eathsham Saadat 4579 MTL Mercedes V Class
+Noman Saadat 4579 Mercedes V Class
+Muhammad Ibrahim 4491
+Mercedes V class
+Ehsam y Basheer Ahmed 5181 V class
+Jabran Mercedes 048
+Ali baqer 5986 vw caravelle 048 de noche mohsin malik
+Awais muhammad Vtc
+Ali Tanveer VW Caddy 1073 - Moiz
+Junaid Gondal 10278 Mercedez V class
+Sohail Gondal 10278 Mercedez V class
+SOBAN Ali Khalil,Aneeq irtaza 263 Ford Turneo 048
+Nomy 749 ford custom 047
+Zohaib y Ahmed lexus es300 VTC
+Abdullah Hassan 616
+Mercedes Vito
+Muhammad umer y mohsan ghakhr 9175
+Ford turneo
+Ali Tehreem 5901 Mercedes Vito 047 sin rampa
+Ali Haider & Muhammad Zain RAV4 1675
+Salah & Hamza Mercedes vito 6280
+Mehboob shahbaz 5276 prius +
+ABDULLAH AZHAR 752 Prius +
+Ali Haider + Ali khan. 4916.
+Vito 8Px
+Zafar Mehdi +Sheroon Akram 255 Mercedes v
+Imran Khan llic: 9288 Mercedes Vito pmr
+ALI ARSLAN 3935 PRIUS +
+Usman Ali 4512 corolla
+Sameer Khan:10445 CADDY
+Hamid VTC Mercedes Vito
+
+Muneeb Vtc
+Farrakh Sahi 3071 Mercedes V
+Raja hadeed. 5063 ford 048
+Karan Camry 3381
+Raja Adnan 8717 Vito 047
+Inder camry 3135
+Raja Talha 1831 Vito 047
+Qaisar cheema 8268 vito 047& noche Sukh Sidhu conductor
+Joshua Decano 10427 talento pmr 047
+Eathsham Saadat 4579 MTL Mercedes V Class
+Noman Saadat 4579 Mercedes V Class
+Muhammad Ibrahim 4491
+Mercedes V class
+Ehsam y Basheer Ahmed 5181 V class
+Jabran Mercedes 048
+Ali baqer 5986 vw caravelle 048 de noche mohsin malik
+Awais muhammad Vtc
+Ali Tanveer VW Caddy 1073 - Moiz
+Junaid Gondal 10278 Mercedez V class
+Sohail Gondal 10278 Mercedez V class
+SOBAN Ali Khalil,Aneeq irtaza 263 Ford Turneo 048
+Nomy 749 ford custom 047
+Zohaib y Ahmed lexus es300 VTC
+Abdullah Hassan 616
+Mercedes Vito
+Muhammad umer y mohsan ghakhr 9175
+Ford turneo
+Ali Tehreem 5901 Mercedes Vito 047 sin rampa
+Ali Haider & Muhammad Zain RAV4 1675
+Salah & Hamza Mercedes vito 6280
+Mehboob shahbaz 5276 prius +
+ABDULLAH AZHAR 752 Prius +
+Ali Haider + Ali khan. 4916.
+Vito 8Px
+Zafar Mehdi +Sheroon Akram 255 Mercedes v
+Imran Khan llic: 9288 Mercedes Vito pmr
+ALI ARSLAN 3935 PRIUS +
+Usman Ali 4512 corolla`;
 
 function existing(input: Partial<ExistingDriverImportSnapshot> & Pick<ExistingDriverImportSnapshot, "id" | "name" | "licenseNumber">): ExistingDriverImportSnapshot {
   return {
@@ -183,11 +278,11 @@ test("Phase 2F driver import tools are strict text/update/prepare contracts with
   for (const forbidden of ["userId", "owner", "role", "status", "subscriptionExempt", "payment", "commission", "image", "file", "OCR"]) {
     assert.equal(serialized.includes(`\"${forbidden}\"`), false);
   }
-  assert.deepEqual(parseParseDriverListTextArguments(JSON.stringify({ driver_list_text: realList })), { driver_list_text: realList });
+  assert.deepEqual(parseParseDriverListTextArguments("{}"), {});
   assert.deepEqual(parsePrepareDriverImportArguments('{"draft_id":"d1","revision":2}'), { draft_id: "d1", revision: 2 });
   assert.deepEqual(parseUpdateDriverImportDraftArguments('{"rows":[],"confirm_complete":true}'), { rows: [], confirm_complete: true });
   assert.throws(
-    () => parseParseDriverListTextArguments('{"driver_list_text":"A","role":"ADMIN"}'),
+    () => parseParseDriverListTextArguments('{"driver_list_text":"A"}'),
     (error: unknown) => error instanceof AssistantTransportError && error.code === "TOOL_VALIDATION_FAILED",
   );
 });
@@ -252,6 +347,90 @@ test("real messy repeated blocks deduplicate before analysis and retain only bou
   });
   assert.equal(split.rows.length, 1);
   assert.equal(split.rows[0].vehicleType, "VAN");
+});
+
+test("exact production failure fixture passes transport, deduplicates before the 48-row limit, persists durably, and serializes to SSE", async () => {
+  const body = JSON.stringify({ message: productionFailureFixture, context: [] });
+  assert.equal(productionFailureFixture.length, 2_370);
+  assert.equal(
+    productionFailureFixture.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && line !== "Lista :").length,
+    81,
+  );
+  assert.equal(new TextEncoder().encode(body).byteLength < ASSISTANT_MAX_REQUEST_BYTES, true);
+
+  const parsedRequest = await parseAssistantRequest(new Request("http://localhost/api/assistant/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+  }), 20_000);
+  assert.equal(parsedRequest.message, productionFailureFixture);
+
+  const backend = new MemoryWorkflowBackend();
+  const firstStore = createDurableDriverImportDraftStore(workflowRepository(backend), { now: () => now });
+  const coldStartStore = createDurableDriverImportDraftStore(workflowRepository(backend), { now: () => now });
+  const operation = await parseDriverListDraft(admin, parsedRequest.message, {
+    store: firstStore,
+    repository: new ExistingRepository(),
+    createDraftId: () => "production-fixture-draft",
+    createRowId: (index) => `production-fixture-${index}`,
+    now: () => now,
+  });
+  assert.equal(operation.kind, "DRAFT");
+  if (operation.kind !== "DRAFT") return;
+
+  const { draft } = operation;
+  assert.equal(draft.rows.length, 37);
+  assert.equal(draft.duplicateRowsSkipped, 36);
+  assert.equal(draft.counts.NEW, 16);
+  assert.equal(draft.counts.NEEDS_REVIEW, 17);
+  assert.equal(draft.counts.CONFLICT, 4);
+  assert.equal(draft.blockingCount, 21);
+  assert.equal(draft.rows.find((row) => row.licenseNumber === "9175")?.vehicleType, "VAN");
+  assert.deepEqual(
+    draft.rows.find((row) => row.licenseNumber === "255")?.possibleNames,
+    ["Zafar Mehdi", "Sheroon Akram"],
+  );
+  assert.equal(draft.rows.filter((row) => row.licenseNumber === "10278" && row.state === "CONFLICT").length, 2);
+  assert.equal(draft.rows.find((row) => row.licenseNumber === "5063")?.state, "NEEDS_REVIEW");
+
+  const storedPayload = [...backend.rows.values()][0]?.payload;
+  assert.equal(new TextEncoder().encode(JSON.stringify(storedPayload)).byteLength < AI_WORKFLOW_DRAFT_MAX_JSON_BYTES, true);
+  const coldLoaded = await coldStartStore.load(admin);
+  assert.equal(coldLoaded.kind, "ACTIVE");
+  assert.equal(coldLoaded.kind === "ACTIVE" && coldLoaded.draft.id, "production-fixture-draft");
+
+  const encoded = encodeAssistantStreamEvent({ type: "assistant.driver_import_draft", draft });
+  assert.equal(new TextEncoder().encode(encoded).byteLength < 128_000, true);
+  const data = encoded.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
+  assert.equal(parseAssistantStreamEvent(JSON.parse(data ?? "null")).type, "assistant.driver_import_draft");
+});
+
+test("transport accepts exactly 20,000 Unicode message characters within the bounded request-byte ceiling", async () => {
+  const message = "🚕".repeat(10_000);
+  const body = JSON.stringify({ message });
+  assert.equal(message.length, 20_000);
+  assert.equal(new TextEncoder().encode(body).byteLength < ASSISTANT_MAX_REQUEST_BYTES, true);
+  const parsed = await parseAssistantRequest(new Request("http://localhost/api/assistant/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+  }), 20_000);
+  assert.equal(parsed.message, message);
+
+  const escapedMessage = "\u0001".repeat(20_000);
+  const escapedContext = Array.from({ length: 4 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" as const : "assistant" as const,
+    content: "\u0001".repeat(1_000),
+  }));
+  const escapedBody = JSON.stringify({ message: escapedMessage, context: escapedContext });
+  assert.equal(new TextEncoder().encode(escapedBody).byteLength < ASSISTANT_MAX_REQUEST_BYTES, true);
+  const escaped = await parseAssistantRequest(new Request("http://localhost/api/assistant/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: escapedBody,
+  }), 20_000);
+  assert.equal(escaped.message.length, 20_000);
+  assert.equal(escaped.context.length, 4);
 });
 
 test("vehicle classification is deterministic, owns spelling normalization, and leaves unknown models unresolved", () => {
@@ -722,11 +901,11 @@ function modelCall(name: string, args: unknown) {
   return { type: "function_call", name, call_id: `call-${name}`, arguments: JSON.stringify(args) };
 }
 
-test("tool loop emits a bounded driver import draft and rejects parsing text not equal to the current user message", async () => {
+test("tool loop injects the current user message server-side and rejects echoed driver-list arguments", async () => {
   const store = new MemoryImportStore();
   const repository = new ExistingRepository();
   const results: AssistantModelResult[] = [
-    { output: [modelCall("parse_driver_list_text", { driver_list_text: "Usman Ali 4512 Corolla" })] },
+    { output: [modelCall("parse_driver_list_text", {})] },
     { output: [{ type: "message" }] },
   ];
   let index = 0;
@@ -737,7 +916,7 @@ test("tool loop emits a bounded driver import draft and rejects parsing text not
     searchDrivers: async () => ({ drivers: [], count: 0, hasMore: false, nextCursor: null }),
     getDriverLedgerSummary: async () => null,
     getDriverTransactions: async () => null,
-    parseDriverListText: (context, input) => parseDriverListDraft(context, input.driver_list_text, {
+    parseDriverListText: (context, currentUserMessage) => parseDriverListDraft(context, currentUserMessage, {
       store,
       repository,
       createDraftId: () => "loop-draft",
@@ -759,19 +938,19 @@ test("tool loop emits a bounded driver import draft and rejects parsing text not
 
   const badResults: AssistantModelResult[] = [
     { output: [modelCall("parse_driver_list_text", { driver_list_text: "forged list" })] },
-    { output: [{ type: "message" }] },
   ];
   index = 0;
   dependencies.streamModel = async () => badResults[index++] ?? { output: [{ type: "message" }] };
-  const badEvents: AssistantStreamEvent[] = [];
-  await runReservationAssistantToolLoop({
-    message: "Usman Ali 4512 Corolla",
-    context: [],
-    authContext: admin,
-    signal: new AbortController().signal,
-    emit(event) { badEvents.push(event); },
-  }, dependencies);
-  assert.equal(badEvents.some((event) => event.type === "assistant.driver_import_draft"), false);
+  await assert.rejects(
+    () => runReservationAssistantToolLoop({
+      message: "Usman Ali 4512 Corolla",
+      context: [],
+      authContext: admin,
+      signal: new AbortController().signal,
+      emit() {},
+    }, dependencies),
+    (error: unknown) => error instanceof AssistantTransportError && error.code === "TOOL_VALIDATION_FAILED",
+  );
 });
 
 test("typed SSE and mobile source support grouped import review without tables or horizontal overflow classes", async () => {

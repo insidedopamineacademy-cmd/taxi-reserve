@@ -464,7 +464,7 @@ Never commit real values. Configure production values in the deployment platform
 | `AI_ASSISTANT_MODEL` | Required server-side Responses API model identifier |
 | `AI_ASSISTANT_REQUEST_TIMEOUT_MS` | Optional 1,000-120,000 ms hard timeout; default 30,000 |
 | `AI_ASSISTANT_MAX_REQUESTS_PER_MINUTE` | Optional per-user/per-instance rolling cap from 1-60; default 6 |
-| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional user message cap from 100-4,000 characters; default 2,000 |
+| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional user message cap from 100-20,000 characters; default 2,000 |
 | `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | Optional per-round output ceiling from 100-4,000; default 1,200 |
 | `AI_ASSISTANT_ALLOWED_EMAILS` | Optional normalized comma-separated rollout allowlist; maximum 100 addresses |
 

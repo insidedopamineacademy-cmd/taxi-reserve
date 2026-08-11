@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { cancelAssistantAction, prepareAssistantAction } from "../assistant/actions/service";
-import type { ParseDriverListTextArguments } from "../assistant/tools/driver-import-contracts";
 import type { ReservationAccessContext } from "../reservations/assistant-read-core";
 import {
   applyDriverImportClarification,
@@ -29,9 +28,9 @@ const dependencies = {
 
 export function parseDriverListTextAction(
   context: ReservationAccessContext,
-  input: ParseDriverListTextArguments,
+  currentUserMessage: string,
 ) {
-  return parseDriverListDraft(context, input.driver_list_text, dependencies);
+  return parseDriverListDraft(context, currentUserMessage, dependencies);
 }
 
 export function updateDriverImportDraftAction(

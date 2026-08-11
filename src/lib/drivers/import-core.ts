@@ -131,9 +131,9 @@ const vehicleRules: Array<{
   type: DriverVehicleTypeCode;
   canonical: string;
 }> = [
-  { pattern: /\b(?:mercedes\s+)?v[ -]?class\b/i, type: "VAN", canonical: "Mercedes V-Class" },
-  { pattern: /\bmercedes\s+v\b/i, type: "VAN", canonical: "Mercedes V" },
-  { pattern: /\b(?:mercedes\s+)?vito\b/i, type: "VAN", canonical: "Mercedes Vito" },
+  { pattern: /\b(?:(?:mercedes|mercedez)\s+)?v[ -]?class\b/i, type: "VAN", canonical: "Mercedes V-Class" },
+  { pattern: /\b(?:mercedes|mercedez)\s+v\b/i, type: "VAN", canonical: "Mercedes V" },
+  { pattern: /\b(?:(?:mercedes|mercedez)\s+)?vito\b/i, type: "VAN", canonical: "Mercedes Vito" },
   { pattern: /\b(?:volkswagen|vw)?\s*caravelle\b/i, type: "VAN", canonical: "Volkswagen Caravelle" },
   { pattern: /\b(?:volkswagen|vw)?\s*caddy\b/i, type: "VAN", canonical: "Volkswagen Caddy" },
   { pattern: /\b(?:ford\s+)?(?:tourneo|turneo)\b/i, type: "VAN", canonical: "Ford Tourneo" },
@@ -147,12 +147,11 @@ const vehicleRules: Array<{
 ];
 
 export function classifyDriverVehicle(raw: string) {
-  const normalized = raw.replace(/mercedez/gi, "Mercedes").replace(/turneo/gi, "Tourneo");
   for (const rule of vehicleRules) {
-    const match = rule.pattern.exec(normalized);
+    const match = rule.pattern.exec(raw);
     if (match) return { vehicleRaw: rule.canonical, vehicleType: rule.type, matchedText: match[0] };
   }
-  const unknown = /\b(?:mercedes|volkswagen|vw|ford|fiat|toyota|lexus|peugeot|renault|citroen)(?:\s+[a-z0-9+-]+)?\b/i.exec(normalized);
+  const unknown = /\b(?:mercedes|mercedez|volkswagen|vw|ford|fiat|toyota|lexus|peugeot|renault|citroen)(?:\s+[a-z0-9+-]+)?\b/i.exec(raw);
   return unknown
     ? { vehicleRaw: unknown[0].trim(), vehicleType: null, matchedText: unknown[0] }
     : { vehicleRaw: null, vehicleType: null, matchedText: null };
@@ -198,17 +197,21 @@ function cleanNameSource(
   if (vehicleMatchedText) value = value.replace(vehicleMatchedText, " ");
   value = value
     .replace(/\b(?:047|048|VTC|MTL|PMR|LLIC|8Px)\b/gi, " ")
+    .replace(/\b(?:sin rampa)\b.*$/gi, " ")
     .replace(/[,;|]+$/g, " ")
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .replace(/[\s.:;-]+$/g, "");
   return value;
 }
 
 function multipleNames(value: string, notes: string[]) {
-  const hasConnector = /\s(?:&|\+|y)\s|,/.test(value);
+  const hasConnector = /[&+,]|\s+y\s/i.test(value);
   const hasSecondary = notes.some((note) => /noche|conductor|Secondary text/i.test(note));
   if (!hasConnector && !hasSecondary) return [];
-  const primary = value.split(/\s+(?:&|\+|y)\s+|\s*,\s*/i).map((name) => name.trim()).filter(Boolean);
+  const primary = value.split(/\s*(?:&|\+)\s*|\s+y\s+|\s*,\s*/i)
+    .map((name) => name.trim().replace(/[\s.:;-]+$/g, ""))
+    .filter(Boolean);
   for (const note of notes) {
     const night = /(?:de\s+)?noche\s+(.+?)(?:\s+conductor)?$/i.exec(note);
     if (night?.[1]) primary.push(night[1].trim());
@@ -389,7 +392,7 @@ export function extractDriverImportRows(input: {
   const unique = new Map<string, DriverImportRow>();
   let duplicateRowsSkipped = 0;
   for (const line of lines) {
-    if (/^(drivers?|list|turno|shift)\s*:?'?$/i.test(line)) continue;
+    if (/^(drivers?|lists?|listas?|turno|shift)\s*:?'?$/i.test(line)) continue;
     const key = normalizeSourceLine(line);
     const duplicate = unique.get(key);
     if (duplicate) {

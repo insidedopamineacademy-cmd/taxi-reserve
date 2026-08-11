@@ -138,6 +138,9 @@ test("cost and rollout configuration is bounded, normalized, and fail-closed", (
     assert.equal(isAssistantEmailAllowed("Owner@Example.com"), true);
     assert.equal(isAssistantEmailAllowed("other@example.com"), false);
 
+    process.env.AI_ASSISTANT_MAX_INPUT_CHARS = "20000";
+    assert.equal(getAssistantMaxInputChars(), 20_000);
+
     process.env.AI_ASSISTANT_MAX_REQUESTS_PER_MINUTE = "0";
     assert.throws(getAssistantMaxRequestsPerMinute, AssistantConfigurationError);
     process.env.AI_ASSISTANT_MAX_INPUT_CHARS = "999999";

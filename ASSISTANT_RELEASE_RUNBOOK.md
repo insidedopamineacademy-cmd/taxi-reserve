@@ -17,7 +17,7 @@ Configure values only in the deployment platform. Never put a real key, address 
 | `AI_ASSISTANT_MODEL` | Required reviewed server-only Responses API model identifier. |
 | `AI_ASSISTANT_REQUEST_TIMEOUT_MS` | Optional 1,000-120,000 ms hard timeout; default `30000`. |
 | `AI_ASSISTANT_MAX_REQUESTS_PER_MINUTE` | Optional 1-60 accepted generations per canonical user per application instance; initial default `6`. |
-| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional 100-4,000 user-message characters; initial default `2000`. |
+| `AI_ASSISTANT_MAX_INPUT_CHARS` | Optional 100-20,000 user-message characters; initial default `2000`. |
 | `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | Optional 100-4,000 tokens per model round; initial default `1200`. |
 | `AI_ASSISTANT_ALLOWED_EMAILS` | Optional comma-separated authenticated-email allowlist, normalized case-insensitively; use a very small list for first enablement. |
 | `AI_ASSISTANT_PREVIEW` | Keep `false` in production; code also disables preview when `NODE_ENV=production`. |

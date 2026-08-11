@@ -16,14 +16,20 @@ import type {
   AssistantAdmissionDecision,
   AssistantAdmissionLease,
 } from "./admission-core.ts";
-import { DEFAULT_ASSISTANT_MAX_INPUT_CHARS } from "./config.ts";
+import {
+  DEFAULT_ASSISTANT_MAX_INPUT_CHARS,
+  MAX_ASSISTANT_MAX_INPUT_CHARS,
+} from "./config.ts";
 import type { ReservationAccessContext } from "../reservations/assistant-read-core.ts";
 
-export const ASSISTANT_MAX_REQUEST_BYTES = 8_192;
 export const ASSISTANT_MAX_MESSAGE_LENGTH = DEFAULT_ASSISTANT_MAX_INPUT_CHARS;
 export const ASSISTANT_MAX_CONTEXT_ENTRIES = 6;
 export const ASSISTANT_MAX_CONTEXT_ENTRY_LENGTH = 1_000;
 export const ASSISTANT_MAX_CONTEXT_CHARACTERS = 4_000;
+// JSON may escape one UTF-16 code unit into six ASCII bytes. Size the hard byte
+// ceiling from the bounded message and context contracts, with fixed overhead.
+export const ASSISTANT_MAX_REQUEST_BYTES =
+  (MAX_ASSISTANT_MAX_INPUT_CHARS + ASSISTANT_MAX_CONTEXT_CHARACTERS) * 6 + 8 * 1_024;
 
 type AssistantTransportRunResult = {
   upstreamResponseId?: string;

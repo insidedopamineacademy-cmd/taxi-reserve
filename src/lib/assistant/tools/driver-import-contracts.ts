@@ -1,30 +1,23 @@
 import type { FunctionTool } from "openai/resources/responses/responses";
 import { AssistantTransportError } from "../errors.ts";
 import {
-  DRIVER_IMPORT_TEXT_MAX_LENGTH,
   type DriverImportDraftUpdateArguments,
   type DriverImportRowUpdate,
   type PrepareDriverImportArguments,
 } from "../../drivers/import-core.ts";
 
-export type ParseDriverListTextArguments = { driver_list_text: string };
+export type ParseDriverListTextArguments = Record<string, never>;
 
 export const parseDriverListTextTool: FunctionTool = {
   type: "function",
   name: "parse_driver_list_text",
-  description: "Parse the exact current pasted Taxi Reserve driver list text into a review-only structured draft. This never writes Driver records.",
+  description: "Parse the server-validated current user message as a pasted Taxi Reserve driver list into a review-only structured draft. This never writes Driver records.",
   strict: true,
   parameters: {
     type: "object",
     additionalProperties: false,
-    required: ["driver_list_text"],
-    properties: {
-      driver_list_text: {
-        type: "string",
-        minLength: 1,
-        maxLength: DRIVER_IMPORT_TEXT_MAX_LENGTH,
-      },
-    },
+    required: [],
+    properties: {},
   },
 };
 
@@ -101,13 +94,8 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]) {
 
 export function parseParseDriverListTextArguments(raw: string): ParseDriverListTextArguments {
   const value = parseObject(raw);
-  exactKeys(value, ["driver_list_text"]);
-  if (
-    typeof value.driver_list_text !== "string" ||
-    !value.driver_list_text.trim() ||
-    value.driver_list_text.length > DRIVER_IMPORT_TEXT_MAX_LENGTH
-  ) throw new AssistantTransportError("TOOL_VALIDATION_FAILED");
-  return { driver_list_text: value.driver_list_text };
+  exactKeys(value, []);
+  return {};
 }
 
 function nullableText(value: unknown, maximum: number) {
