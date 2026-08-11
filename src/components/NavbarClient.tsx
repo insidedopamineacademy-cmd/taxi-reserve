@@ -24,11 +24,7 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
   const mobileMenuButton = (
     <button
       type="button"
-      className={
-        assistantEnabled
-          ? "inline-flex size-11 items-center justify-center rounded-md text-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300"
-          : "lg:hidden"
-      }
+      className="inline-flex size-11 items-center justify-center rounded-md text-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 lg:hidden"
       onClick={() => setOpen((value) => !value)}
       aria-label="Toggle navigation menu"
       aria-expanded={open}
@@ -39,7 +35,8 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
   );
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-[#0b1324] text-white shadow-md">
+    <>
+      <nav className="sticky top-0 z-50 w-full bg-[#0b1324] text-white shadow-md">
       <div className="mx-auto max-w-6xl px-4 h-12 flex items-center justify-between">
         <Link href="/" className="text-xl font-semibold hover:text-yellow-400">
           AppReserve
@@ -75,14 +72,7 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
           )}
         </div>
 
-        {assistantEnabled ? (
-          <div className="flex items-center gap-2 lg:hidden">
-            <AssistantLauncher variant="mobile" onBeforeOpen={() => setOpen(false)} />
-            {mobileMenuButton}
-          </div>
-        ) : (
-          mobileMenuButton
-        )}
+        {mobileMenuButton}
       </div>
 
       {open ? (
@@ -120,7 +110,14 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
         </div>
       ) : null}
 
-      {assistantEnabled ? <AssistantLauncher variant="desktop" /> : null}
-    </nav>
+      </nav>
+
+      {assistantEnabled ? (
+        <>
+          <AssistantLauncher variant="mobile" onBeforeOpen={() => setOpen(false)} />
+          <AssistantLauncher variant="desktop" />
+        </>
+      ) : null}
+    </>
   );
 }

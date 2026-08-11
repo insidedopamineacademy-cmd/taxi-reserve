@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   canAcceptAssistantSubmission,
@@ -119,4 +120,52 @@ test("Enter submits only for non-composing fine-pointer input", () => {
   assert.equal(shouldSubmitAssistantKey({ ...base, isComposing: true }), false);
   assert.equal(shouldSubmitAssistantKey({ ...base, keyCode: 229 }), false);
   assert.equal(shouldSubmitAssistantKey({ ...base, coarsePointer: true }), false);
+});
+
+test("mobile uses one accessible floating portrait launcher outside the navbar", () => {
+  const launcher = readFileSync(
+    new URL("../src/components/assistant/AssistantLauncher.tsx", import.meta.url),
+    "utf8",
+  );
+  const navbar = readFileSync(
+    new URL("../src/components/NavbarClient.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = readFileSync(
+    new URL("../src/app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(navbar.match(/<AssistantLauncher variant="mobile"/g)?.length, 1);
+  assert.equal(
+    navbar.indexOf('<AssistantLauncher variant="mobile"') > navbar.indexOf("</nav>"),
+    true,
+  );
+  assert.match(launcher, /aria-label="Open AI Assistant"/);
+  assert.match(launcher, /hidden=\{isOpen\}/);
+  assert.match(launcher, /AssistantAvatar size="launcher"/);
+  assert.match(launcher, /assistant-launcher-mobile z-40 size-14/);
+  assert.match(styles, /\.assistant-launcher-mobile\s*\{[\s\S]*position: fixed/);
+  assert.match(styles, /env\(safe-area-inset-bottom\)/);
+  assert.match(styles, /env\(safe-area-inset-right\)/);
+});
+
+test("sticky reply composer receives the only page-specific launcher accommodation", () => {
+  const reply = readFileSync(
+    new URL("../src/components/emails/ReplyComposer.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = readFileSync(
+    new URL("../src/app/globals.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(reply, /email-reply-composer-shell/);
+  assert.match(
+    styles,
+    /body:has\(\.email-reply-composer-shell\) \.assistant-launcher-mobile/,
+  );
+  assert.match(
+    styles,
+    /body:has\(\.email-reply-composer-shell #email-reply-composer\) \.assistant-launcher-mobile/,
+  );
 });

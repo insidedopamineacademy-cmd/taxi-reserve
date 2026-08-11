@@ -194,10 +194,27 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
 .assistant-launcher-mobile {
   display: inline-flex;
+  position: fixed;
+  right: max(1rem, calc(0.75rem + env(safe-area-inset-right)));
+  bottom: max(1rem, calc(0.75rem + env(safe-area-inset-bottom)));
 }
 
 .assistant-launcher-desktop {
   display: none;
+}
+
+.assistant-launcher[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 639px) {
+  body:has(.email-reply-composer-shell) .assistant-launcher-mobile {
+    bottom: max(5.75rem, calc(5.5rem + env(safe-area-inset-bottom)));
+  }
+
+  body:has(.email-reply-composer-shell #email-reply-composer) .assistant-launcher-mobile {
+    bottom: max(15.5rem, calc(15.25rem + env(safe-area-inset-bottom)));
+  }
 }
 
 @media (min-width: 768px) and (min-height: 600px) and (hover: hover) and (pointer: fine) {

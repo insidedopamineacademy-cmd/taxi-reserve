@@ -64,7 +64,7 @@ export default function ReplyComposer({
   return (
     <section
       aria-label="Reply"
-      className="sticky bottom-0 z-20 mt-4 rounded-t-2xl border border-b-0 border-white/10 bg-[#111827]/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur sm:static sm:rounded-2xl sm:border-b"
+      className="email-reply-composer-shell sticky bottom-0 z-20 mt-4 rounded-t-2xl border border-b-0 border-white/10 bg-[#111827]/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur sm:static sm:rounded-2xl sm:border-b"
     >
       {!open ? (
         <div>
