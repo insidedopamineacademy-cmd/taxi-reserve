@@ -15,6 +15,7 @@ import {
   classifyDriverVehicle,
   createDriverImportDraft,
   extractDriverImportRows,
+  MAX_DRIVER_IMPORT_ROWS,
   toPublicDriverImportDraft,
   updateDriverImportDraft,
   type DriverImportDraftRecord,
@@ -37,6 +38,7 @@ import type { DriverImportDraftStore } from "../src/lib/drivers/import-store.ts"
 import {
   serializeDriverImportActionPayload,
   serializeDriverImportActionPrecondition,
+  parseStoredDriverImportAction,
   type DriverImportActionPayload,
   type DriverImportActionPrecondition,
   type DriverImportMutationRepository,
@@ -51,6 +53,7 @@ import {
   type AiPendingActionUpdate,
 } from "../src/lib/assistant/actions/core.ts";
 import {
+  AI_ACTION_MAX_JSON_BYTES,
   assertJsonObject,
   parseAiActionPreview,
   type JsonObject,
@@ -61,6 +64,8 @@ import {
   type AssistantToolLoopDependencies,
 } from "../src/lib/assistant/tool-loop.ts";
 import {
+  ASSISTANT_MAX_STREAM_FRAME_BYTES,
+  AssistantSseDecoder,
   encodeAssistantStreamEvent,
   parseAssistantStreamEvent,
   type AssistantStreamEvent,
@@ -118,6 +123,39 @@ const realRows = [
   "Usman Ali 4512 Corolla",
 ];
 const realList = realRows.join("\n");
+
+function alphabeticId(index: number) {
+  let value = index;
+  let output = "";
+  do {
+    output = String.fromCharCode(65 + (value % 26)) + output;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return output;
+}
+
+function driverName(index: number) {
+  return `Driver Code${alphabeticId(index)} Alpha`;
+}
+
+function driverList(count: number, codeFor = (index: number) => String(10_000 + index)) {
+  return Array.from(
+    { length: count },
+    (_, index) => `${driverName(index)} ${codeFor(index)} Caddy`,
+  ).join("\n");
+}
+
+function maximumSplitDriverList() {
+  let nextName = 0;
+  return Array.from({ length: 17 }, (_, groupIndex) => {
+    const nameCount = groupIndex < 16 ? 6 : 4;
+    const names = Array.from({ length: nameCount }, () => driverName(nextName++));
+    const primary = names.slice(0, -1).join(" + ");
+    const secondary = `${names.at(-1)} ${"Longname ".repeat(17)}`.trim();
+    const base = `${primary} ${10_000 + groupIndex} Caddy de noche ${secondary} conductor; `;
+    return `${base}${"Z".repeat(Math.max(0, 500 - base.length))}`;
+  }).join("\n");
+}
 
 const productionFailureFixture = `Lista :
 
@@ -287,6 +325,77 @@ test("Phase 2F driver import tools are strict text/update/prepare contracts with
   );
 });
 
+test("driver import accepts 48, 49, 99, and 100 unique identities and rejects 101 cleanly", () => {
+  assert.equal(MAX_DRIVER_IMPORT_ROWS, 100);
+  for (const count of [48, 49, 99, 100]) {
+    const parsed = extractDriverImportRows({
+      text: driverList(count),
+      createRowId: (index) => `boundary-${count}-${index}`,
+    });
+    assert.equal(parsed.rows.length, count);
+  }
+  assert.throws(
+    () => extractDriverImportRows({
+      text: driverList(101),
+      createRowId: (index) => `over-limit-${index}`,
+    }),
+    /This pasted list exceeds the 100-unique-driver import limit\. Please send it in smaller batches\./,
+  );
+});
+
+test("capacity is evaluated after source/identity deduplication without collapsing shared codes or VTC", () => {
+  const unique = driverList(100);
+  const repeated = extractDriverImportRows({
+    text: `${unique}\n${unique}`,
+    createRowId: (index) => `repeated-${index}`,
+  });
+  assert.equal(repeated.rows.length, 100);
+  assert.equal(repeated.duplicateRowsSkipped, 100);
+
+  const sharedCode = extractDriverImportRows({
+    text: driverList(100, () => "7777"),
+    createRowId: (index) => `shared-${index}`,
+  });
+  assert.equal(sharedCode.rows.length, 100);
+  assert.equal(new Set(sharedCode.rows.map((row) => row.name)).size, 100);
+  assert.equal(new Set(sharedCode.rows.map((row) => row.licenseNumber)).size, 1);
+
+  const repeatedVtc = extractDriverImportRows({
+    text: driverList(100, () => "VTC"),
+    createRowId: (index) => `vtc-${index}`,
+  });
+  assert.equal(repeatedVtc.rows.length, 100);
+  assert.equal(repeatedVtc.rows.every((row) => row.licenseNumber === "VTC"), true);
+
+  const sameNameDifferentCodes = extractDriverImportRows({
+    text: Array.from(
+      { length: 100 },
+      (_, index) => `Same Driver Alpha ${10_000 + index} Caddy`,
+    ).join("\n"),
+    createRowId: (index) => `same-name-${index}`,
+  });
+  assert.equal(sameNameDifferentCodes.rows.length, 100);
+  assert.equal(new Set(sameNameDifferentCodes.rows.map((row) => row.licenseNumber)).size, 100);
+});
+
+test("split names count separately toward the 100-driver capacity", () => {
+  const pairedLines = Array.from({ length: 50 }, (_, index) => (
+    `${driverName(index * 2)} + ${driverName(index * 2 + 1)} ${20_000 + index} Caddy`
+  ));
+  const accepted = extractDriverImportRows({
+    text: pairedLines.join("\n"),
+    createRowId: (index) => `paired-${index}`,
+  });
+  assert.equal(accepted.rows.length, 100);
+  assert.throws(
+    () => extractDriverImportRows({
+      text: [...pairedLines, `${driverName(100)} 29999 Caddy`].join("\n"),
+      createRowId: (index) => `paired-over-${index}`,
+    }),
+    /100-unique-driver import limit/,
+  );
+});
+
 test("durable workflow drafts survive a second store instance, isolate owners, expire, clean up, and reject malformed or oversized payloads", async () => {
   const backend = new MemoryWorkflowBackend();
   let clock = new Date(now);
@@ -349,7 +458,7 @@ test("real messy repeated blocks deduplicate before analysis and retain only bou
   assert.equal(split.rows[0].vehicleType, "VAN");
 });
 
-test("exact production failure fixture passes transport, deduplicates before the 48-row limit, persists durably, and serializes to SSE", async () => {
+test("exact production failure fixture passes transport, deduplicates before capacity evaluation, persists durably, and serializes to SSE", async () => {
   const body = JSON.stringify({ message: productionFailureFixture, context: [] });
   assert.equal(productionFailureFixture.length, 2_370);
   assert.equal(
@@ -403,6 +512,92 @@ test("exact production failure fixture passes transport, deduplicates before the
   assert.equal(new TextEncoder().encode(encoded).byteLength < 128_000, true);
   const data = encoded.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
   assert.equal(parseAssistantStreamEvent(JSON.parse(data ?? "null")).type, "assistant.driver_import_draft");
+});
+
+test("a maximum valid 100-driver draft survives durable save, cold reload, and SSE serialization", async () => {
+  const text = maximumSplitDriverList();
+  const readOnlyEmptyRepository = new ExistingRepository();
+  const firstPass = await createDriverImportDraft({
+    id: "maximum-first-pass",
+    ownerUserId: admin.userId,
+    ownerEmail: admin.email,
+    text,
+    createRowId: (index) => `maximum-first-${index}`,
+    repository: readOnlyEmptyRepository,
+    now,
+  });
+  assert.equal(firstPass.rows.length, 100);
+
+  const existingRows = firstPass.rows.map((row, index) => {
+    const idPrefix = `maximum-existing-${index}-`;
+    return existing({
+      id: `${idPrefix}${"x".repeat(200 - idPrefix.length)}`,
+      name: row.name!,
+      licenseNumber: row.licenseNumber!,
+      vehicleType: "SEDAN",
+    });
+  });
+  const repository = new ExistingRepository(existingRows);
+  const parsed = await createDriverImportDraft({
+    id: "maximum-durable-driver-draft",
+    ownerUserId: admin.userId,
+    ownerEmail: admin.email,
+    text,
+    createRowId: (index) => {
+      const prefix = `maximum-row-${index}-`;
+      return `${prefix}${"r".repeat(200 - prefix.length)}`;
+    },
+    repository,
+    now,
+  });
+  const draft = await updateDriverImportDraft(
+    parsed,
+    { rows: [], confirm_complete: true },
+    repository,
+    now,
+  );
+
+  const backend = new MemoryWorkflowBackend();
+  const firstStore = createDurableDriverImportDraftStore(
+    workflowRepository(backend),
+    { now: () => now },
+  );
+  const coldStartStore = createDurableDriverImportDraftStore(
+    workflowRepository(backend),
+    { now: () => now },
+  );
+  await firstStore.save(draft);
+
+  const storedPayload = [...backend.rows.values()][0]?.payload;
+  const storedBytes = new TextEncoder().encode(JSON.stringify(storedPayload)).byteLength;
+  assert.ok(storedBytes > 64 * 1_024);
+  assert.ok(storedBytes <= AI_WORKFLOW_DRAFT_MAX_JSON_BYTES);
+  const coldLoaded = await coldStartStore.load(admin);
+  assert.equal(coldLoaded.kind, "ACTIVE");
+  assert.equal(coldLoaded.kind === "ACTIVE" && coldLoaded.draft.rows.length, 100);
+  assert.equal(
+    coldLoaded.kind === "ACTIVE" && coldLoaded.draft.expiresAt.getTime() - now.getTime(),
+    15 * 60 * 1_000,
+  );
+  assert.deepEqual(
+    await coldStartStore.load({ userId: admin.userId, email: "other@example.com" }),
+    { kind: "MISSING" },
+  );
+
+  const publicDraft = toPublicDriverImportDraft(draft);
+  const encoded = encodeAssistantStreamEvent({
+    type: "assistant.driver_import_draft",
+    draft: publicDraft,
+  });
+  assert.ok(new TextEncoder().encode(encoded).byteLength < ASSISTANT_MAX_STREAM_FRAME_BYTES);
+  const decoder = new AssistantSseDecoder();
+  const events = decoder.push(encoded);
+  decoder.finish();
+  assert.equal(events.length, 1);
+  assert.equal(
+    events[0]?.type === "assistant.driver_import_draft" && events[0].draft.rows.length,
+    100,
+  );
 });
 
 test("transport accepts exactly 20,000 Unicode message characters within the bounded request-byte ceiling", async () => {
@@ -627,14 +822,15 @@ test("review completion prepares one bounded server-owned IMPORT_DRIVERS action 
 });
 
 test("a maximum-size reviewed import stays inside pending-action and preview bounds", async () => {
-  const rows = Array.from({ length: 48 }, (_, index) => {
+  const rows = Array.from({ length: MAX_DRIVER_IMPORT_ROWS }, (_, index) => {
     const suffix = `${String.fromCharCode(65 + Math.floor(index / 26))}${String.fromCharCode(65 + (index % 26))}`;
-    const name = `${"Longname ".repeat(21)}${suffix}`;
-    const licenseNumber = String(1_000 + index);
+    const name = `${"Longname ".repeat(20)}${suffix}`;
+    const licenseNumber = String(10_000 + index);
+    const idPrefix = `existing-maximum-${index}-`;
     return {
       line: `${name} ${licenseNumber} Caddy`,
       existing: existing({
-        id: `existing-maximum-${index}-${"x".repeat(24)}`,
+        id: `${idPrefix}${"x".repeat(200 - idPrefix.length)}`,
         name,
         licenseNumber,
         vehicleType: "SEDAN",
@@ -642,6 +838,7 @@ test("a maximum-size reviewed import stays inside pending-action and preview bou
     };
   });
   const repository = new ExistingRepository(rows.map((row) => row.existing));
+  const existingBeforePreparation = structuredClone(repository.rows);
   const parsed = await createDriverImportDraft({
     id: "driver-import-maximum",
     ownerUserId: admin.userId,
@@ -687,13 +884,26 @@ test("a maximum-size reviewed import stays inside pending-action and preview bou
   });
   assert.equal(result.kind, "ACTION_PREVIEW");
   assert.ok(captured);
-  assert.equal((captured.payload as DriverImportActionPayload).updates.length, 48);
+  assert.equal((captured.payload as DriverImportActionPayload).updates.length, 100);
   assertJsonObject(captured.payload, "maximum import payload");
   assertJsonObject(captured.precondition, "maximum import precondition");
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(captured.payload)).byteLength;
+  const preconditionBytes = new TextEncoder().encode(JSON.stringify(captured.precondition)).byteLength;
+  assert.ok(payloadBytes <= AI_ACTION_MAX_JSON_BYTES);
+  assert.ok(preconditionBytes > 32_768);
+  assert.ok(preconditionBytes <= AI_ACTION_MAX_JSON_BYTES);
+  const stored = parseStoredDriverImportAction(captured.payload, captured.precondition);
+  assert.equal(stored.payload.updates.length, 100);
+  assert.equal(stored.precondition.existing.length, 100);
+  assert.throws(() => parseStoredDriverImportAction({
+    ...captured.payload,
+    creates: [{ name: "Additional Driver", licenseNumber: "99999", vehicleType: "VAN" }],
+  }, captured.precondition), /payload is invalid/);
   const preview = parseAiActionPreview(captured.preview);
   assert.equal(preview.sections.length <= 6, true);
   assert.equal(preview.sections.every((section) => section.facts.length <= 12), true);
   assert.equal(preview.sections.flatMap((section) => section.facts).every((fact) => fact.value.length <= 500), true);
+  assert.deepEqual(repository.rows, existingBeforePreparation);
 });
 
 type ImportTransaction = {
@@ -708,6 +918,7 @@ function storedImportAction(input: {
   creates?: DriverImportActionPayload["creates"];
   updates?: DriverImportActionPayload["updates"];
   existing?: ExistingDriverImportSnapshot[];
+  noOpCount?: number;
 } = {}): AiPendingActionRecord {
   const creates = input.creates ?? [{ name: "Usman Ali", licenseNumber: "4512", vehicleType: "SEDAN" }];
   const updates = input.updates ?? [{ driverId: "existing-ali", vehicleType: "VAN" }];
@@ -718,7 +929,7 @@ function storedImportAction(input: {
     creates,
     updates,
     duplicatesSkipped: 2,
-    noOpCount: 1,
+    noOpCount: input.noOpCount ?? 1,
   };
   const precondition: DriverImportActionPrecondition = {
     ownerUserId: admin.userId,
@@ -876,6 +1087,33 @@ test("IMPORT_DRIVERS confirmation is ADMIN-only, idempotent, transactional, and 
   assert.equal(forbiddenStore.drivers.length, 1);
 });
 
+test("IMPORT_DRIVERS confirmation executes a valid 100-driver action without truncation", async () => {
+  const creates = Array.from({ length: MAX_DRIVER_IMPORT_ROWS }, (_, index) => ({
+    name: driverName(index),
+    licenseNumber: index % 2 === 0 ? "VTC" : "7777",
+    vehicleType: index % 3 === 0 ? "SEDAN" as const : "VAN" as const,
+  }));
+  const action = storedImportAction({ creates, updates: [], existing: [], noOpCount: 0 });
+  assertJsonObject(action.payload, "100-driver import payload");
+  assertJsonObject(action.precondition, "100-driver import precondition");
+  const store = new TransactionalImportStore(action, []);
+  const result = await confirmAiPendingAction(
+    { session: admin, actionId: action.id },
+    {
+      store,
+      executors: { IMPORT_DRIVERS: createDriverImportExecutor(mutationRepository) },
+      now: () => now,
+    },
+  );
+
+  assert.equal(result.code, "ACTION_EXECUTED");
+  assert.equal(store.drivers.length, 100);
+  assert.equal(store.creates, 100);
+  assert.equal(store.activities.filter((entry) => entry.action === "driver_created").length, 100);
+  assert.equal(store.activities.filter((entry) => entry.action === "drivers_imported").length, 1);
+  assert.match(result.action?.result?.message ?? "", /Created: 100.*Updated: 0/);
+});
+
 test("stale existing state conflicts and a later database failure rolls the entire batch back before persisting failure", async () => {
   const staleStore = new TransactionalImportStore();
   staleStore.drivers[0].updatedAt = new Date(now.getTime() + 1);
@@ -990,6 +1228,7 @@ test("source regression proves one workflow-draft migration, shared normal drive
   const normalRoute = readFileSync("src/app/api/drivers/route.ts", "utf8");
   const executor = readFileSync("src/lib/assistant/actions/driver-import-executor.ts", "utf8");
   const confirmation = readFileSync("src/lib/assistant/actions/core.ts", "utf8");
+  const actionStore = readFileSync("src/lib/assistant/actions/prisma-store.ts", "utf8");
   assert.match(schema, /model AiWorkflowDraft/);
   assert.match(schema, /@@unique\(\[userId, kind\]\)/);
   assert.match(migration, /CREATE TABLE "AiWorkflowDraft"/);
@@ -1000,4 +1239,5 @@ test("source regression proves one workflow-draft migration, shared normal drive
     assert.equal(executor.includes(forbidden), false);
   }
   assert.doesNotMatch(confirmation, /from\s+["']openai["']|require\(["']openai["']\)/i);
+  assert.match(actionStore, /maxWait:\s*10_000, timeout:\s*60_000/);
 });

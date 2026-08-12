@@ -7,7 +7,7 @@ import {
 } from "./profile-core.ts";
 
 export const DRIVER_IMPORT_TEXT_MAX_LENGTH = 20_000;
-export const DRIVER_IMPORT_MAX_ROWS = 48;
+export const MAX_DRIVER_IMPORT_ROWS = 100;
 export const DRIVER_IMPORT_TTL_MS = 15 * 60 * 1_000;
 
 export type DriverImportRowState =
@@ -390,8 +390,10 @@ export function extractDriverImportRows(input: {
         duplicateRowsSkipped += 1;
         continue;
       }
-      if (rows.length >= DRIVER_IMPORT_MAX_ROWS) {
-        throw new DriverImportInputError(`Driver imports are limited to ${DRIVER_IMPORT_MAX_ROWS} unique rows.`);
+      if (rows.length >= MAX_DRIVER_IMPORT_ROWS) {
+        throw new DriverImportInputError(
+          `This pasted list exceeds the ${MAX_DRIVER_IMPORT_ROWS}-unique-driver import limit. Please send it in smaller batches.`,
+        );
       }
       rows.push(candidate);
       if (identityKey && !identities.has(identityKey)) identities.set(identityKey, candidate);

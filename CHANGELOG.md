@@ -24,6 +24,7 @@ Notable project changes are recorded here in reverse chronological order.
 
 ### Changed
 
+- Increased the confirmed ADMIN driver-import capacity from 48 to 100 unique normalized Driver records after source and identity deduplication, with bounded durable-draft and pending-action envelopes sized for the larger batch.
 - Hardened the assistant as a mobile full-screen workspace with coalesced Visual Viewport enhancement, offset-aware sizing, rotation recovery, four-sided safe areas, iOS-safe body locking, and keyboard-aware bottom padding.
 - Added explicit idle/submitting/generating/failed request states, synchronous duplicate-submit protection, mobile multiline Return behavior, composition tracking, stable transcript anchoring, and memoized message rendering.
 - Reused the shared Madrid date helper for driver financial date derivation without changing persisted financial-date semantics.

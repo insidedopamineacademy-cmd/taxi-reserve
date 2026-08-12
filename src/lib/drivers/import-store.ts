@@ -1,8 +1,8 @@
 import "server-only";
 
 import {
-  DRIVER_IMPORT_MAX_ROWS,
   DRIVER_IMPORT_TTL_MS,
+  MAX_DRIVER_IMPORT_ROWS,
   type DriverImportDraftRecord,
   type DriverImportRow,
   type DriverImportRowState,
@@ -160,7 +160,7 @@ function deserializeDraft(payload: unknown, expiresAt: Date): DriverImportDraftR
     !boundedString(payload.ownerUserId, 200) ||
     !boundedString(payload.ownerEmail, 320) ||
     !Number.isInteger(payload.revision) || (payload.revision as number) < 1 ||
-    !Array.isArray(payload.rows) || payload.rows.length === 0 || payload.rows.length > DRIVER_IMPORT_MAX_ROWS ||
+    !Array.isArray(payload.rows) || payload.rows.length === 0 || payload.rows.length > MAX_DRIVER_IMPORT_ROWS ||
     rows.some((row) => row === null) ||
     !Number.isInteger(payload.duplicateRowsSkipped) || (payload.duplicateRowsSkipped as number) < 0 ||
     typeof payload.completeConfirmed !== "boolean" ||

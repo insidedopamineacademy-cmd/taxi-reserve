@@ -128,6 +128,8 @@ Finance DTOs reuse the canonical Prisma Decimal summaries and formula `commissio
 
 The browser receives only small typed application-owned events, including `assistant.reservation_result`, `assistant.driver_result`, `assistant.driver_financial_summary`, and `assistant.driver_transactions`; raw provider events never reach it. Text is animation-frame coalesced; cards come from structured facts rather than Markdown parsing. Stop aborts the live request and preserves partial output. Retry reuses the failed turn without duplicating its user bubble or cards. Conversation context is ephemeral, text-only, and capped at six entries/4,000 characters; it is not stored in browser storage, OpenAI conversations, or Taxi Reserve tables.
 
+ADMIN driver-list imports accept at most 100 unique normalized Driver records per batch. Repeated source rows and exact normalized name/code identities are removed before that limit is evaluated; split names count separately. Drafts contain structured workflow data only, remain owner-isolated, expire after 15 minutes, and do not mutate Driver records until the prepared action is explicitly confirmed.
+
 No AI write, reservation/driver/finance mutation, unrestricted Prisma/SQL access, conversation persistence, or Phase 1D database migration was added.
 
 For local visual QA only, set both flags to `true` while running the development server and visit `/assistant-preview`. This route presents clearly labelled static fixtures and returns 404 in production. It must never be used as a source of operational truth.

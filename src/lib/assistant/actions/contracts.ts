@@ -1,7 +1,7 @@
 export const AI_PENDING_ACTION_TTL_MS = 10 * 60 * 1_000;
-// Bulk driver imports can carry up to 48 exact stale-state snapshots. Keep the
+// Bulk driver imports can carry up to 100 exact stale-state snapshots. Keep the
 // envelope bounded while leaving room for schema-valid names, codes, and IDs.
-export const AI_ACTION_MAX_JSON_BYTES = 32_768;
+export const AI_ACTION_MAX_JSON_BYTES = 64 * 1_024;
 
 export const AI_ACTION_TYPES = [
   "UPDATE_RESERVATION",

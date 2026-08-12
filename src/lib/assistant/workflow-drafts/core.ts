@@ -1,5 +1,7 @@
 export const AI_WORKFLOW_DRAFT_TTL_MS = 15 * 60 * 1_000;
-export const AI_WORKFLOW_DRAFT_MAX_JSON_BYTES = 64 * 1_024;
+// A parser-derived 100-driver draft can reach just under 155 KiB when bounded
+// source rows, split-name notes, and exact existing snapshots are retained.
+export const AI_WORKFLOW_DRAFT_MAX_JSON_BYTES = 160 * 1_024;
 
 export const AI_WORKFLOW_DRAFT_KINDS = [
   "RESERVATION_CREATE",

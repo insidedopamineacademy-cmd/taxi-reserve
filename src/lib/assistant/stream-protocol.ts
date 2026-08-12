@@ -31,7 +31,10 @@ import type {
   AssistantDriverTransactionsData,
 } from "../drivers/assistant-finance-core.ts";
 import type { ReservationDraftPublic } from "../reservations/reservation-draft-core.ts";
-import type { DriverImportDraftPublic } from "../drivers/import-core.ts";
+import {
+  MAX_DRIVER_IMPORT_ROWS,
+  type DriverImportDraftPublic,
+} from "../drivers/import-core.ts";
 export type { ReservationDraftPublic as AssistantReservationDraftData } from "../reservations/reservation-draft-core.ts";
 export type { DriverImportDraftPublic as AssistantDriverImportDraftData } from "../drivers/import-core.ts";
 
@@ -385,7 +388,7 @@ function isDriverImportDraft(value: unknown): value is DriverImportDraftPublic {
     typeof value.completeConfirmed !== "boolean" ||
     typeof value.readyToPrepare !== "boolean" ||
     typeof value.question !== "string" || value.question.length > 5_000 ||
-    !Array.isArray(value.rows) || value.rows.length > 48 || !value.rows.every(isDriverImportRow)
+    !Array.isArray(value.rows) || value.rows.length > MAX_DRIVER_IMPORT_ROWS || !value.rows.every(isDriverImportRow)
   ) return false;
   return true;
 }

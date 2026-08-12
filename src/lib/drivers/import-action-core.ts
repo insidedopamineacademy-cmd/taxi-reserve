@@ -1,5 +1,6 @@
 import type { JsonObject } from "../assistant/actions/contracts.ts";
 import {
+  MAX_DRIVER_IMPORT_ROWS,
   normalizeDriverIdentity,
   type ExistingDriverImportSnapshot,
 } from "./import-core.ts";
@@ -137,10 +138,14 @@ export function parseStoredDriverImportAction(
   ]) ||
     !text(payloadValue.draftId, 200) ||
     !Number.isInteger(payloadValue.draftRevision) || (payloadValue.draftRevision as number) < 1 ||
-    !Array.isArray(payloadValue.creates) || payloadValue.creates.length > 48 ||
-    !Array.isArray(payloadValue.updates) || payloadValue.updates.length > 48 ||
+    !Array.isArray(payloadValue.creates) || payloadValue.creates.length > MAX_DRIVER_IMPORT_ROWS ||
+    !Array.isArray(payloadValue.updates) || payloadValue.updates.length > MAX_DRIVER_IMPORT_ROWS ||
     !Number.isInteger(payloadValue.duplicatesSkipped) || (payloadValue.duplicatesSkipped as number) < 0 ||
     !Number.isInteger(payloadValue.noOpCount) || (payloadValue.noOpCount as number) < 0
+  ) throw new Error("Stored driver import payload is invalid.");
+  if (
+    payloadValue.creates.length + payloadValue.updates.length +
+      (payloadValue.noOpCount as number) > MAX_DRIVER_IMPORT_ROWS
   ) throw new Error("Stored driver import payload is invalid.");
   if (!exactKeys(preconditionValue, [
     "ownerUserId", "ownerEmail", "preparedAt", "existing", "newDrivers",
@@ -148,8 +153,12 @@ export function parseStoredDriverImportAction(
     !text(preconditionValue.ownerUserId, 200) ||
     !text(preconditionValue.ownerEmail, 320) ||
     !text(preconditionValue.preparedAt, 40) ||
-    !Array.isArray(preconditionValue.existing) || preconditionValue.existing.length > 48 ||
-    !Array.isArray(preconditionValue.newDrivers) || preconditionValue.newDrivers.length > 48
+    !Array.isArray(preconditionValue.existing) || preconditionValue.existing.length > MAX_DRIVER_IMPORT_ROWS ||
+    !Array.isArray(preconditionValue.newDrivers) || preconditionValue.newDrivers.length > MAX_DRIVER_IMPORT_ROWS
+  ) throw new Error("Stored driver import precondition is invalid.");
+  if (
+    preconditionValue.existing.length + preconditionValue.newDrivers.length >
+      MAX_DRIVER_IMPORT_ROWS
   ) throw new Error("Stored driver import precondition is invalid.");
   const preparedAt = new Date(preconditionValue.preparedAt as string);
   if (!Number.isFinite(preparedAt.getTime()) || preparedAt.toISOString() !== preconditionValue.preparedAt) {

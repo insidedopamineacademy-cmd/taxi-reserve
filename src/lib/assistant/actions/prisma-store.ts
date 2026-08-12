@@ -78,7 +78,7 @@ function updateData(update: AiPendingActionUpdate): Prisma.AiPendingActionUpdate
 
 export const prismaAiPendingActionStore: AiPendingActionStore<AiActionTransaction> = {
   transaction(callback) {
-    return prisma.$transaction(callback, { maxWait: 5_000, timeout: 15_000 });
+    return prisma.$transaction(callback, { maxWait: 10_000, timeout: 60_000 });
   },
 
   async findCanonicalActor(transaction, identity) {

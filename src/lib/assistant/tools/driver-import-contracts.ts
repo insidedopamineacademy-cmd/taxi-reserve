@@ -1,6 +1,7 @@
 import type { FunctionTool } from "openai/resources/responses/responses";
 import { AssistantTransportError } from "../errors.ts";
 import {
+  MAX_DRIVER_IMPORT_ROWS,
   type DriverImportDraftUpdateArguments,
   type DriverImportRowUpdate,
   type PrepareDriverImportArguments,
@@ -11,7 +12,7 @@ export type ParseDriverListTextArguments = Record<string, never>;
 export const parseDriverListTextTool: FunctionTool = {
   type: "function",
   name: "parse_driver_list_text",
-  description: "Parse the server-validated current user message as a pasted Taxi Reserve driver list into a review-only structured draft. This never writes Driver records.",
+  description: `Parse the server-validated current user message as a pasted Taxi Reserve driver list into a review-only structured draft of at most ${MAX_DRIVER_IMPORT_ROWS} unique drivers after deduplication. This never writes Driver records.`,
   strict: true,
   parameters: {
     type: "object",
