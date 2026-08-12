@@ -182,7 +182,8 @@ function findLicenseNumber(line: string, vehicleMatchedText: string | null) {
     .replace(/\b(?:sin rampa|de noche|noche|conductor)\b.*$/gi, " ");
   const tokens = candidateText.match(/\b[A-Za-z0-9]{3,12}\b/g) ?? [];
   const token = tokens.find((value) => /\d/.test(value) && !/^ES300$/i.test(value));
-  return token ? normalizeDriverLicenseNumber(token) : null;
+  if (token) return normalizeDriverLicenseNumber(token);
+  return /\bVTC\b/i.test(line) ? "VTC" : null;
 }
 
 function cleanNameSource(
@@ -221,46 +222,46 @@ function multipleNames(value: string, notes: string[]) {
   return [...new Set(primary.map((name) => normalizeDriverName(name)))].slice(0, 6);
 }
 
-function initialRow(line: string, id: string): DriverImportRow {
+function initialRows(
+  line: string,
+  createRowId: (offset: number) => string,
+): DriverImportRow[] {
   const vehicle = classifyDriverVehicle(line);
   const licenseNumber = findLicenseNumber(line, vehicle.matchedText);
   const notes = sourceNotes(line);
   const nameSource = cleanNameSource(line, licenseNumber, vehicle.matchedText);
-  const possibleNames = multipleNames(nameSource, notes);
-  const issues: string[] = [];
-  const name = possibleNames.length > 1
-    ? null
+  const parsedNames = multipleNames(nameSource, notes);
+  const names = parsedNames.length > 0
+    ? parsedNames
     : nameSource
-      ? normalizeDriverName(nameSource)
-      : null;
-  if (possibleNames.length > 1) issues.push("Multiple people appear in one row. Confirm the single driver record that owns this code.");
-  if (!name && possibleNames.length <= 1) issues.push("Driver name is missing.");
-  if (!licenseNumber) issues.push("Driver code/license number is missing.");
-  if (!vehicle.vehicleRaw) issues.push("Vehicle model/type is missing.");
-  else if (!vehicle.vehicleType) issues.push(`Should ${vehicle.vehicleRaw} be VAN or SEDAN?`);
-  return {
-    id,
-    sourceLine: line.slice(0, 500),
-    name,
-    licenseNumber,
-    vehicleRaw: vehicle.vehicleRaw,
-    vehicleType: vehicle.vehicleType,
-    sourceNotes: notes,
-    possibleNames,
-    duplicateOccurrences: 0,
-    state: issues.length > 0 ? "NEEDS_REVIEW" : "NEW",
-    issues,
-    existing: null,
-  };
+      ? [normalizeDriverName(nameSource)]
+      : [null];
+  return names.map((name, offset) => {
+    const issues: string[] = [];
+    if (!name) issues.push("Driver name is missing.");
+    if (!licenseNumber) issues.push("Driver code/license number is missing.");
+    if (!vehicle.vehicleRaw) issues.push("Vehicle model/type is missing.");
+    else if (!vehicle.vehicleType) issues.push(`Should ${vehicle.vehicleRaw} be VAN or SEDAN?`);
+    return {
+      id: createRowId(offset),
+      sourceLine: line.slice(0, 500),
+      name,
+      licenseNumber,
+      vehicleRaw: vehicle.vehicleRaw,
+      vehicleType: vehicle.vehicleType,
+      sourceNotes: notes,
+      possibleNames: [],
+      duplicateOccurrences: 0,
+      state: issues.length > 0 ? "NEEDS_REVIEW" : "NEW",
+      issues,
+      existing: null,
+    };
+  });
 }
 
 function baseIssues(row: DriverImportRow) {
   const issues: string[] = [];
-  if (!row.name) {
-    issues.push(row.possibleNames.length > 1
-      ? "Multiple people appear in one row. Confirm the single driver record that owns this code."
-      : "Driver name is missing.");
-  }
+  if (!row.name) issues.push("Driver name is missing.");
   if (!row.licenseNumber) issues.push("Driver code/license number is missing.");
   if (!row.vehicleType) {
     issues.push(row.vehicleRaw
@@ -280,88 +281,56 @@ export function analyzeDriverImportRows(
     state: baseIssues(row).length > 0 ? "NEEDS_REVIEW" : "NEW",
     existing: null,
   }));
-  const byCode = new Map<string, DriverImportRow[]>();
-  const byName = new Map<string, DriverImportRow[]>();
+  const byIdentity = new Map<string, DriverImportRow[]>();
   for (const row of analyzed) {
-    if (row.licenseNumber) {
-      const key = row.licenseNumber.toUpperCase();
-      byCode.set(key, [...(byCode.get(key) ?? []), row]);
-    }
-    if (row.name) {
-      const key = normalizeDriverIdentity(row.name);
-      byName.set(key, [...(byName.get(key) ?? []), row]);
+    if (row.name && row.licenseNumber) {
+      const nameKey = normalizeDriverIdentity(row.name);
+      const identityKey = `${nameKey}\u0000${row.licenseNumber.toUpperCase()}`;
+      byIdentity.set(identityKey, [...(byIdentity.get(identityKey) ?? []), row]);
     }
   }
-  for (const group of byCode.values()) {
-    const names = new Set(group.map((row) => row.name && normalizeDriverIdentity(row.name)).filter(Boolean));
-    if (names.size > 1) {
+  for (const group of byIdentity.values()) {
+    if (group.length <= 1) continue;
+    const vehicleTypes = new Set(group.map((row) => row.vehicleType).filter(Boolean));
+    if (vehicleTypes.size > 1) {
       for (const row of group) {
         row.state = "CONFLICT";
-        row.issues.push(`Code ${row.licenseNumber} appears with different driver names.`);
+        row.issues.push("The same driver name and code appear with conflicting vehicle types.");
       }
       continue;
     }
-    if (names.size === 1 && group.length > 1) {
-      const vehicleTypes = new Set(group.map((row) => row.vehicleType).filter(Boolean));
-      if (vehicleTypes.size > 1) {
-        for (const row of group) {
-          row.state = "CONFLICT";
-          row.issues.push(`Code ${row.licenseNumber} appears with conflicting vehicle types.`);
-        }
-        continue;
-      }
-      const canonical = group.find((row) => row.issues.length === 0);
-      if (canonical) {
-        for (const row of group) {
-          if (row !== canonical && row.issues.length === 0 && row.vehicleType === canonical.vehicleType) {
-            row.state = "DUPLICATE_IN_IMPORT";
-            row.issues.push(`Duplicate code, driver name, and vehicle type in this import.`);
-          }
-        }
-      }
-    }
-  }
-  for (const group of byName.values()) {
-    const codes = new Set(group.map((row) => row.licenseNumber).filter(Boolean));
-    if (codes.size > 1) {
+    const canonical = group.find((row) => row.issues.length === 0);
+    if (canonical) {
       for (const row of group) {
-        if (row.state !== "CONFLICT") row.state = "NEEDS_REVIEW";
-        row.issues.push(`${row.name} appears with different codes in this import.`);
+        if (row !== canonical && row.issues.length === 0 && row.vehicleType === canonical.vehicleType) {
+          row.state = "DUPLICATE_IN_IMPORT";
+          row.issues.push("Duplicate driver name, code, and vehicle type in this import.");
+        }
       }
     }
   }
-
   for (const row of analyzed) {
     if (row.state === "CONFLICT" || row.state === "DUPLICATE_IN_IMPORT" || row.issues.length > 0) continue;
-    const codeMatches = existingDrivers.filter(
-      (driver) => driver.licenseNumber.toUpperCase() === row.licenseNumber!.toUpperCase(),
+    const exactMatches = existingDrivers.filter(
+      (driver) =>
+        driver.licenseNumber.toUpperCase() === row.licenseNumber!.toUpperCase() &&
+        normalizeDriverIdentity(driver.name) === normalizeDriverIdentity(row.name!),
     );
-    if (codeMatches.length > 1) {
+    if (exactMatches.length > 1) {
       row.state = "CONFLICT";
-      row.issues.push(`Code ${row.licenseNumber} matches more than one existing driver.`);
+      row.issues.push("More than one existing driver has this same name and code.");
       continue;
     }
-    if (codeMatches.length === 1) {
-      const existing = codeMatches[0];
+    if (exactMatches.length === 1) {
+      const existing = exactMatches[0];
       row.existing = structuredClone(existing);
-      if (normalizeDriverIdentity(existing.name) !== normalizeDriverIdentity(row.name!)) {
-        row.state = "CONFLICT";
-        row.issues.push(`Code ${row.licenseNumber} belongs to existing driver ${existing.name}.`);
-      } else if (existing.vehicleType !== row.vehicleType) {
+      if (existing.vehicleType !== row.vehicleType) {
         row.state = "EXISTING_UPDATE";
         if (existing.status === "INACTIVE") row.issues.push("Existing driver is INACTIVE; status will not change.");
       } else {
         row.state = "EXISTING_MATCH";
         if (existing.status === "INACTIVE") row.issues.push("Existing driver is INACTIVE; status will not change.");
       }
-      continue;
-    }
-    const nameMatches = existingDrivers.filter(
-      (driver) => normalizeDriverIdentity(driver.name) === normalizeDriverIdentity(row.name!),
-    );
-    if (nameMatches.some((driver) => driver.licenseNumber.toUpperCase() !== row.licenseNumber!.toUpperCase())) {
-      row.state = "NEEDS_REVIEW";
-      row.issues.push(`${row.name} already exists with a different code.`);
       continue;
     }
     row.state = "NEW";
@@ -389,24 +358,47 @@ export function extractDriverImportRows(input: {
       lines.push(line);
     }
   }
-  const unique = new Map<string, DriverImportRow>();
+  const uniqueSourceLines = new Map<string, { line: string; duplicateOccurrences: number }>();
   let duplicateRowsSkipped = 0;
   for (const line of lines) {
     if (/^(drivers?|lists?|listas?|turno|shift)\s*:?'?$/i.test(line)) continue;
     const key = normalizeSourceLine(line);
-    const duplicate = unique.get(key);
+    const duplicate = uniqueSourceLines.get(key);
     if (duplicate) {
       duplicate.duplicateOccurrences += 1;
       duplicateRowsSkipped += 1;
       continue;
     }
-    if (unique.size >= DRIVER_IMPORT_MAX_ROWS) {
-      throw new DriverImportInputError(`Driver imports are limited to ${DRIVER_IMPORT_MAX_ROWS} unique rows.`);
-    }
-    unique.set(key, initialRow(line, input.createRowId(unique.size)));
+    uniqueSourceLines.set(key, { line, duplicateOccurrences: 0 });
   }
-  if (unique.size === 0) throw new DriverImportInputError("No driver rows were found.");
-  return { rows: [...unique.values()], duplicateRowsSkipped };
+
+  const rows: DriverImportRow[] = [];
+  const identities = new Map<string, DriverImportRow>();
+  for (const source of uniqueSourceLines.values()) {
+    const candidates = initialRows(
+      source.line,
+      (offset) => input.createRowId(rows.length + offset),
+    );
+    for (const candidate of candidates) {
+      candidate.duplicateOccurrences = source.duplicateOccurrences;
+      const identityKey = candidate.name && candidate.licenseNumber
+        ? `${normalizeDriverIdentity(candidate.name)}\u0000${candidate.licenseNumber.toUpperCase()}`
+        : null;
+      const duplicate = identityKey ? identities.get(identityKey) : null;
+      if (duplicate && duplicate.vehicleType === candidate.vehicleType) {
+        duplicate.duplicateOccurrences += 1;
+        duplicateRowsSkipped += 1;
+        continue;
+      }
+      if (rows.length >= DRIVER_IMPORT_MAX_ROWS) {
+        throw new DriverImportInputError(`Driver imports are limited to ${DRIVER_IMPORT_MAX_ROWS} unique rows.`);
+      }
+      rows.push(candidate);
+      if (identityKey && !identities.has(identityKey)) identities.set(identityKey, candidate);
+    }
+  }
+  if (rows.length === 0) throw new DriverImportInputError("No driver rows were found.");
+  return { rows, duplicateRowsSkipped };
 }
 
 export function driverImportLookup(rows: DriverImportRow[]) {

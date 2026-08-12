@@ -333,7 +333,7 @@ test("real messy repeated blocks deduplicate before analysis and retain only bou
     text: `${realList}\n${realList}`,
     createRowId: (index) => `row-${index}`,
   });
-  assert.equal(parsed.rows.length, realRows.length);
+  assert.equal(parsed.rows.length, 48);
   assert.equal(parsed.duplicateRowsSkipped, realRows.length);
   assert.equal(parsed.rows.every((row) => row.duplicateOccurrences === 1), true);
   const sameer = parsed.rows.find((row) => row.licenseNumber === "10445")!;
@@ -379,18 +379,18 @@ test("exact production failure fixture passes transport, deduplicates before the
   if (operation.kind !== "DRAFT") return;
 
   const { draft } = operation;
-  assert.equal(draft.rows.length, 37);
+  assert.equal(draft.rows.length, 48);
   assert.equal(draft.duplicateRowsSkipped, 36);
-  assert.equal(draft.counts.NEW, 16);
-  assert.equal(draft.counts.NEEDS_REVIEW, 17);
-  assert.equal(draft.counts.CONFLICT, 4);
-  assert.equal(draft.blockingCount, 21);
+  assert.equal(draft.counts.NEW, 43);
+  assert.equal(draft.counts.NEEDS_REVIEW, 5);
+  assert.equal(draft.counts.CONFLICT, 0);
+  assert.equal(draft.blockingCount, 5);
   assert.equal(draft.rows.find((row) => row.licenseNumber === "9175")?.vehicleType, "VAN");
   assert.deepEqual(
-    draft.rows.find((row) => row.licenseNumber === "255")?.possibleNames,
+    draft.rows.filter((row) => row.licenseNumber === "255").map((row) => row.name),
     ["Zafar Mehdi", "Sheroon Akram"],
   );
-  assert.equal(draft.rows.filter((row) => row.licenseNumber === "10278" && row.state === "CONFLICT").length, 2);
+  assert.equal(draft.rows.filter((row) => row.licenseNumber === "10278" && row.state === "NEW").length, 2);
   assert.equal(draft.rows.find((row) => row.licenseNumber === "5063")?.state, "NEEDS_REVIEW");
 
   const storedPayload = [...backend.rows.values()][0]?.payload;
@@ -442,7 +442,7 @@ test("vehicle classification is deterministic, owns spelling normalization, and 
   assert.equal(classifyDriverVehicle("Peugeot Traveller").vehicleRaw, "Peugeot Traveller");
 });
 
-test("multiple names, night drivers, missing fields, unknown vehicles, and unsupported notes require review without persistence fields", async () => {
+test("multiple and night-driver names split while genuinely missing or unknown fields remain review-only", async () => {
   const draft = await createDriverImportDraft({
     id: "draft-ambiguous",
     ownerUserId: admin.userId,
@@ -457,16 +457,23 @@ test("multiple names, night drivers, missing fields, unknown vehicles, and unsup
     repository: new ExistingRepository(),
     now,
   });
-  assert.equal(draft.rows.every((row) => row.state === "NEEDS_REVIEW"), true);
-  assert.deepEqual(draft.rows[0].possibleNames, ["Ehsam", "Basheer Ahmed"]);
-  assert.match(draft.rows[1].sourceNotes.join(" "), /047.*noche/i);
-  assert.match(draft.rows[3].sourceNotes.join(" "), /048.*PMR/i);
-  assert.equal("notes" in draft.rows[3], false);
-  assert.equal("vehicleModel" in draft.rows[3], false);
+  assert.equal(draft.rows.length, 6);
+  assert.deepEqual(draft.rows.slice(0, 4).map((row) => [row.name, row.state]), [
+    ["Ehsam", "NEW"],
+    ["Basheer Ahmed", "NEW"],
+    ["Qaisar Cheema", "NEW"],
+    ["Sukh Sidhu", "NEW"],
+  ]);
+  assert.equal(draft.rows[4].state, "NEEDS_REVIEW");
+  assert.equal(draft.rows[5].state, "NEEDS_REVIEW");
+  assert.match(draft.rows[2].sourceNotes.join(" "), /047.*noche/i);
+  assert.match(draft.rows[5].sourceNotes.join(" "), /048.*PMR/i);
+  assert.equal("notes" in draft.rows[5], false);
+  assert.equal("vehicleModel" in draft.rows[5], false);
   assert.equal(toPublicDriverImportDraft(draft).readyToPrepare, false);
 });
 
-test("same-code/name conflicts and existing-driver matches follow conservative exact rules", async () => {
+test("shared codes and shared names identify separate drivers while exact matches remain conservative", async () => {
   const repository = new ExistingRepository([
     existing({ id: "existing-1", name: "Sameer Khan", licenseNumber: "10445", vehicleType: "VAN" }),
     existing({ id: "existing-2", name: "Ali Tehreem", licenseNumber: "5901", vehicleType: "SEDAN" }),
@@ -488,13 +495,12 @@ test("same-code/name conflicts and existing-driver matches follow conservative e
     repository,
     now,
   });
-  // A conflicting second row for the same code makes the entire code group unsafe.
-  assert.equal(draft.rows[0].state, "CONFLICT");
+  assert.equal(draft.rows[0].state, "EXISTING_MATCH");
   assert.equal(draft.rows[1].state, "EXISTING_UPDATE");
-  assert.equal(draft.rows[2].state, "CONFLICT");
-  assert.equal(draft.rows[3].state, "NEEDS_REVIEW");
-  assert.equal(draft.rows[4].state, "CONFLICT");
-  assert.equal(draft.rows[5].state, "CONFLICT");
+  assert.equal(draft.rows[2].state, "NEW");
+  assert.equal(draft.rows[3].state, "NEW");
+  assert.equal(draft.rows[4].state, "NEW");
+  assert.equal(draft.rows[5].state, "NEW");
 
   const exactDraft = await createDriverImportDraft({
     id: "draft-existing-exact",
@@ -521,7 +527,7 @@ test("same normalized code, name, and vehicle are skipped once while contradicto
     repository: new ExistingRepository(),
     now,
   });
-  assert.deepEqual(semanticDuplicate.rows.map((row) => row.state), ["NEW", "DUPLICATE_IN_IMPORT"]);
+  assert.deepEqual(semanticDuplicate.rows.map((row) => row.state), ["NEW"]);
   assert.equal(toPublicDriverImportDraft(semanticDuplicate).duplicateRowsSkipped, 1);
 
   const contradictory = await createDriverImportDraft({
@@ -811,7 +817,10 @@ function mutationRepository(transaction: ImportTransaction): DriverImportMutatio
     async create(profile) {
       transaction.creates += 1;
       if (transaction.failCreateAt === transaction.creates) throw new Error("database failed");
-      if (transaction.drivers.some((driver) => driver.licenseNumber.toUpperCase() === profile.licenseNumber.toUpperCase())) {
+      if (transaction.drivers.some((driver) =>
+        driver.licenseNumber.toUpperCase() === profile.licenseNumber.toUpperCase() &&
+        driver.name.toLowerCase() === profile.name.toLowerCase()
+      )) {
         throw new Error("duplicate");
       }
       const created = existing({

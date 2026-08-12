@@ -198,7 +198,7 @@ export function hasIdentityCollision(
   driver: { name: string; licenseNumber: string },
 ) {
   return candidates.some((candidate) =>
-    candidate.licenseNumber.toUpperCase() === driver.licenseNumber.toUpperCase() ||
-    normalizeDriverIdentity(candidate.name) === normalizeDriverIdentity(driver.name),
+    normalizeDriverIdentity(candidate.name) === normalizeDriverIdentity(driver.name) &&
+    candidate.licenseNumber.toUpperCase() === driver.licenseNumber.toUpperCase(),
   );
 }

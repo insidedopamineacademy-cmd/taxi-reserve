@@ -157,7 +157,7 @@ model Reservation {
 model Driver {
   id                 String             @id @default(cuid())
   name               String
-  licenseNumber      String             @unique
+  licenseNumber      String
   vehicleType        DriverVehicleType?
   subscriptionExempt Boolean            @default(false)
   status             DriverStatus       @default(ACTIVE)
@@ -168,6 +168,8 @@ model Driver {
   commissionEntries   CommissionEntry[]
   payments            DriverPayment[]
   subscriptionCharges DriverSubscriptionCharge[]
+
+  @@index([licenseNumber])
 }
 
 model CommissionEntry {

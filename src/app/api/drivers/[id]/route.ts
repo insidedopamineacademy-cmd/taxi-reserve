@@ -3,6 +3,11 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activityLog";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
+import {
+  DriverProfileInputError,
+  normalizeDriverLicenseNumber,
+  normalizeDriverName,
+} from "@/lib/drivers/profile-core";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -19,9 +24,9 @@ function parseVehicleType(value: unknown) {
   return null;
 }
 
-function duplicateLicenseResponse() {
+function duplicateDriverResponse() {
   return NextResponse.json(
-    { error: "A driver with this license number already exists." },
+    { error: "A driver with this name and license number already exists." },
     { status: 409 },
   );
 }
@@ -72,49 +77,49 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   const data: Prisma.DriverUpdateInput = {};
   const changedFields: string[] = [];
+  let nextName = current.name;
+  let nextLicenseNumber = current.licenseNumber;
 
   if ("name" in input) {
-    const name = typeof input.name === "string" ? input.name.trim() : "";
-    if (!name) {
-      return NextResponse.json({ error: "Enter the driver's name." }, { status: 400 });
+    try {
+      nextName = normalizeDriverName(input.name);
+    } catch (error) {
+      if (error instanceof DriverProfileInputError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
     }
-    if (name.length > 200) {
-      return NextResponse.json(
-        { error: "Driver name must be 200 characters or fewer." },
-        { status: 400 },
-      );
-    }
-    if (name !== current.name) {
-      data.name = name;
+    if (nextName !== current.name) {
+      data.name = nextName;
       changedFields.push("name");
     }
   }
 
   if ("licenseNumber" in input) {
-    const licenseNumber =
-      typeof input.licenseNumber === "string" ? input.licenseNumber.trim() : "";
-    if (!licenseNumber) {
-      return NextResponse.json(
-        { error: "Enter the driver's license number." },
-        { status: 400 },
-      );
+    try {
+      nextLicenseNumber = normalizeDriverLicenseNumber(input.licenseNumber);
+    } catch (error) {
+      if (error instanceof DriverProfileInputError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
     }
-    if (licenseNumber.length > 100) {
-      return NextResponse.json(
-        { error: "License number must be 100 characters or fewer." },
-        { status: 400 },
-      );
-    }
-    if (licenseNumber !== current.licenseNumber) {
-      const duplicate = await prisma.driver.findUnique({
-        where: { licenseNumber },
-        select: { id: true },
-      });
-      if (duplicate) return duplicateLicenseResponse();
-
-      data.licenseNumber = licenseNumber;
+    if (nextLicenseNumber !== current.licenseNumber) {
+      data.licenseNumber = nextLicenseNumber;
       changedFields.push("licenseNumber");
     }
+  }
+
+  if (changedFields.includes("name") || changedFields.includes("licenseNumber")) {
+    const duplicate = await prisma.driver.findFirst({
+      where: {
+        id: { not: current.id },
+        name: { equals: nextName, mode: "insensitive" },
+        licenseNumber: { equals: nextLicenseNumber, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (duplicate) return duplicateDriverResponse();
   }
 
   if ("status" in input) {
@@ -201,10 +206,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
     return NextResponse.json({ driver });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return duplicateLicenseResponse();
-    }
-
     console.error("Driver update failed:", error);
     return NextResponse.json({ error: "Could not update the driver." }, { status: 500 });
   }

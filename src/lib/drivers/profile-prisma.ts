@@ -21,9 +21,12 @@ export function createPrismaDriverProfileRepository(
   database: DriverDatabase = prisma,
 ): DriverProfileRepository {
   return {
-    findByLicenseNumber(licenseNumber) {
+    findByIdentity(input) {
       return database.driver.findFirst({
-        where: { licenseNumber: { equals: licenseNumber, mode: "insensitive" } },
+        where: {
+          name: { equals: input.name, mode: "insensitive" },
+          licenseNumber: { equals: input.licenseNumber, mode: "insensitive" },
+        },
         select: driverProfileSelect,
       });
     },

@@ -29,6 +29,8 @@
     "test:assistant-commission-actions": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-commission-aware-actions.mts",
     "test:assistant-reservation-creation": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-reservation-creation.mts",
     "test:assistant-driver-import": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-driver-import.mts",
+    "test:driver-one-time-import": "node --experimental-transform-types --test scripts/test-driver-one-time-import.mts",
+    "import:drivers": "dotenv -e .env.local -- node --experimental-transform-types scripts/import-drivers-one-time.mts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

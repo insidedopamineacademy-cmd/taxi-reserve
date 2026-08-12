@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
@@ -10,9 +9,9 @@ import {
 import { createPrismaDriverProfileRepository } from "@/lib/drivers/profile-prisma";
 import { prisma } from "@/lib/prisma";
 
-function duplicateLicenseResponse() {
+function duplicateDriverResponse() {
   return NextResponse.json(
-    { error: "A driver with this license number already exists." },
+    { error: "A driver with this name and license number already exists." },
     { status: 409 },
   );
 }
@@ -69,10 +68,7 @@ export async function POST(request: Request) {
     revalidatePath("/payments");
     return NextResponse.json({ driver }, { status: 201 });
   } catch (error) {
-    if (error instanceof DriverProfileInputError) return duplicateLicenseResponse();
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return duplicateLicenseResponse();
-    }
+    if (error instanceof DriverProfileInputError) return duplicateDriverResponse();
     console.error("Driver creation failed:", error);
     return NextResponse.json({ error: "Could not create the driver." }, { status: 500 });
   }

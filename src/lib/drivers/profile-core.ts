@@ -21,7 +21,10 @@ export type DriverProfileSnapshot = {
 };
 
 export type DriverProfileRepository = {
-  findByLicenseNumber(licenseNumber: string): Promise<DriverProfileSnapshot | null>;
+  findByIdentity(input: {
+    name: string;
+    licenseNumber: string;
+  }): Promise<DriverProfileSnapshot | null>;
   create(profile: NormalizedDriverProfile): Promise<DriverProfileSnapshot>;
 };
 
@@ -98,7 +101,15 @@ export async function createDriverProfile(
   profile: NormalizedDriverProfile,
   repository: DriverProfileRepository,
 ) {
-  const duplicate = await repository.findByLicenseNumber(profile.licenseNumber);
-  if (duplicate) throw new DriverProfileInputError("A driver with this license number already exists.", "licenseNumber");
+  const duplicate = await repository.findByIdentity({
+    name: profile.name,
+    licenseNumber: profile.licenseNumber,
+  });
+  if (duplicate) {
+    throw new DriverProfileInputError(
+      "A driver with this name and license number already exists.",
+      "licenseNumber",
+    );
+  }
   return repository.create(profile);
 }

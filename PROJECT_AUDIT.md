@@ -194,7 +194,7 @@ The ADMIN section is addressable as `#driver-commission`, which is the target of
 ## Driver management
 
 - Driver pages and APIs are ADMIN-only.
-- A driver has a unique license number and `ACTIVE` or `INACTIVE` status.
+- A driver is identified by `Driver.id`; license/code values may be shared by different drivers. Each distinct source name is a separate driver, including names split from shared rows. Only the same normalized name plus normalized code is treated as one logical duplicate; the same name with another code remains distinct. Drivers have `ACTIVE` or `INACTIVE` status.
 - Current operations are create, read/list, edit, activate, and deactivate. No driver-delete route or UI is implemented.
 - New drivers must select `VAN` or `SEDAN`. Existing production drivers are migration-safe because `vehicleType` is nullable and appear as `Not set - configuration required` until edited.
 - `subscriptionExempt` defaults to `false` and can be changed in the driver form.
@@ -311,7 +311,7 @@ The homepage exposes the Full Ledger PDF directly to ADMIN users. The finance ov
 
 ### Driver-related models
 
-- `Driver`: unique license, status, nullable vehicle type, exemption flag, and relations to reservations and all ledger records.
+- `Driver`: non-unique license/code, status, nullable vehicle type, exemption flag, and `Driver.id` relations to reservations and all ledger records.
 - `CommissionEntry`: Decimal commission, financial date, optional notes, optional unique reservation, and optional manual route fields.
 - `DriverPayment`: Decimal payment, date, method, optional notes, and driver.
 - `DriverSubscriptionCharge`: Decimal monthly charge and PostgreSQL date, with unique driver/month constraint.
