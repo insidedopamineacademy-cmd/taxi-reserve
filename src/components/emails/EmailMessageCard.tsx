@@ -1,4 +1,5 @@
 import { sanitizeEmailHtml } from "@/lib/emails/content";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 
 type Attachment = {
   id: string;
@@ -34,6 +35,10 @@ function formatBytes(value: number | null) {
 export default function EmailMessageCard({ message }: { message: Message }) {
   const outgoing = message.direction === "OUTGOING";
   const date = message.sentAt ?? message.receivedAt ?? message.createdAt;
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
   const sender = message.fromName || message.fromEmail || (outgoing ? "Taxi Reserve" : "Unknown sender");
   const folderText = message.folders.length ? message.folders.join(" · ") : message.folder;
 
@@ -64,13 +69,7 @@ export default function EmailMessageCard({ message }: { message: Message }) {
           {message.ccEmails ? <p className="break-all text-xs text-neutral-500">Cc: {message.ccEmails}</p> : null}
         </div>
         <time className="shrink-0 text-right text-xs text-neutral-400" dateTime={date.toISOString()}>
-          {new Intl.DateTimeFormat("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }).format(date)}
+          {formatLocalInstantDateDisplay(date)} · {time}
         </time>
       </header>
 

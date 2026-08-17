@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PhoneActions } from "@/components/PhoneActions";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 import {
   nextReservationStatusCode,
   normalizeReservationStatusCode,
@@ -41,11 +42,7 @@ type Props = {
 /* ---------- Helpers ---------- */
 function fmtDateParts(ms: number) {
   const d = new Date(ms);
-  const date = d.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  const date = formatLocalInstantDateDisplay(d);
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   return { date, time };
 }
@@ -54,12 +51,7 @@ function fmtShareDateParts(ms: number) {
   const d = new Date(ms);
   if (!Number.isFinite(d.getTime())) return null;
   return {
-    date: d.toLocaleDateString("en-GB", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }),
+    date: formatLocalInstantDateDisplay(d),
     time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
   };
 }

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 import InboxAccessDenied from "@/components/emails/InboxAccessDenied";
 import EmailConfigNotice from "@/components/emails/EmailConfigNotice";
 import InboxSetupState from "@/components/emails/InboxSetupState";
@@ -37,12 +38,11 @@ function pageHref(q: string, filter: string, folder: EmailFolder, page: number) 
 
 function formatInboxDate(date: Date | null) {
   if (!date) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
+  const time = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+  return `${formatLocalInstantDateDisplay(date)} · ${time}`;
 }
 
 export default async function EmailsPage({ searchParams }: { searchParams?: Promise<Search> }) {

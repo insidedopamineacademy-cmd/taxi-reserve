@@ -18,7 +18,7 @@ import {
   type ReservationDraftUpdateArguments,
 } from "./reservation-draft-core.ts";
 import type { ReservationDraftStore } from "./reservation-draft-store.ts";
-import { formatMadridDate, formatMadridTime } from "../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../time/madrid.ts";
 
 export type ReservationDraftOperationResult =
   | { kind: "DRAFT"; draft: ReservationDraftPublic }
@@ -129,7 +129,7 @@ function previewForCreation(
         facts: [
           {
             label: "Date and time",
-            value: `${formatMadridDate(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`,
+            value: `${formatMadridDateDisplay(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`,
           },
           { label: "Pickup", value: reservation.pickupText! },
           { label: "Drop-off", value: reservation.dropoffText! },

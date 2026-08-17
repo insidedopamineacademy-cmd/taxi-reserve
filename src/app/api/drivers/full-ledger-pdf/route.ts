@@ -8,13 +8,11 @@ import { getDriverFinancialSummaries } from "@/lib/drivers/financials";
 import { buildFullDriverLedgerPdf } from "@/lib/drivers/pdf";
 import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
+import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
 
 function generatedDateTime() {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Madrid",
-  }).format(new Date());
+  const now = new Date();
+  return `${formatMadridDateDisplay(now)} · ${formatMadridTime(now)}`;
 }
 
 function paymentMethodLabel(method: "CASH" | "BANK" | "OTHER") {

@@ -16,6 +16,7 @@
     "prisma:validate": "dotenv -e .env.local -- prisma validate",
     "prisma:studio": "dotenv -e .env.local -- prisma studio",
     "test:driver-subscriptions": "node --conditions=react-server --experimental-transform-types scripts/test-driver-subscriptions.mjs",
+    "test:date-display": "node --experimental-transform-types --test scripts/test-date-display.mts",
     "test:assistant-mobile": "node --experimental-transform-types --test scripts/test-assistant-mobile.mts",
     "test:assistant-foundation": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-foundation.mts",
     "test:assistant-tool-loop": "node --experimental-transform-types --test scripts/test-assistant-tool-loop.mts",
@@ -30,6 +31,7 @@
     "test:assistant-reservation-creation": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-reservation-creation.mts",
     "test:assistant-driver-import": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-driver-import.mts",
     "test:driver-one-time-import": "node --experimental-transform-types --test scripts/test-driver-one-time-import.mts",
+    "test:pending-commissions-pdf": "node --conditions=react-server --experimental-transform-types --test scripts/test-pending-commissions-pdf.mts",
     "import:drivers": "dotenv -e .env.local -- node --experimental-transform-types scripts/import-drivers-one-time.mts",
     "postinstall": "prisma generate"
   },

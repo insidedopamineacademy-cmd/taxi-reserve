@@ -1,4 +1,5 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatCalendarDateDisplay } from "../dateDisplay.ts";
 
 export const TAXI_RESERVE_TIME_ZONE = "Europe/Madrid";
 
@@ -39,6 +40,10 @@ export function isClockTime(value: string) {
 export function formatMadridDate(instant: Date) {
   if (!Number.isFinite(instant.getTime())) throw new Error("Invalid instant");
   return formatInTimeZone(instant, TAXI_RESERVE_TIME_ZONE, "yyyy-MM-dd");
+}
+
+export function formatMadridDateDisplay(instant: Date) {
+  return formatCalendarDateDisplay(formatMadridDate(instant));
 }
 
 export function formatMadridTime(instant: Date) {

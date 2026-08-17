@@ -4,6 +4,7 @@ import {
   isCalendarDate,
   isClockTime,
 } from "../time/madrid.ts";
+import { formatCalendarDateDisplay } from "../dateDisplay.ts";
 
 export const RESERVATION_DRAFT_TTL_MS = 15 * 60 * 1_000;
 export const RESERVATION_BOOKING_TEXT_MAX_LENGTH = 4_000;
@@ -219,7 +220,7 @@ function parseDateCandidate(raw: string, now: Date): ReservationDraftField<strin
       const american = validCalendarDate(year, first, second);
       return conflictField(
         distinct([european, american].filter((value): value is string => Boolean(value))),
-        `${numeric[1]}/${numeric[2]}/${numeric[3]} is ambiguous. Which date is correct?`,
+        "That numeric date is ambiguous. Which date is correct?",
       );
     }
     const european = validCalendarDate(year, second, first);
@@ -228,7 +229,7 @@ function parseDateCandidate(raw: string, now: Date): ReservationDraftField<strin
     if (american) {
       return inferredField(
         american,
-        `I interpreted ${numeric[1]}/${numeric[2]}/${numeric[3]} as ${american}. Please confirm it.`,
+        `I interpreted the service date as ${formatCalendarDateDisplay(american)}. Please confirm it.`,
       );
     }
     return conflictField([], "The booking date is invalid.");
@@ -236,10 +237,16 @@ function parseDateCandidate(raw: string, now: Date): ReservationDraftField<strin
 
   const dateContext = getMadridDateContext(now);
   if (normalized === "today") {
-    return inferredField(dateContext.today, `I interpreted “today” as ${dateContext.today}.`);
+    return inferredField(
+      dateContext.today,
+      `I interpreted “today” as ${formatCalendarDateDisplay(dateContext.today)}.`,
+    );
   }
   if (normalized === "tomorrow") {
-    return inferredField(dateContext.tomorrow, `I interpreted “tomorrow” as ${dateContext.tomorrow}.`);
+    return inferredField(
+      dateContext.tomorrow,
+      `I interpreted “tomorrow” as ${formatCalendarDateDisplay(dateContext.tomorrow)}.`,
+    );
   }
   const weekdays: Record<string, number> = {
     sunday: 0,
@@ -253,7 +260,10 @@ function parseDateCandidate(raw: string, now: Date): ReservationDraftField<strin
   const weekdayName = normalized.replace(/^next\s+/, "");
   if (weekdayName in weekdays) {
     const value = nextWeekday(dateContext.today, weekdays[weekdayName]);
-    return inferredField(value, `I interpreted “${raw.trim()}” as ${value}.`);
+    return inferredField(
+      value,
+      `I interpreted “${raw.trim()}” as ${formatCalendarDateDisplay(value)}.`,
+    );
   }
   return conflictField([], "The booking date could not be interpreted safely.");
 }

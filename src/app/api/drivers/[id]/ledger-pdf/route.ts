@@ -8,14 +8,12 @@ import { getDriverFinancialSummary } from "@/lib/drivers/financials";
 import { buildDriverLedgerPdf } from "@/lib/drivers/pdf";
 import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
+import { formatMadridDateDisplay } from "@/lib/time/madrid";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 function generatedDate() {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeZone: "Europe/Madrid",
-  }).format(new Date());
+  return formatMadridDateDisplay(new Date());
 }
 
 function paymentMethodLabel(method: "CASH" | "BANK" | "OTHER") {

@@ -1,5 +1,7 @@
 // src/lib/parseStartAt.ts
 
+import { formatLocalInstantDateDisplay } from "./dateDisplay.ts";
+
 /**
  * Turn an <input type="datetime-local"> value (local wall time)
  * directly into a UTC ISO string for the API/DB.
@@ -29,5 +31,6 @@ export function relTimeFromNow(value: string | number | Date) {
 export function formatLocalDateTime(value: string | number | Date) {
   const d = new Date(value);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${formatLocalInstantDateDisplay(d)} · ${time}`;
 }

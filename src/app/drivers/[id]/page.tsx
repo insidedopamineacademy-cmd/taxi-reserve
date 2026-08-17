@@ -18,14 +18,12 @@ import {
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
+import { formatMadridDateDisplay } from "@/lib/time/madrid";
 
 type PageProps = { params: Promise<{ id: string }> };
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeZone: "Europe/Madrid",
-  }).format(date);
+  return formatMadridDateDisplay(date);
 }
 
 function paymentMethodLabel(method: "CASH" | "BANK" | "OTHER") {

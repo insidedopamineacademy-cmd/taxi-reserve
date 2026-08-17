@@ -11,7 +11,7 @@ import {
   updateOwnedReservation,
 } from "../../reservations/update-service.ts";
 import type { OwnedReservationUpdateRepository } from "../../reservations/update-service.ts";
-import { formatMadridDate, formatMadridTime } from "../../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../../time/madrid.ts";
 import type { JsonObject, JsonValue } from "./contracts.ts";
 
 type ParsedReservationAction = {
@@ -163,7 +163,7 @@ export function createUpdateReservationExecutor<Transaction>(
         const serializedChanges = action.payload.changes as Record<string, JsonValue>;
         const route = `${updated.pickupText || "Not provided"} → ${updated.dropoffText || "Not provided"}`;
         const summary = [
-          `${formatMadridDate(updated.startAt)} · ${formatMadridTime(updated.startAt)}`,
+          `${formatMadridDateDisplay(updated.startAt)} · ${formatMadridTime(updated.startAt)}`,
           route,
           changedFields.includes("pax") ? `Passengers: ${updated.pax}` : null,
         ].filter(Boolean).join(" · ");

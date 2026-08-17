@@ -14,7 +14,7 @@ import type {
   AiActionPublic,
   JsonObject,
 } from "../assistant/actions/contracts.ts";
-import { formatMadridDate, formatMadridTime } from "../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../time/madrid.ts";
 
 export type PrepareReservationUpdateResult =
   | { kind: "ACTION_PREVIEW"; action: AiActionPublic }
@@ -49,7 +49,7 @@ function compactText(value: string | null, maximum = 240) {
 
 function dateTimeText(value: Date | null) {
   return value
-    ? `${formatMadridDate(value)} · ${formatMadridTime(value)}`
+    ? `${formatMadridDateDisplay(value)} · ${formatMadridTime(value)}`
     : "Not provided";
 }
 

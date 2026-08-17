@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 
 type User = {
   id: string;
@@ -13,6 +14,13 @@ type AdminData = {
   count: number;
   users: User[];
 };
+
+function formatCreatedAt(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Invalid date";
+  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${formatLocalInstantDateDisplay(date)} · ${time}`;
+}
 
 export default function AdminPage() {
   const [data, setData] = useState<AdminData | null>(null);
@@ -79,7 +87,7 @@ export default function AdminPage() {
                 <td className="p-2 border">{u.email}</td>
                 <td className="p-2 border">{u.name || "-"}</td>
                 <td className="p-2 border">
-                  {new Date(u.createdAt).toLocaleString()}
+                  {formatCreatedAt(u.createdAt)}
                 </td>
               </tr>
             ))}

@@ -12,7 +12,7 @@ import {
   type DriverAssignmentExpectedState,
   type DriverAssignmentRepository,
 } from "../../reservations/driver-assignment-core.ts";
-import { formatMadridDate, formatMadridTime } from "../../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../../time/madrid.ts";
 
 type StoredDriverAssignmentAction = {
   actionType: "ASSIGN_DRIVER" | "CLEAR_DRIVER";
@@ -267,7 +267,7 @@ export function createDriverAssignmentExecutor<Transaction>(
         }
 
         const reservation = assignment.reservation;
-        const dateTime = `${formatMadridDate(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`;
+        const dateTime = `${formatMadridDateDisplay(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`;
         const route = `${reservation.pickupText || "Not provided"} → ${reservation.dropoffText || "Not provided"}`;
         const assigned = actionType === "ASSIGN_DRIVER";
         const driverName = assignment.nextDriver?.name || "Unassigned";

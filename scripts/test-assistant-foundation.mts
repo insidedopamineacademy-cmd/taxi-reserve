@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   addCalendarDays,
   formatMadridDate,
+  formatMadridDateDisplay,
   getMadridDateContext,
   getMadridDayRange,
   madridDateTimeToInstant,
@@ -94,6 +95,7 @@ test("Madrid context resolves today and tomorrow across the UTC summer boundary"
 test("Madrid date formatting handles winter midnight independently of host timezone", () => {
   assert.equal(formatMadridDate(new Date("2026-01-01T22:59:00.000Z")), "2026-01-01");
   assert.equal(formatMadridDate(new Date("2026-01-01T23:00:00.000Z")), "2026-01-02");
+  assert.equal(formatMadridDateDisplay(new Date("2026-01-01T23:00:00.000Z")), "02 Jan 2026");
 });
 
 test("Madrid day boundaries reflect spring and autumn daylight-saving changes", () => {

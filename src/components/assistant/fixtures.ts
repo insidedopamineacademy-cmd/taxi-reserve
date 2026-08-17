@@ -23,7 +23,7 @@ const fixtureReservation: AssistantMessage = {
       type: "reservation",
       reservation: {
         id: "fixture-reservation-001",
-        dateLabel: "Wednesday, 12 August",
+        dateLabel: "12 Aug 2026",
         timeLabel: "06:45",
         pickup:
           "Barcelona-El Prat Airport, Terminal 1 — Arrivals meeting point beside the exceptionally long transport desk name",
@@ -42,7 +42,7 @@ const fixtureReservation: AssistantMessage = {
       type: "reservation",
       reservation: {
         id: "fixture-reservation-002",
-        dateLabel: "Wednesday, 12 August",
+        dateLabel: "12 Aug 2026",
         timeLabel: "09:10",
         pickup: "Plaça de Catalunya, Barcelona",
         dropoff: "Girona Old Town",
@@ -56,7 +56,7 @@ const fixtureReservation: AssistantMessage = {
       type: "reservation",
       reservation: {
         id: "fixture-reservation-003",
-        dateLabel: "Wednesday, 12 August",
+        dateLabel: "12 Aug 2026",
         timeLabel: "12:30",
         pickup: "Hotel fixture pickup",
         dropoff: "Port fixture drop-off",
@@ -106,7 +106,7 @@ const fixtureReservationCreation: AssistantMessage[] = [
               value: "2026-11-21",
               alternatives: [],
               confirmed: false,
-              message: "I interpreted the service date as 21 November 2026. Please confirm it.",
+              message: "I interpreted the service date as 21 Nov 2026. Please confirm it.",
             },
             pickupTime: {
               state: "EXPLICIT",
@@ -144,7 +144,7 @@ const fixtureReservationCreation: AssistantMessage[] = [
           completeConfirmed: false,
           duplicateAcknowledged: false,
           readyToPrepare: false,
-          question: "I need two details:\n• Confirm 21 November 2026?\n• Is the passenger count 8 or 15?",
+          question: "I need two details:\n• Confirm 21 Nov 2026?\n• Is the passenger count 8 or 15?",
           fixture: true,
         },
       },

@@ -1,4 +1,5 @@
 import type { AssistantReservationDraft } from "./types";
+import { formatCalendarDateDisplay } from "@/lib/dateDisplay";
 
 const stateCopy = {
   EXPLICIT: "✓ Confirmed",
@@ -24,10 +25,14 @@ function displayValue(
   value: string | number | null,
   alternatives: Array<string | number>,
 ) {
-  if (alternatives.length > 0) return alternatives.join(" or ");
+  const format = (item: string | number) =>
+    name === "serviceDate" && typeof item === "string"
+      ? formatCalendarDateDisplay(item)
+      : String(item);
+  if (alternatives.length > 0) return alternatives.map(format).join(" or ");
   if (value === null || value === "") return "Not provided";
   if (name === "priceEuro" && typeof value === "number") return `€${value.toFixed(2)}`;
-  return String(value);
+  return format(value);
 }
 
 export function ReservationDraftCard({ draft }: { draft: AssistantReservationDraft }) {

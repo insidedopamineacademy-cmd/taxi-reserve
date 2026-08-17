@@ -1,6 +1,7 @@
 import "server-only";
 
 import { DriverPaymentMethod, Prisma } from "@prisma/client";
+import { formatCalendarDateDisplay } from "../dateDisplay.ts";
 import {
   formatMadridDate,
   madridCalendarDateAsUtc,
@@ -57,7 +58,7 @@ export function parseFinancialDate(
   const date = parseFinancialCivilDate(value);
   return date
     ? { ok: true, value: date }
-    : { ok: false, error: `${label} must be a valid date in YYYY-MM-DD format.` };
+    : { ok: false, error: `${label} must be a valid date.` };
 }
 
 export function parseFinancialNotes(value: unknown): ValidationResult<string | null> {
@@ -96,10 +97,13 @@ export function formatFinancialDateInput(date: Date) {
 }
 
 export function formatFinancialDateDisplay(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeZone: "UTC",
-  }).format(date);
+  if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid financial date");
+  const calendarDate = [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+  return formatCalendarDateDisplay(calendarDate);
 }
 
 export function currentFinancialDateInput(now = new Date()) {

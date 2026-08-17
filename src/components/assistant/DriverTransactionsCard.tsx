@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { memo } from "react";
 import { formatAssistantEuro } from "./assistantMoney";
+import { formatCalendarDateDisplay } from "@/lib/dateDisplay";
 import type {
   AssistantDriverTransactions,
 } from "./types";
@@ -15,9 +16,11 @@ const typeLabels = {
 } as const;
 
 function periodLabel(period: AssistantDriverTransactions["period"]) {
-  if (period.from && period.to) return `${period.from} to ${period.to}`;
-  if (period.from) return `From ${period.from}`;
-  if (period.to) return `Through ${period.to}`;
+  if (period.from && period.to) {
+    return `${formatCalendarDateDisplay(period.from)} to ${formatCalendarDateDisplay(period.to)}`;
+  }
+  if (period.from) return `From ${formatCalendarDateDisplay(period.from)}`;
+  if (period.to) return `Through ${formatCalendarDateDisplay(period.to)}`;
   return "All dates";
 }
 
@@ -40,7 +43,9 @@ function TransactionRow({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-sm text-slate-100">{label}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{row.date}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {formatCalendarDateDisplay(row.date)}
+          </p>
           {detail ? <p className="mt-1 break-words text-xs leading-5 text-slate-400">{detail}</p> : null}
           {row.type === "COMMISSION" && row.reservation ? (
             <Link

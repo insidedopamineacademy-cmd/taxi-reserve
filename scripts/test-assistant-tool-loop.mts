@@ -146,6 +146,10 @@ test("A: search tool returns bounded structured cards and a concise final stream
     "/reservations/r-1/edit",
   );
   assert.equal(
+    firstCard?.type === "assistant.reservation_result" ? firstCard.reservation.dateLabel : null,
+    "12 Aug 2026",
+  );
+  assert.equal(
     events.some(
       (event) =>
         event.type === "assistant.text.delta" && event.delta.includes("3 airport"),
@@ -172,7 +176,9 @@ test("A: search tool returns bounded structured cards and a concise final stream
     "prepare_driver_import",
   ]);
   assert.equal(requests[0].parallelToolCalls, false);
-  assert.match(requests[0].instructions, /Current local date: 2026-08-11/);
+  assert.match(requests[0].instructions, /Worker-facing local date: 11 Aug 2026/);
+  assert.match(requests[0].instructions, /today 2026-08-11; tomorrow 2026-08-12/);
+  assert.match(requests[0].instructions, /write every full calendar date as DD MMM YYYY/);
   assert.match(requests[0].instructions, /Current local time: 11:30/);
   assert.equal(
     requests[1].input.some(

@@ -5,7 +5,11 @@ import {
   deserializeReservationCreation,
   type ReservationCreationRepository,
 } from "../../reservations/creation-core.ts";
-import { formatMadridDate, formatMadridTime } from "../../time/madrid.ts";
+import {
+  formatMadridDate,
+  formatMadridDateDisplay,
+  formatMadridTime,
+} from "../../time/madrid.ts";
 
 function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]) {
   return Object.keys(value).length === keys.length && keys.every((key) => key in value);
@@ -91,7 +95,7 @@ export function createReservationCreationExecutor<Transaction>(
           { ownerEmail: actor.email, reservation: stored.reservation },
           createRepository(transaction),
         );
-        const dateTime = `${formatMadridDate(created.startAt)} · ${formatMadridTime(created.startAt)}`;
+        const dateTime = `${formatMadridDateDisplay(created.startAt)} · ${formatMadridTime(created.startAt)}`;
         const route = `${created.pickupText || "Not provided"} → ${created.dropoffText || "Not provided"}`;
         return {
           kind: "EXECUTED",

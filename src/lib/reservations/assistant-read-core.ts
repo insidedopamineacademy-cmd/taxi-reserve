@@ -115,7 +115,7 @@ function optionalQuery(value: string | undefined, label: string, maxLength: numb
 
 function assertDate(value: string | undefined, label: string) {
   if (value !== undefined && (typeof value !== "string" || !isCalendarDate(value))) {
-    throw new ReservationReadInputError(`${label} must use YYYY-MM-DD.`);
+    throw new ReservationReadInputError(`${label} must be a valid calendar date.`);
   }
 }
 

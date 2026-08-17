@@ -4,6 +4,7 @@
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { updateReservationField } from "@/app/reservations/actions";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 import { relTimeFromNow } from "@/lib/parseStartAt";
 
 type Reservation = {
@@ -59,6 +60,10 @@ export default function ReservationsTable({ items }: { items: Reservation[] }) {
 
 function Row({ r }: { r: Reservation }) {
   const dt = typeof r.startAt === "string" ? new Date(r.startAt) : r.startAt;
+  const dateTime = `${formatLocalInstantDateDisplay(dt)} · ${dt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 
   // When chip
   const rel = relTimeFromNow(dt);
@@ -70,7 +75,7 @@ function Row({ r }: { r: Reservation }) {
 
   return (
     <tr className="border-t border-gray-700 hover:bg-gray-800/60">
-      <td className="px-4 py-2 whitespace-nowrap">{dt.toLocaleString()}</td>
+      <td className="px-4 py-2 whitespace-nowrap">{dateTime}</td>
       <td className="px-4 py-2">
         <span className={`rounded px-2 py-0.5 text-xs ${chipClass}`}>{rel}</span>
       </td>

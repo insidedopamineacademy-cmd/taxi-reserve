@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
 
 type ActivitySearchParams = {
   q?: string | string[];
@@ -25,11 +26,7 @@ function metadataSummary(metadata: Prisma.JsonValue | null) {
 }
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Madrid",
-  }).format(date);
+  return `${formatMadridDateDisplay(date)} · ${formatMadridTime(date)}`;
 }
 
 export default async function ActivityLogPage({

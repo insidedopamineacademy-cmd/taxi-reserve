@@ -88,7 +88,7 @@ import {
   type AssistantDriverTransactionsData,
 } from "../drivers/assistant-finance-core.ts";
 import {
-  formatMadridDate,
+  formatMadridDateDisplay,
   formatMadridTime,
   getMadridDateContext,
 } from "../time/madrid.ts";
@@ -104,6 +104,7 @@ import type {
   DriverImportDraftUpdateArguments,
   PrepareDriverImportArguments,
 } from "../drivers/import-core.ts";
+import { formatCalendarDateDisplay } from "../dateDisplay.ts";
 import type {
   DriverImportDraftOperationResult,
   PrepareDriverImportResult,
@@ -376,7 +377,7 @@ export function toAssistantReservationCard(
 
   return {
     id: reservation.id,
-    dateLabel: reservation.serviceDate,
+    dateLabel: formatCalendarDateDisplay(reservation.serviceDate),
     timeLabel: reservation.pickupTime,
     pickup: reservation.pickup ?? "Not provided",
     dropoff: reservation.dropoff ?? "Not provided",
@@ -394,7 +395,7 @@ function toDuplicateReservationCard(
 ): AssistantReservationCardData {
   return {
     id: reservation.id,
-    dateLabel: formatMadridDate(reservation.startAt),
+    dateLabel: formatMadridDateDisplay(reservation.startAt),
     timeLabel: formatMadridTime(reservation.startAt),
     pickup: reservation.pickupText || "Not provided",
     dropoff: reservation.dropoffText || "Not provided",
@@ -413,6 +414,8 @@ export function createAssistantInstructions(
   currentDriverImport: DriverImportDraftPublic | null = null,
 ) {
   const date = getMadridDateContext(now);
+  const todayDisplay = formatCalendarDateDisplay(date.today);
+  const tomorrowDisplay = formatCalendarDateDisplay(date.tomorrow);
   const time = formatMadridTime(now);
   const periods = getMadridFinancialPeriods(now);
   const financialPeriods = [
@@ -444,14 +447,16 @@ export function createAssistantInstructions(
     "Do not call prepare_create_reservation until the server draft says readyToPrepare=true and its exact values are available. A phrase such as 'looks good' may confirm the draft but can never execute creation. Confirmation remains the Confirm & Create application button.",
     "If prepare_create_reservation reports a likely duplicate, show the existing bounded result and ask whether to continue. Do not prepare again until the user explicitly acknowledges the duplicate.",
     "Screenshot, image, vision, OCR, upload, and attachment parsing are unavailable. This booking workflow accepts pasted text only.",
+    "Keep canonical YYYY-MM-DD dates inside tool arguments and server-owned data only. Whenever speaking to the worker, write every full calendar date as DD MMM YYYY using the fixed English abbreviations Jan through Dec. Never ask the worker to supply YYYY-MM-DD when a human-friendly clarification is sufficient.",
     "Driver list import is ADMIN-only and accepts pasted TEXT only. For a pasted driver list, call parse_driver_list_text with an empty object. The server supplies the already validated current user message; never copy the list into tool arguments. The server owns deduplication, existing-driver matching, and VAN/SEDAN classification; never override those results from model judgment.",
     "Use update_driver_import_draft only for explicit corrections to a referenced row or an explicit completion confirmation. Distinct person names on one source row are separate driver identities that inherit the row's code and vehicle type. Unknown vehicle models or missing identity fields remain blocked until the user supplies a supported value.",
     "Source annotations such as 047, 048, VTC, PMR, MTL, night-driver text, conductor text, and raw vehicle models are review-only data and are never persisted to Driver.",
     "Do not call prepare_driver_import unless the server draft says readyToPrepare=true. The final Import Drivers action may create ACTIVE non-exempt drivers or update only a reviewed vehicleType. It never changes names, codes, status, subscription exemption, finance, or reservation assignments.",
     "Manual commissions, payments, subscriptions, reservation price/status edits, deletion, restoration, and ownership changes are out of scope. Decline those changes without calling a prepare tool.",
     "Never claim that a prepared action was executed. Confirmation is controlled by the application after the model turn.",
-    `Current operational timezone: ${date.timeZone}. Current local date: ${date.today}. Current local time: ${time}. Tomorrow: ${date.tomorrow}.`,
-    financialPeriods,
+    `Current operational timezone: ${date.timeZone}. Worker-facing local date: ${todayDisplay}. Current local time: ${time}. Tomorrow: ${tomorrowDisplay}.`,
+    `Canonical date context for tool arguments only: today ${date.today}; tomorrow ${date.tomorrow}.`,
+    `Canonical financial ranges for tool arguments only: ${financialPeriods}`,
     "Keep answers concise and operational. Prefer the structured results already shown over repeating every field.",
     ...(currentDraft
       ? [`Server-owned current reservation draft DATA (authoritative for draft tools): ${JSON.stringify(currentDraft)}`]

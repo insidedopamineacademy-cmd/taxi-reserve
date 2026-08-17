@@ -7,7 +7,7 @@ import type {
   AiActionPublic,
   JsonObject,
 } from "../assistant/actions/contracts.ts";
-import { formatMadridDate, formatMadridTime } from "../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../time/madrid.ts";
 import type { ReservationAccessContext } from "./assistant-read-core.ts";
 import type {
   AssignmentDriverSnapshot,
@@ -50,7 +50,7 @@ function reservationFacts(reservation: ReservationDriverAssignmentSnapshot) {
   return [
     {
       label: "Date and time",
-      value: `${formatMadridDate(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`,
+      value: `${formatMadridDateDisplay(reservation.startAt)} · ${formatMadridTime(reservation.startAt)}`,
     },
     { label: "Route", value: routeText(reservation).slice(0, 500) },
   ];

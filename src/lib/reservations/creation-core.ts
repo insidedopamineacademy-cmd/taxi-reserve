@@ -81,7 +81,7 @@ function parsePrice(value: unknown) {
 function madridInstant(date: string, time: string) {
   if (!isCalendarDate(date) || !isClockTime(time)) {
     throw new ReservationCreationInputError(
-      "Service date and pickup time must use valid YYYY-MM-DD and HH:mm values.",
+      "Service date and pickup time must be valid.",
       "startAt",
     );
   }

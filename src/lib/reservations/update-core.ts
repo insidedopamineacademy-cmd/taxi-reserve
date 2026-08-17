@@ -106,7 +106,7 @@ function parsePassengers(value: unknown) {
 function madridInstant(date: string, time: string, label: string) {
   if (!isCalendarDate(date) || !isClockTime(time)) {
     throw new ReservationUpdateInputError(
-      `${label} must use a valid YYYY-MM-DD date and HH:mm time.`,
+      `${label} must use a valid date and time.`,
       label,
     );
   }

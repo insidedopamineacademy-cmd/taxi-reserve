@@ -19,7 +19,7 @@ import {
   type DriverAssignmentExpectedState,
   type LinkedCommissionSnapshot,
 } from "../../reservations/driver-assignment-core.ts";
-import { formatMadridDate, formatMadridTime } from "../../time/madrid.ts";
+import { formatMadridDateDisplay, formatMadridTime } from "../../time/madrid.ts";
 
 type CommissionAwareActionType =
   | "ASSIGN_DRIVER"
@@ -346,7 +346,7 @@ export function createCommissionAwareAssignmentExecutor<Transaction>(
         const beforeCommission = mutation.before.linkedCommission;
         const afterCommission = after.linkedCommission;
         const route = `${after.pickupText || "Not provided"} → ${after.dropoffText || "Not provided"}`;
-        const dateTime = `${formatMadridDate(after.startAt)} · ${formatMadridTime(after.startAt)}`;
+        const dateTime = `${formatMadridDateDisplay(after.startAt)} · ${formatMadridTime(after.startAt)}`;
         const clear = actionType === "CLEAR_DRIVER";
         const updateOnly = actionType === "UPDATE_RESERVATION_COMMISSION";
         const resultTitle = clear

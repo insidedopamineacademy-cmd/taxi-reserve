@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { updateReservationField } from "@/app/reservations/actions";
+import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 import { relTimeFromNow } from "@/lib/parseStartAt";
 import {
   RESERVATION_STATUS_OPTIONS,
@@ -58,10 +59,10 @@ export default function ReservationRow({ res }: Props) {
   };
 
   const dt = new Date(res.startAt);
-  const startAtText = dt.toLocaleString("en-GB", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  const startAtText = `${formatLocalInstantDateDisplay(dt)} · ${dt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 
   const rel = relTimeFromNow(dt);
   const chipClass = rel.includes("ago")

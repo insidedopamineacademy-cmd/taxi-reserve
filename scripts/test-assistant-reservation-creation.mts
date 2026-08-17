@@ -284,6 +284,8 @@ test("ambiguous dates, relative dates, invalid values, and passenger discrepanci
   assert.equal(relative.fields.serviceDate.state, "INFERRED");
   assert.equal(relative.fields.serviceDate.value, "2026-08-12");
   assert.equal(relative.fields.serviceDate.confirmed, false);
+  assert.match(relative.fields.serviceDate.message ?? "", /12 Aug 2026/);
+  assert.equal((relative.fields.serviceDate.message ?? "").includes("2026-08-12"), false);
 
   const invalid = extracted("Pickup: A\nDrop-off: B\nWhen: nonsense 31:80\nPassengers: many");
   assert.equal(invalid.fields.serviceDate.state, "CONFLICT");
@@ -441,6 +443,8 @@ test("prepare uses only a complete confirmed server draft, creates no reservatio
   assert.match(JSON.stringify(pending?.preview), /Barcelona Airport T1/);
   assert.match(JSON.stringify(pending?.preview), /€120\.00/);
   assert.match(JSON.stringify(pending?.preview), /Passengers/);
+  assert.match(JSON.stringify(pending?.preview), /21 Nov 2026 · 09:50/);
+  assert.equal(JSON.stringify(pending?.preview).includes("2026-11-21 · 09:50"), false);
   assert.equal(pending?.confirmationLabel, "Confirm & Create");
 
   const changedArgs = { ...args, passengers: 7 };
@@ -563,7 +567,9 @@ test("CREATE_RESERVATION executor enforces canonical actor, uses shared service,
   assert.equal(repository.rows.length, 1);
   if (result.kind === "EXECUTED") {
     assert.equal(result.result.reference?.href, "/reservations/reservation-1/edit");
+    assert.match(result.result.message ?? "", /21 Nov 2026 · 09:50/);
     assert.equal(result.audit.metadata?.reservationId, "reservation-1");
+    assert.equal(result.audit.metadata?.serviceDate, "2026-11-21");
     assert.equal("phone" in (result.audit.metadata ?? {}), false);
     assert.equal("pickupText" in (result.audit.metadata ?? {}), false);
   }
