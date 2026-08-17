@@ -39,30 +39,36 @@ export default async function DriverFinanceOverviewPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">Finance Overview</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-muted">
             Current driver balances and recent financial activity.
           </p>
         </div>
         <Link
           href="/api/drivers/due-pdf"
-          className="inline-flex h-11 items-center justify-center rounded-md bg-yellow-500 px-4 text-sm font-semibold text-black hover:bg-yellow-400"
+          className="inline-flex h-11 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg transition hover:bg-brand-hover"
         >
           Download Due PDF
         </Link>
       </div>
 
-      <section aria-label="Driver finance summary" className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <section aria-label="Driver finance summary" className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
         {cards.map((card, index) => (
           <article
             key={card.label}
             className={
               index === 0
-                ? "rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4"
-                : "rounded-xl border border-white/10 bg-[#0e1426] p-4"
+                ? "rounded-xl border border-warning/25 bg-warning/[0.06] p-4"
+                : "rounded-xl border border-app-border bg-surface p-4"
             }
           >
-            <p className="text-sm text-neutral-400">{card.label}</p>
-            <p className={index === 0 ? "mt-2 text-xl font-semibold text-yellow-300" : "mt-2 text-xl font-semibold text-white"}>
+            <p className="text-sm text-muted">{card.label}</p>
+            <p
+              className={
+                index === 0
+                  ? "mt-2 text-xl font-semibold tnum text-warning"
+                  : "mt-2 text-xl font-semibold tnum text-white"
+              }
+            >
               {card.value}
             </p>
           </article>
@@ -75,12 +81,12 @@ export default async function DriverFinanceOverviewPage() {
             <h2 id="recent-commissions" className="text-lg font-semibold text-white">
               Recent Commissions
             </h2>
-            <Link href="/commissions" className="text-sm text-yellow-300 hover:text-yellow-200">
+            <Link href="/commissions" className="text-sm font-medium text-brand hover:text-brand-hover">
               View all
             </Link>
           </div>
           {overview.recentCommissions.length === 0 ? (
-            <div className="mt-3 rounded-xl border border-white/10 bg-[#0e1426] p-8 text-center text-sm text-neutral-400">
+            <div className="mt-3 rounded-xl border border-app-border bg-surface p-8 text-center text-sm text-muted">
               No commissions recorded yet.
             </div>
           ) : (
@@ -88,23 +94,23 @@ export default async function DriverFinanceOverviewPage() {
               {overview.recentCommissions.map((entry) => {
                 const route = resolveCommissionRoute(entry);
                 return (
-                  <li key={entry.id} className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
+                  <li key={entry.id} className="rounded-xl border border-app-border bg-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <Link
                           href={`/drivers/${entry.driver.id}`}
-                          className="font-medium text-white hover:text-yellow-300"
+                          className="font-medium text-white hover:text-brand"
                         >
                           {entry.driver.name}
                         </Link>
-                        <p className="mt-1 break-words text-sm text-neutral-400">
+                        <p className="mt-1 break-words text-sm text-muted">
                           {formatCommissionRoute(route)}
                         </p>
-                        <p className="mt-1 text-xs text-neutral-500">
+                        <p className="mt-1 text-xs text-subtle">
                           {formatFinancialDateDisplay(entry.entryDate)}
                         </p>
                       </div>
-                      <p className="shrink-0 font-semibold text-white">
+                      <p className="shrink-0 font-semibold text-white tnum">
                         {formatEuro(entry.commissionAmount)}
                       </p>
                     </div>
@@ -120,34 +126,34 @@ export default async function DriverFinanceOverviewPage() {
             <h2 id="recent-payments" className="text-lg font-semibold text-white">
               Recent Payments
             </h2>
-            <Link href="/payments" className="text-sm text-yellow-300 hover:text-yellow-200">
+            <Link href="/payments" className="text-sm font-medium text-brand hover:text-brand-hover">
               View all
             </Link>
           </div>
           {overview.recentPayments.length === 0 ? (
-            <div className="mt-3 rounded-xl border border-white/10 bg-[#0e1426] p-8 text-center text-sm text-neutral-400">
+            <div className="mt-3 rounded-xl border border-app-border bg-surface p-8 text-center text-sm text-muted">
               No payments recorded yet.
             </div>
           ) : (
             <ol className="mt-3 grid gap-3">
               {overview.recentPayments.map((payment) => (
-                <li key={payment.id} className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
+                <li key={payment.id} className="rounded-xl border border-app-border bg-surface p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <Link
                         href={`/drivers/${payment.driver.id}`}
-                        className="font-medium text-white hover:text-yellow-300"
+                        className="font-medium text-white hover:text-brand"
                       >
                         {payment.driver.name}
                       </Link>
-                      <p className="mt-1 text-sm text-neutral-400">
+                      <p className="mt-1 text-sm text-muted">
                         {paymentMethodLabel(payment.method)}
                       </p>
-                      <p className="mt-1 text-xs text-neutral-500">
+                      <p className="mt-1 text-xs text-subtle">
                         {formatFinancialDateDisplay(payment.paymentDate)}
                       </p>
                     </div>
-                    <p className="shrink-0 font-semibold text-white">
+                    <p className="shrink-0 font-semibold text-white tnum">
                       {formatEuro(payment.amount)}
                     </p>
                   </div>

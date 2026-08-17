@@ -66,11 +66,25 @@ function fmtShareDateParts(ms: number) {
 
 function statusChipClass(status?: string | null) {
   const code = normalizeReservationStatusCode(status);
+  // COMPLETED = "Cobrado" (paid) -> success; ASSIGNED = "Falta cobrar" (to
+  // collect) -> warning. Text label + a leading dot keep it readable without
+  // relying on color alone.
   if (code === "COMPLETED") {
-    return "border-green-500/40 bg-green-500/15 text-green-100 hover:bg-green-500/25";
+    return "border-success/30 bg-success/12 text-success hover:bg-success/20";
   }
-  return "border-blue-500/40 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25";
+  return "border-warning/30 bg-warning/12 text-warning hover:bg-warning/20";
 }
+
+function statusDotClass(status?: string | null) {
+  return normalizeReservationStatusCode(status) === "COMPLETED"
+    ? "bg-success"
+    : "bg-warning";
+}
+
+const euroFmt = new Intl.NumberFormat("en-IE", {
+  style: "currency",
+  currency: "EUR",
+});
 
 function addShareSection(
   lines: string[],
@@ -446,17 +460,35 @@ export default function ReservationsList({
             return (
               <li
                 key={r.id}
-                className="rounded-xl border border-white/10 bg-[#0e1426] shadow-sm transition hover:border-white/20"
+                className="rounded-xl border border-app-border bg-surface shadow-sm transition hover:border-app-border-strong"
               >
                 {/* Header row */}
                 <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-                    <div className="text-base font-semibold">{date}</div>
-                    <div className="text-sm text-neutral-400">{time}</div>
+                    <div className="text-base font-semibold text-white">{date}</div>
+                    <div className="text-sm text-subtle tnum">{time}</div>
+                    {showStatus && (
+                      <button
+                        type="button"
+                        disabled={statusBusyId === r.id}
+                        onClick={() => handleStatusCycle(r)}
+                        title={`Status: ${statusLabel}. Tap to change.`}
+                        aria-label={`Payment status: ${statusLabel}. Tap to change.`}
+                        className={`inline-flex h-8 min-w-0 max-w-[13rem] items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:text-xs ${statusChipClass(
+                          r.status
+                        )}`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`size-1.5 shrink-0 rounded-full ${statusDotClass(r.status)}`}
+                        />
+                        <span className="truncate">{statusLabel}</span>
+                      </button>
+                    )}
                     {showDriverShortcut ? (
                       <Link
                         href={`/reservations/${r.id}/edit#driver-commission`}
-                        className="inline-flex h-8 max-w-full items-center rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 text-xs font-medium text-yellow-200 hover:bg-yellow-500/15"
+                        className="inline-flex h-8 max-w-full items-center rounded-full border border-brand/25 bg-brand/10 px-3 text-xs font-medium text-brand hover:bg-brand/15"
                         title={r.driverName ? `Edit driver assignment: ${r.driverName}` : "Assign driver"}
                       >
                         <span className="truncate">
@@ -466,10 +498,10 @@ export default function ReservationsList({
                     ) : null}
                   </div>
 
-                  <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2">
+                  <div className="flex w-full min-w-0 flex-nowrap items-center justify-end gap-2 sm:w-auto">
                     <button
                       onClick={() => setOpenId(open ? null : r.id)}
-                      className="h-8 shrink-0 rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
+                      className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
                     >
                       {open ? "Hide" : "Details"}
                     </button>
@@ -477,7 +509,7 @@ export default function ReservationsList({
                     {showEdit && (
                       <Link
                         href={`/reservations/${r.id}/edit`}
-                        className="inline-flex h-8 shrink-0 items-center rounded-md border border-white/10 px-2 text-xs hover:bg-white/5 sm:px-3 sm:text-sm"
+                        className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
                         title="Edit reservation"
                       >
                         Edit
@@ -491,24 +523,9 @@ export default function ReservationsList({
                         }}
                         title="Share to WhatsApp"
                         aria-label="Share to WhatsApp"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-green-600/40 bg-green-600/20 text-green-100 transition hover:bg-green-600/30"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-success/30 bg-success/15 text-success transition hover:bg-success/25"
                       >
                         <ShareIcon className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    {showStatus && (
-                      <button
-                        type="button"
-                        disabled={statusBusyId === r.id}
-                        onClick={() => handleStatusCycle(r)}
-                        title={`Status: ${statusLabel}. Tap to change.`}
-                        aria-label={`Status: ${statusLabel}. Tap to change.`}
-                        className={`inline-flex h-8 min-w-0 max-w-[9rem] shrink items-center justify-center rounded-full border px-2 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:max-w-none sm:px-2.5 sm:text-xs ${statusChipClass(
-                          r.status
-                        )}`}
-                      >
-                        <span className="truncate">{statusLabel}</span>
                       </button>
                     )}
 
@@ -519,7 +536,7 @@ export default function ReservationsList({
                         onClick={() => handleRestore(r.id)}
                         title="Restore reservation"
                         aria-label="Restore reservation"
-                        className="h-8 shrink-0 rounded-md border border-green-600/40 bg-green-600/20 px-2 text-xs text-green-100 transition hover:bg-green-600/30 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
+                        className="inline-flex h-9 shrink-0 items-center rounded-lg border border-success/30 bg-success/15 px-2.5 text-xs font-medium text-success transition hover:bg-success/25 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
                       >
                         {restoreBusyId === r.id ? "Restoring..." : "Restore"}
                       </button>
@@ -531,10 +548,10 @@ export default function ReservationsList({
                         onClick={() => handleDelete(r.id)}
                         title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
                         aria-label="Move to Deleted list"
-                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
+                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${
                           busyId === r.id
-                            ? "cursor-wait opacity-60 border-red-600/30 bg-red-700/20 text-red-200"
-                            : "border-red-600/30 bg-red-600/20 text-red-300 hover:bg-red-600/30"
+                            ? "cursor-wait border-danger/30 bg-danger/15 text-danger opacity-60"
+                            : "border-danger/30 bg-danger/10 text-danger hover:bg-danger/20"
                         }`}
                       >
                         <TrashIcon className="h-4 w-4" />
@@ -545,17 +562,25 @@ export default function ReservationsList({
 
                 {/* Details */}
                 {open && (
-                  <div className="grid gap-1.5 border-t border-white/10 px-4 py-3">
+                  <div className="grid gap-1.5 border-t border-app-border px-4 py-3">
                     {r.pickupText && <Field label="Pickup" value={r.pickupText} />}
                     {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
                     <Field label="Pax" value={r.pax} />
-                    {typeof r.priceEuro === "number" && <Field label="Price" value={`${r.priceEuro}€`} />}
+                    {typeof r.priceEuro === "number" && (
+                      <Field
+                        label="Price"
+                        value={<span className="tnum font-semibold text-white">{euroFmt.format(r.priceEuro)}</span>}
+                      />
+                    )}
                     <PhoneActions phone={r.phone} />
                     {r.flight && <Field label="Flight" value={r.flight} />}
                     {statusLabel && <Field label="Status" value={statusLabel} />}
                     {r.driverName && <Field label="Driver" value={r.driverName} />}
                     {r.commissionAmount && (
-                      <Field label="Commission" value={`€${r.commissionAmount}`} />
+                      <Field
+                        label="Commission"
+                        value={<span className="tnum">{`€${r.commissionAmount}`}</span>}
+                      />
                     )}
                     {r.notes && (
                       <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />

@@ -92,9 +92,14 @@ export default async function ReservationsPage({
   });
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
-      <h1 className="mb-4 text-2xl font-semibold">Reservations</h1>
+    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      <div className="mb-5">
+        <h1 className="text-2xl font-semibold text-white">Reservations</h1>
+        <p className="mt-1 text-sm text-muted">
+          {items.length} {items.length === 1 ? "booking" : "bookings"} · search, sort and manage.
+        </p>
+      </div>
       <ReservationsListView items={items} showDriverShortcut={isAdmin} />
-    </div>
+    </main>
   );
 }

@@ -4,6 +4,10 @@ Notable project changes are recorded here in reverse chronological order.
 
 ## Unreleased
 
+### Documentation
+
+- Added `DRIVER_COMMISSION_PARITY_AUDIT.md`: a capability-parity audit of the driver/commission surface against the legacy `admin.bookataxibarcelona.com` (`admin-dashboard`) reference system. Verdict: Taxi Reserve is mostly feature-complete and materially exceeds the legacy system (Decimal money, RBAC, audit trail, concurrency safety, reservation integration, subscriptions, bulk import). Genuine gaps are one capability regression (on-screen "commission due" list is now PDF-only), a set of small worker conveniences (filtered-row totals, date filters, unpaid quick filter, booking-reference tag, driver phone/notes), and one out-of-scope legacy module (facturación / driver self-invoicing). No production code changed.
+
 ### Added
 
 - Added the feature-flagged Phase 1B Taxi Reserve Assistant frontend shell for authenticated navigation, with the supplied portrait launcher, responsive modal UI, typed message parts, reservation-card presentation, composer interaction architecture, focus restoration, and pinned transcript scrolling.

@@ -18,7 +18,7 @@ export default function DriverEntryLauncher({
 
   if (drivers.length === 0) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#0e1426] p-4 text-sm text-neutral-400">
+      <div className="rounded-xl border border-app-border bg-surface p-4 text-sm text-muted">
         Create or activate a driver before recording a new {label}.
       </div>
     );
@@ -26,7 +26,7 @@ export default function DriverEntryLauncher({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0e1426] p-4 sm:flex-row sm:items-end"
+      className="flex flex-col gap-3 rounded-xl border border-app-border bg-surface p-4 sm:flex-row sm:items-end"
       onSubmit={(event) => {
         event.preventDefault();
         if (!driverId) return;
@@ -35,13 +35,13 @@ export default function DriverEntryLauncher({
       }}
     >
       <label className="min-w-0 flex-1">
-        <span className="mb-1 block text-xs font-medium text-neutral-400">
+        <span className="mb-1 block text-xs font-medium text-muted">
           Active driver
         </span>
         <select
           value={driverId}
           onChange={(event) => setDriverId(event.target.value)}
-          className="h-11 w-full rounded-md border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-white/30"
+          className="h-11 w-full rounded-lg border border-app-border bg-surface-2 px-3 text-base text-white outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/25 [color-scheme:dark]"
         >
           {drivers.map((driver) => (
             <option key={driver.id} value={driver.id}>
@@ -52,7 +52,7 @@ export default function DriverEntryLauncher({
       </label>
       <button
         type="submit"
-        className="h-11 rounded-md bg-yellow-500 px-4 text-sm font-semibold text-black hover:bg-yellow-400"
+        className="inline-flex h-11 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg transition hover:bg-brand-hover"
       >
         {kind === "commission" ? "Add manual commission" : "Record payment"}
       </button>

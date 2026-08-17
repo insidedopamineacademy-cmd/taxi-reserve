@@ -7,6 +7,70 @@ import { authOptions } from "@/lib/auth";
 import { getUnreadEmailCountSafely } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
 
+type TileProps = {
+  href: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+};
+
+function Tile({ href, title, description, icon }: TileProps) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start gap-3 rounded-xl border border-app-border bg-surface-2/60 p-4 transition hover:border-app-border-strong hover:bg-surface-2"
+    >
+      <span
+        aria-hidden="true"
+        className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand"
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-medium text-white group-hover:text-brand">
+          {title}
+        </span>
+        <span className="mt-1 block text-sm text-muted">{description}</span>
+      </span>
+    </Link>
+  );
+}
+
+const icons = {
+  list: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  ),
+  plus: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  users: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" />
+    </svg>
+  ),
+  file: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
+    </svg>
+  ),
+  mail: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 5L2 7" />
+    </svg>
+  ),
+  gear: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+    </svg>
+  ),
+};
+
 export default async function Home() {
   const [inboxAccess, session] = await Promise.all([
     getEmailInboxAccess(),
@@ -19,83 +83,64 @@ export default async function Home() {
     : 0;
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <section className="rounded-2xl border border-white/10 bg-[#0e1426] p-6">
-        <h1 className="text-2xl font-semibold text-white">
-          {email ? `Welcome, ${email}` : "Welcome to AppReserve"}
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+      <section className="rounded-2xl border border-app-border bg-surface p-6 shadow-sm sm:p-8">
+        <p className="text-sm font-medium text-brand">Taxi Reserve</p>
+        <h1 className="mt-1 text-2xl font-semibold text-white">
+          {email ? `Welcome back` : "Welcome"}
         </h1>
-        <p className="mt-2 text-sm text-neutral-300">
-          Manage your taxi reservations from one place.
+        <p className="mt-2 text-sm text-muted">
+          {email
+            ? `Signed in as ${email}. Manage bookings, drivers and finances from one place.`
+            : "Manage your taxi reservations, drivers and finances from one place."}
         </p>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Link
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Tile
             href="/reservations"
-            className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-          >
-            <h3 className="font-medium text-white">Reservations</h3>
-            <p className="mt-1 text-sm text-neutral-300">
-              View & manage all bookings.
-            </p>
-          </Link>
-
-          <Link
+            title="Reservations"
+            description="View & manage all bookings."
+            icon={icons.list}
+          />
+          <Tile
             href="/reservations/new"
-            className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-          >
-            <h3 className="font-medium text-white">New reservation</h3>
-            <p className="mt-1 text-sm text-neutral-300">
-              Create a new booking fast.
-            </p>
-          </Link>
+            title="New reservation"
+            description="Create a new booking fast."
+            icon={icons.plus}
+          />
 
           {isAdmin ? (
             <>
-              <Link
+              <Tile
                 href="/drivers"
-                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-              >
-                <h3 className="font-medium text-white">Drivers</h3>
-                <p className="mt-1 text-sm text-neutral-300">
-                  Manage drivers and ledgers.
-                </p>
-              </Link>
-
-              <Link
+                title="Drivers"
+                description="Manage drivers and ledgers."
+                icon={icons.users}
+              />
+              <Tile
                 href="/api/drivers/full-ledger-pdf"
-                className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-              >
-                <h3 className="font-medium text-white">Download Full Ledger PDF</h3>
-                <p className="mt-1 text-sm text-neutral-300">
-                  Download all driver ledgers.
-                </p>
-              </Link>
+                title="Full ledger PDF"
+                description="Download all driver ledgers."
+                icon={icons.file}
+              />
             </>
           ) : null}
 
           {inboxAccess.allowed ? (
-            <Link
+            <Tile
               href="/emails"
-              className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-            >
-              <h3 className="font-medium text-white">Inbox</h3>
-              <p className="mt-1 text-sm text-neutral-300">
-                {unreadEmails} unread {unreadEmails === 1 ? "email" : "emails"}. Open Inbox.
-              </p>
-            </Link>
+              title="Inbox"
+              description={`${unreadEmails} unread ${unreadEmails === 1 ? "email" : "emails"}.`}
+              icon={icons.mail}
+            />
           ) : null}
 
-          <Link
+          <Tile
             href={email ? "/settings" : "/login"}
-            className="rounded-lg border border-white/10 bg-black/30 p-4 hover:border-white/20"
-          >
-            <h3 className="font-medium text-white">
-              {email ? "Settings" : "Login"}
-            </h3>
-            <p className="mt-1 text-sm text-neutral-300">
-              {email ? "Account preferences." : "Sign in to your account."}
-            </p>
-          </Link>
+            title={email ? "Settings" : "Login"}
+            description={email ? "Account preferences." : "Sign in to your account."}
+            icon={icons.gear}
+          />
         </div>
       </section>
     </main>

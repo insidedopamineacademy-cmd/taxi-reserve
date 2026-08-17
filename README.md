@@ -4,6 +4,8 @@ Taxi Reserve is the operational web application for taxi reservations, the share
 
 The driver ledger is integrated into the existing reservation and email application. It does not replace reservation ownership, date handling, authentication, or inbox behavior. No repository migration claims to import historical balances from a previous standalone commission system.
 
+A capability-parity review of the driver/commission surface against the legacy `admin.bookataxibarcelona.com` portal is documented in [`DRIVER_COMMISSION_PARITY_AUDIT.md`](DRIVER_COMMISSION_PARITY_AUDIT.md), including a worker-task matrix and a prioritized list of features to add.
+
 ## Current capabilities
 
 - Credentials authentication with `USER` and `ADMIN` roles stored in PostgreSQL and propagated through NextAuth JWT sessions.

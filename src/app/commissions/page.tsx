@@ -58,7 +58,7 @@ export default async function CommissionsPage() {
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-white">Commissions</h1>
-        <p className="mt-1 text-sm text-neutral-400">
+        <p className="mt-1 text-sm text-muted">
           Review reservation-linked and manual driver commissions.
         </p>
       </div>

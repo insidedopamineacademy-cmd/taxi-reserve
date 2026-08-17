@@ -1,6 +1,8 @@
 :root{
-  --bg:#0a0a0a; --card:#111214; --ink:#f5f7fa; --ink-dim:#c6c9cf;
-  --brand:#ffd11a; --danger:#ff4d4f; --muted:#2a2c31;
+  /* Aligned with the global design tokens in globals.css so the mobile
+     surfaces, brand yellow, and danger red match the rest of the app. */
+  --bg:#080b16; --card:#0e1426; --ink:#f3f5fb; --ink-dim:#aab3c5;
+  --brand:#f7c948; --danger:#f87171; --muted:#1a2340;
   --radius:16px; --tap:56px;
 }
 html,body{background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}

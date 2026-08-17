@@ -16,8 +16,8 @@ import {
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ReservationApp",
-  description: "Taxi reservation app",
+  title: "Taxi Reserve",
+  description: "Taxi reservation and driver operations",
 };
 
 export const viewport: Viewport = {

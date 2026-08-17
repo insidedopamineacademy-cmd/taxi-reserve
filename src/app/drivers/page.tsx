@@ -43,7 +43,7 @@ export default async function DriversPage() {
         </div>
         <Link
           href="/drivers/new"
-          className="inline-flex h-11 items-center justify-center rounded-md bg-yellow-500 px-4 text-sm font-semibold text-black hover:bg-yellow-400"
+          className="inline-flex h-11 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg transition hover:bg-brand-hover"
         >
           New driver
         </Link>
@@ -53,30 +53,31 @@ export default async function DriversPage() {
         <h2 id="driver-financial-overview" className="sr-only">
           Driver financial overview
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
-            <p className="text-sm text-neutral-400">Total commissions</p>
-            <p className="mt-2 text-xl font-semibold text-white">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <article className="rounded-xl border border-app-border bg-surface p-4">
+            <p className="text-sm text-muted">Total commissions</p>
+            <p className="mt-2 text-xl font-semibold text-white tnum">
               {formatEuro(overview.totalCommissions)}
             </p>
           </article>
-          <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
-            <p className="text-sm text-neutral-400">Total payments</p>
-            <p className="mt-2 text-xl font-semibold text-white">
+          <article className="rounded-xl border border-app-border bg-surface p-4">
+            <p className="text-sm text-muted">Total payments</p>
+            <p className="mt-2 text-xl font-semibold text-white tnum">
               {formatEuro(overview.totalPayments)}
             </p>
           </article>
-          <article className="rounded-xl border border-white/10 bg-[#0e1426] p-4">
-            <p className="text-sm text-neutral-400">Subscription charges</p>
-            <p className="mt-2 text-xl font-semibold text-white">
+          <article className="rounded-xl border border-app-border bg-surface p-4">
+            <p className="text-sm text-muted">Subscription charges</p>
+            <p className="mt-2 text-xl font-semibold text-white tnum">
               {formatEuro(overview.totalSubscriptionCharges)}
             </p>
           </article>
-          <article className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-            <p className="text-sm text-neutral-300">Total outstanding</p>
-            <p className="mt-2 text-xl font-semibold text-yellow-300">
+          <article className="rounded-xl border border-warning/25 bg-warning/[0.06] p-4">
+            <p className="text-sm text-muted">Total outstanding</p>
+            <p className="mt-2 text-xl font-semibold text-warning tnum">
               {formatEuro(overview.balance)}
             </p>
+            <p className="mt-0.5 text-xs text-subtle">Net due to company</p>
           </article>
         </div>
       </section>

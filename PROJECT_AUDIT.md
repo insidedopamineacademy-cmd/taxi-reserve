@@ -13,6 +13,8 @@ Taxi Reserve, branded as `AppReserve` in parts of the UI, is the current operati
 
 The driver/finance module was integrated into Taxi Reserve without replacing or reinterpreting the existing reservation, authentication, email, or timezone architecture. Any previous standalone commission application is historical/reference context only. This repository contains no migration that claims to import its historical financial data; new driver-ledger operations are recorded in Taxi Reserve's current models.
 
+> A dedicated capability-parity audit of the driver/commission surface against that previous standalone application (`admin.bookataxibarcelona.com`) lives in `DRIVER_COMMISSION_PARITY_AUDIT.md`. It confirms Taxi Reserve is mostly feature-complete and exceeds the legacy system architecturally, and enumerates the remaining worker-convenience gaps and one out-of-scope legacy module (facturación / driver self-invoicing).
+
 ## Technology stack
 
 - Next.js 15 App Router, React 19, and TypeScript
