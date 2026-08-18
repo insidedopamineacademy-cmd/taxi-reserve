@@ -2,19 +2,23 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import {
+  calculateDriverFinancePosition,
   calculateDriverFinancialSummary,
+  combineDriverFinancialSummaries,
+  type DriverFinancePosition,
   type DriverFinancialSummary,
 } from "@/lib/drivers/financialMath";
 import { prisma } from "@/lib/prisma";
 
-export { calculateDriverFinancialSummary };
-export type { DriverFinancialSummary };
-
-export type DriverFinancePosition = {
-  totalCommissionDue: Prisma.Decimal;
-  driverCredits: Prisma.Decimal;
-  netPosition: Prisma.Decimal;
+// Re-exported so existing server-side call sites keep importing these from
+// "@/lib/drivers/financials"; the pure math lives in financialMath.ts so it can
+// be unit-tested without pulling in the Prisma client.
+export {
+  calculateDriverFinancePosition,
+  calculateDriverFinancialSummary,
+  combineDriverFinancialSummaries,
 };
+export type { DriverFinancePosition, DriverFinancialSummary };
 
 export async function getDriverFinancialSummary(
   driverId: string,
@@ -85,49 +89,6 @@ export async function getDriverFinancialSummaries(driverIds: string[]) {
   }
 
   return summaries;
-}
-
-export function combineDriverFinancialSummaries(
-  summaries: Iterable<DriverFinancialSummary>,
-): DriverFinancialSummary {
-  let totalCommissions = new Prisma.Decimal(0);
-  let totalPayments = new Prisma.Decimal(0);
-  let totalSubscriptionCharges = new Prisma.Decimal(0);
-
-  for (const summary of summaries) {
-    totalCommissions = totalCommissions.plus(summary.totalCommissions);
-    totalPayments = totalPayments.plus(summary.totalPayments);
-    totalSubscriptionCharges = totalSubscriptionCharges.plus(
-      summary.totalSubscriptionCharges,
-    );
-  }
-
-  return calculateDriverFinancialSummary(
-    totalCommissions,
-    totalPayments,
-    totalSubscriptionCharges,
-  );
-}
-
-export function calculateDriverFinancePosition(
-  summaries: Iterable<DriverFinancialSummary>,
-): DriverFinancePosition {
-  let totalCommissionDue = new Prisma.Decimal(0);
-  let driverCredits = new Prisma.Decimal(0);
-
-  for (const summary of summaries) {
-    if (summary.balance.greaterThan(0)) {
-      totalCommissionDue = totalCommissionDue.plus(summary.balance);
-    } else if (summary.balance.lessThan(0)) {
-      driverCredits = driverCredits.plus(summary.balance.abs());
-    }
-  }
-
-  return {
-    totalCommissionDue,
-    driverCredits,
-    netPosition: totalCommissionDue.minus(driverCredits),
-  };
 }
 
 export function formatEuro(amount: Prisma.Decimal) {

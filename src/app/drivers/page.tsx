@@ -5,6 +5,7 @@ import Link from "next/link";
 import DriversList from "@/components/drivers/DriversList";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
 import {
+  calculateDriverFinancePosition,
   combineDriverFinancialSummaries,
   formatEuro,
   getDriverFinancialSummaries,
@@ -27,6 +28,11 @@ export default async function DriversPage() {
   });
   const summaries = await getDriverFinancialSummaries(drivers.map((driver) => driver.id));
   const overview = combineDriverFinancialSummaries(summaries.values());
+  // Gross pending (drivers who owe) and credits (drivers in credit). Pending
+  // deliberately does NOT net off credits — it matches the Pending Commissions
+  // PDF, which is a collections total. Net position = pending − credits lives on
+  // the Finance Overview page.
+  const position = calculateDriverFinancePosition(summaries.values());
   const items = drivers.map((driver) => ({
     ...driver,
     balance: formatEuro(summaries.get(driver.id)!.balance),
@@ -67,17 +73,18 @@ export default async function DriversPage() {
             </p>
           </article>
           <article className="rounded-xl border border-app-border bg-surface p-4">
-            <p className="text-sm text-muted">Subscription charges</p>
-            <p className="mt-2 text-xl font-semibold text-white tnum">
-              {formatEuro(overview.totalSubscriptionCharges)}
+            <p className="text-sm text-muted">Driver credits</p>
+            <p className="mt-2 text-xl font-semibold text-success tnum">
+              {formatEuro(position.driverCredits)}
             </p>
+            <p className="mt-0.5 text-xs text-subtle">Held by drivers in credit</p>
           </article>
           <article className="rounded-xl border border-warning/25 bg-warning/[0.06] p-4">
-            <p className="text-sm text-muted">Total outstanding</p>
+            <p className="text-sm text-muted">Pending commissions</p>
             <p className="mt-2 text-xl font-semibold text-warning tnum">
-              {formatEuro(overview.balance)}
+              {formatEuro(position.totalCommissionDue)}
             </p>
-            <p className="mt-0.5 text-xs text-subtle">Net due to company</p>
+            <p className="mt-0.5 text-xs text-subtle">Owed by drivers · matches PDF</p>
           </article>
         </div>
       </section>

@@ -6,7 +6,9 @@ import { notFound } from "next/navigation";
 import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import FinancialEntryDeleteButton from "@/components/drivers/FinancialEntryDeleteButton";
+import { PdfShareButton } from "@/components/PdfShareButton";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
+import { buildShareFilename } from "@/lib/pdfShare";
 import {
   formatCommissionRoute,
   resolveCommissionRoute,
@@ -101,6 +103,10 @@ export default async function DriverDetailPage({ params }: PageProps) {
       : "border-app-border";
   const balBg = balPositive ? "bg-warning/[0.06]" : balNegative ? "bg-success/[0.06]" : "bg-surface";
   const balNote = balPositive ? "Owed to company" : balNegative ? "Driver credit" : "Settled";
+  const ledgerFilename = buildShareFilename(
+    `driver-ledger-${driver.name}`,
+    formatMadridDateDisplay(new Date()),
+  );
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
@@ -155,6 +161,13 @@ export default async function DriverDetailPage({ params }: PageProps) {
             >
               Download Ledger PDF
             </Link>
+            <PdfShareButton
+              pdfUrl={`/api/drivers/${driver.id}/ledger-pdf`}
+              filename={ledgerFilename}
+              shareTitle={`Ledger — ${driver.name}`}
+              label={`Share ${driver.name} ledger PDF`}
+              variant="button"
+            />
             <Link
               href={`/drivers/${driver.id}/edit`}
               className="inline-flex h-10 items-center rounded-md bg-brand px-3 text-sm font-semibold text-brand-fg hover:bg-brand-hover"

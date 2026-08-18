@@ -3,9 +3,12 @@ export const revalidate = 0;
 
 import Link from "next/link";
 import { getServerSession } from "next-auth";
+import { PdfShareButton } from "@/components/PdfShareButton";
 import { authOptions } from "@/lib/auth";
 import { getUnreadEmailCountSafely } from "@/lib/emails/database";
 import { getEmailInboxAccess } from "@/lib/emails/permissions";
+import { buildShareFilename } from "@/lib/pdfShare";
+import { formatMadridDateDisplay } from "@/lib/time/madrid";
 
 type TileProps = {
   href: string;
@@ -41,6 +44,55 @@ function Tile({ href, title, description, icon, ariaLabel }: TileProps) {
         ) : null}
       </span>
     </Link>
+  );
+}
+
+function PdfActionCard({
+  href,
+  title,
+  icon,
+  openLabel,
+  filename,
+  shareTitle,
+  shareLabel,
+}: {
+  href: string;
+  title: string;
+  icon: React.ReactNode;
+  openLabel: string;
+  filename: string;
+  shareTitle: string;
+  shareLabel: string;
+}) {
+  // One coherent card with two distinct, sibling interactive targets: a
+  // stretched anchor (open/download the PDF) and a share button — never a
+  // button nested inside the anchor.
+  return (
+    <div className="group relative flex h-full items-start gap-3 rounded-xl border border-app-border bg-surface-2/60 p-4 transition hover:border-app-border-strong hover:bg-surface-2 focus-within:border-app-border-strong">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand"
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <a
+          href={href}
+          aria-label={openLabel}
+          className="rounded font-medium text-white after:absolute after:inset-0 group-hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          {title}
+        </a>
+      </span>
+      <PdfShareButton
+        pdfUrl={href}
+        filename={filename}
+        shareTitle={shareTitle}
+        label={shareLabel}
+        variant="icon"
+        className="absolute bottom-2 right-2 z-10"
+      />
+    </div>
   );
 }
 
@@ -95,6 +147,7 @@ export default async function Home() {
   const unreadEmails = inboxAccess.allowed
     ? await getUnreadEmailCountSafely()
     : 0;
+  const pdfDate = formatMadridDateDisplay(new Date());
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -134,17 +187,23 @@ export default async function Home() {
                 />
               </div>
               <div className="grid h-full grid-cols-2 gap-3 sm:col-span-2">
-                <Tile
+                <PdfActionCard
                   href="/api/drivers/full-ledger-pdf"
                   title="Ledger"
                   icon={icons.file}
-                  ariaLabel="Full ledger PDF: all driver ledgers"
+                  openLabel="Open Full Ledger PDF (all driver ledgers)"
+                  filename={buildShareFilename("full-driver-ledger", pdfDate)}
+                  shareTitle="Full driver ledger"
+                  shareLabel="Share Full Ledger PDF"
                 />
-                <Tile
+                <PdfActionCard
                   href="/api/drivers/due-pdf"
                   title="Pending"
                   icon={icons.fileMoney}
-                  ariaLabel="Pending commissions PDF: outstanding balances"
+                  openLabel="Open Pending Commissions PDF (outstanding balances)"
+                  filename={buildShareFilename("comisiones-pendientes", pdfDate)}
+                  shareTitle="Pending commissions"
+                  shareLabel="Share Pending Commissions PDF"
                 />
               </div>
             </>

@@ -4,7 +4,7 @@ import {
   isCalendarDate,
   isClockTime,
 } from "../time/madrid.ts";
-import { formatCalendarDateDisplay } from "../dateDisplay.ts";
+import { formatCalendarDateDisplay, parseCalendarDateInput } from "../dateDisplay.ts";
 
 export const RESERVATION_DRAFT_TTL_MS = 15 * 60 * 1_000;
 export const RESERVATION_BOOKING_TEXT_MAX_LENGTH = 4_000;
@@ -208,7 +208,11 @@ function nextWeekday(today: string, weekday: number) {
 function parseDateCandidate(raw: string, now: Date): ReservationDraftField<string> {
   const normalized = raw.trim().toLowerCase().replace(/\s+/g, " ");
   if (!normalized) return missingField<string>();
-  if (isCalendarDate(normalized)) return explicitField(normalized);
+  // Recognizes both the canonical `2026-08-18` and the human `18 Aug 2026`
+  // standard, normalizing either to the canonical value. Deterministic — no
+  // timezone or locale drift.
+  const calendar = parseCalendarDateInput(normalized);
+  if (calendar) return explicitField(calendar);
 
   const numeric = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalized);
   if (numeric) {
@@ -397,7 +401,9 @@ export function extractReservationDraft(input: {
     const time = /(\d{1,2}:\d{2})/.exec(when);
     if (time) timeValues.push(time[1]);
     const datePart = when
-      .replace(/\b(?:at\s*)?\d{1,2}:\d{2}\b/i, "")
+      // Remove the clock time together with any trailing AM/PM meridiem so a
+      // "18 Aug 2026 07:00 AM" when-line leaves a clean "18 Aug 2026" date.
+      .replace(/\b(?:at\s*)?\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?/i, "")
       .replace(/[,·]/g, " ")
       .trim();
     if (datePart) dateValues.push(datePart);

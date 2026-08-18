@@ -293,6 +293,63 @@ test("ambiguous dates, relative dates, invalid values, and passenger discrepanci
   assert.equal(invalid.fields.passengers.state, "CONFLICT");
 });
 
+test("the DD MMM YYYY human date standard is accepted without any service-date clarification (production regression)", () => {
+  const draft = extracted(
+    [
+      "New booking request",
+      "",
+      "Pickup: Carrer del Perelló, 27, b, Sant Martí,",
+      "08005 Barcelona, Spanje",
+      "",
+      "Drop-off: 08820 El Prat de Llobregat,",
+      "Barcelona, Spanje",
+      "",
+      "Phone: +31 611043357",
+      "",
+      "When: 18 Aug 2026 07:00 AM",
+      "",
+      "Passengers: 3",
+      "",
+      "Luggage: 4",
+      "",
+      "Notes: ___",
+    ].join("\n"),
+    "draft-ddmmmyyyy",
+  );
+
+  // Date and time are derived independently and safely.
+  assert.equal(draft.fields.serviceDate.value, "2026-08-18");
+  assert.equal(draft.fields.serviceDate.state, "EXPLICIT");
+  assert.equal(draft.fields.serviceDate.confirmed, true);
+  assert.equal(draft.fields.pickupTime.value, "07:00");
+  assert.equal(draft.fields.pickupTime.state, "EXPLICIT");
+
+  // No service-date clarification is raised.
+  const publicDraft = toPublicReservationDraft(draft);
+  assert.equal(publicDraft.blockingFields.includes("serviceDate"), false);
+  assert.equal(draft.fields.serviceDate.message, undefined);
+  assert.doesNotMatch(publicDraft.question, /service date|could not be interpreted/i);
+
+  // Date + time variants all resolve to the same canonical date/time.
+  const variants: Array<[string, string, string]> = [
+    ["When: 18 Aug 2026 07:00 AM", "2026-08-18", "07:00"],
+    ["When: 18 Aug 2026 7:00 AM", "2026-08-18", "07:00"],
+    ["When: 18 Aug 2026 19:00", "2026-08-18", "19:00"],
+    ["Date: 05 Jan 2026", "2026-01-05", ""],
+    ["Date: 2026-08-18", "2026-08-18", ""], // ISO still works
+  ];
+  for (const [line, expectedDate, expectedTime] of variants) {
+    const v = extracted(`Pickup: A\nDrop-off: B\n${line}\nPassengers: 2`, `variant-${expectedDate}-${expectedTime}`);
+    assert.equal(v.fields.serviceDate.value, expectedDate, `${line} -> date`);
+    assert.equal(v.fields.serviceDate.state, "EXPLICIT", `${line} -> explicit`);
+    if (expectedTime) assert.equal(v.fields.pickupTime.value, expectedTime, `${line} -> time`);
+  }
+
+  // Impossible named-month dates are still rejected, not silently reinterpreted.
+  const impossible = extracted("Pickup: A\nDrop-off: B\nDate: 31 Feb 2026\nPassengers: 2", "impossible-date");
+  assert.equal(impossible.fields.serviceDate.state, "CONFLICT");
+});
+
 test("multi-turn clarification resolves conflicts without overwriting prior explicit values and requires a completion signal", async () => {
   const store = new MemoryDraftStore();
   const parsed = await parseReservationTextDraft(user, [

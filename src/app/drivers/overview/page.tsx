@@ -22,9 +22,9 @@ export default async function DriverFinanceOverviewPage() {
   const overview = await getDriverFinanceOverview();
 
   const cards = [
-    { label: "Total Commission Due", value: formatEuro(overview.totalCommissionDue) },
-    { label: "Driver Credits", value: formatEuro(overview.driverCredits) },
-    { label: "Net Position", value: formatEuro(overview.netPosition) },
+    { label: "Pending commissions", value: formatEuro(overview.totalCommissionDue) },
+    { label: "Driver credits", value: formatEuro(overview.driverCredits) },
+    { label: "Net position", value: formatEuro(overview.netPosition) },
     { label: "Collected This Week", value: formatEuro(overview.collectedThisWeek) },
     { label: "Collected This Month", value: formatEuro(overview.collectedThisMonth) },
     {

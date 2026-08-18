@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCalendarDateDisplay } from "../src/lib/dateDisplay.ts";
+import { formatCalendarDateDisplay, parseCalendarDateInput } from "../src/lib/dateDisplay.ts";
 
 test("formats canonical calendar dates with fixed English month abbreviations", () => {
   assert.equal(formatCalendarDateDisplay("2026-01-05"), "05 Jan 2026");
@@ -39,6 +39,58 @@ test("calendar-date output does not change with the runtime timezone", () => {
         return formatCalendarDateDisplay("2026-08-19");
       });
     assert.deepEqual(outputs, Array(4).fill("19 Aug 2026"));
+  } finally {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  }
+});
+
+test("parseCalendarDateInput normalizes the human DD MMM YYYY standard to canonical YYYY-MM-DD", () => {
+  assert.equal(parseCalendarDateInput("05 Jan 2026"), "2026-01-05");
+  assert.equal(parseCalendarDateInput("18 Aug 2026"), "2026-08-18");
+  assert.equal(parseCalendarDateInput("31 Dec 2026"), "2026-12-31");
+  assert.equal(parseCalendarDateInput("29 Feb 2024"), "2024-02-29"); // valid leap day
+});
+
+test("parseCalendarDateInput accepts named months case-insensitively", () => {
+  assert.equal(parseCalendarDateInput("18 Aug 2026"), "2026-08-18");
+  assert.equal(parseCalendarDateInput("18 AUG 2026"), "2026-08-18");
+  assert.equal(parseCalendarDateInput("18 aug 2026"), "2026-08-18");
+});
+
+test("parseCalendarDateInput preserves canonical ISO input unchanged", () => {
+  assert.equal(parseCalendarDateInput("2026-08-18"), "2026-08-18");
+  assert.equal(parseCalendarDateInput("2024-02-29"), "2024-02-29");
+});
+
+test("parseCalendarDateInput rejects impossible or unrecognized dates without reinterpreting them", () => {
+  for (const value of [
+    "31 Feb 2026",
+    "29 Feb 2025", // 2025 is not a leap year
+    "31 Apr 2026",
+    "00 Aug 2026",
+    "32 Aug 2026",
+    "18 Foo 2026",
+    "2026-02-29",
+    "2026-13-01",
+    "18/08/2026",
+    "18 August 2026", // full month name is not the fixed abbreviation
+    "",
+    "tomorrow",
+  ]) {
+    assert.equal(parseCalendarDateInput(value), null, `${value} must not parse`);
+  }
+});
+
+test("parseCalendarDateInput is timezone-independent (18 Aug 2026 never drifts a day)", () => {
+  const originalTimeZone = process.env.TZ;
+  try {
+    const outputs = ["UTC", "Europe/Madrid", "America/Los_Angeles", "Pacific/Kiritimati"]
+      .map((timeZone) => {
+        process.env.TZ = timeZone;
+        return parseCalendarDateInput("18 Aug 2026");
+      });
+    assert.deepEqual(outputs, Array(4).fill("2026-08-18"));
   } finally {
     if (originalTimeZone === undefined) delete process.env.TZ;
     else process.env.TZ = originalTimeZone;

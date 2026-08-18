@@ -10,6 +10,10 @@ import {
   prepareDueCommissionsReport,
   type DueCommissionBalanceLine,
 } from "../src/lib/drivers/duePdf.ts";
+import {
+  calculateDriverFinancePosition,
+  calculateDriverFinancialSummary,
+} from "../src/lib/drivers/financialMath.ts";
 
 function balanceLine(
   id: string,
@@ -140,6 +144,35 @@ test("a long report paginates and an empty report remains a valid single-page PD
   });
   const emptyPdf = await PDFDocument.load(emptyBytes);
   assert.equal(emptyPdf.getPageCount(), 1);
+});
+
+test("Pending PDF stays gross while the finance position reconciles to net (credits never offset the collections total)", () => {
+  // Fixture: two drivers owe (gross pending €765), one holds €359 credit.
+  // dec(commissions, payments) -> balance = commissions - payments.
+  const dec = (value: string) => new Prisma.Decimal(value);
+  const summaries = [
+    calculateDriverFinancialSummary(dec("500.00"), null, null), // +500 owed
+    calculateDriverFinancialSummary(dec("265.00"), null, null), // +265 owed
+    calculateDriverFinancialSummary(null, dec("359.00"), null), // -359 credit
+  ];
+
+  const position = calculateDriverFinancePosition(summaries);
+  assert.equal(position.totalCommissionDue.toFixed(2), "765.00", "gross pending is positive balances only");
+  assert.equal(position.driverCredits.toFixed(2), "359.00", "credits are the absolute negative balances");
+  assert.equal(position.netPosition.toFixed(2), "406.00", "net = pending - credits");
+
+  const report = prepareDueCommissionsReport([
+    balanceLine("owes-a", "Driver A", "A-01", "500.00"),
+    balanceLine("owes-b", "Driver B", "B-02", "265.00"),
+    balanceLine("credit-c", "Driver C", "C-03", "-359.00"),
+  ]);
+
+  // The collections report must show the GROSS pending total (€765), not the
+  // net (€406). A driver's credit does not make another driver owe less.
+  assert.equal(report.totalDue, "765.00");
+  assert.equal(report.drivers.length, 2, "credit balances are excluded from the report");
+  assert.equal(report.totalDue, position.totalCommissionDue.toFixed(2), "PDF total equals gross pending");
+  assert.notEqual(report.totalDue, position.netPosition.toFixed(2), "PDF total must NOT equal the net position");
 });
 
 test("the protected endpoint keeps authentication, authorization, authoritative data, and display date", () => {
