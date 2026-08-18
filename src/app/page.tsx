@@ -10,19 +10,25 @@ import { getEmailInboxAccess } from "@/lib/emails/permissions";
 type TileProps = {
   href: string;
   title: string;
-  description: string;
+  description?: string;
   icon: React.ReactNode;
+  ariaLabel?: string;
 };
 
-function Tile({ href, title, description, icon }: TileProps) {
+function Tile({ href, title, description, icon, ariaLabel }: TileProps) {
+  // Icon + title only (no description) renders a vertically centered card so it
+  // stays visually balanced at the standard card height; cards with a
+  // description keep the top-aligned two-line layout.
+  const hasDescription = Boolean(description);
   return (
     <Link
       href={href}
-      className="group flex items-start gap-3 rounded-xl border border-app-border bg-surface-2/60 p-4 transition hover:border-app-border-strong hover:bg-surface-2"
+      aria-label={ariaLabel}
+      className={`group flex h-full gap-3 rounded-xl border border-app-border bg-surface-2/60 p-4 transition hover:border-app-border-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${hasDescription ? "items-start" : "items-center"}`}
     >
       <span
         aria-hidden="true"
-        className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand"
+        className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand ${hasDescription ? "mt-0.5" : ""}`}
       >
         {icon}
       </span>
@@ -30,7 +36,9 @@ function Tile({ href, title, description, icon }: TileProps) {
         <span className="block font-medium text-white group-hover:text-brand">
           {title}
         </span>
-        <span className="mt-1 block text-sm text-muted">{description}</span>
+        {hasDescription ? (
+          <span className="mt-1 block text-sm text-muted">{description}</span>
+        ) : null}
       </span>
     </Link>
   );
@@ -55,6 +63,12 @@ const icons = {
   file: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
+    </svg>
+  ),
+  fileMoney: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
+      <path d="M16 12.5a3.5 3.5 0 1 0 0 5M10.5 14h5M10.5 16h4.5" />
     </svg>
   ),
   mail: (
@@ -95,7 +109,7 @@ export default async function Home() {
             : "Manage your taxi reservations, drivers and finances from one place."}
         </p>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-6 grid auto-rows-fr gap-3 sm:grid-cols-2">
           <Tile
             href="/reservations"
             title="Reservations"
@@ -111,18 +125,28 @@ export default async function Home() {
 
           {isAdmin ? (
             <>
-              <Tile
-                href="/drivers"
-                title="Drivers"
-                description="Manage drivers and ledgers."
-                icon={icons.users}
-              />
-              <Tile
-                href="/api/drivers/full-ledger-pdf"
-                title="Full ledger PDF"
-                description="Download all driver ledgers."
-                icon={icons.file}
-              />
+              <div className="sm:col-span-2">
+                <Tile
+                  href="/drivers"
+                  title="Drivers"
+                  description="Manage drivers and ledgers."
+                  icon={icons.users}
+                />
+              </div>
+              <div className="grid h-full grid-cols-2 gap-3 sm:col-span-2">
+                <Tile
+                  href="/api/drivers/full-ledger-pdf"
+                  title="Ledger"
+                  icon={icons.file}
+                  ariaLabel="Full ledger PDF: all driver ledgers"
+                />
+                <Tile
+                  href="/api/drivers/due-pdf"
+                  title="Pending"
+                  icon={icons.fileMoney}
+                  ariaLabel="Pending commissions PDF: outstanding balances"
+                />
+              </div>
             </>
           ) : null}
 
