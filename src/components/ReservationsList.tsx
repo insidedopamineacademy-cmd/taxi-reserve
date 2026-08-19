@@ -510,23 +510,23 @@ export default function ReservationsList({
                             )}
                           </div>
 
-                          {/* Driver assignment — sits below the time/status row */}
-                          {showDriverShortcut ? (
-                            <div className="flex min-w-0">
+                          {/* Action toolbar: driver control (left) + actions (right) on one row.
+                              flex-wrap keeps it one line at >=390px and only wraps the action
+                              group onto its own line at very narrow widths (~360px). */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {showDriverShortcut ? (
                               <Link
                                 href={`/reservations/${r.id}/edit#driver-commission`}
-                                className="inline-flex h-8 max-w-full items-center rounded-full border border-brand/25 bg-brand/10 px-3 text-xs font-medium text-brand hover:bg-brand/15"
+                                className="inline-flex h-9 min-w-0 max-w-full shrink-0 items-center rounded-full border border-brand/25 bg-brand/10 px-3 text-xs font-medium text-brand hover:bg-brand/15"
                                 title={r.driverName ? `Edit driver assignment: ${r.driverName}` : "Assign driver"}
                               >
                                 <span className="truncate">
                                   {r.driverName ? `Driver: ${r.driverName}` : "Assign Driver"}
                                 </span>
                               </Link>
-                            </div>
-                          ) : null}
+                            ) : null}
 
-                          {/* Actions */}
-                          <div className="flex flex-nowrap items-center justify-end gap-2">
+                            <div className="ml-auto flex flex-nowrap items-center gap-2">
                             <button
                               onClick={() => setOpenId(open ? null : r.id)}
                               className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
@@ -585,6 +585,7 @@ export default function ReservationsList({
                                 <TrashIcon className="h-4 w-4" />
                               </button>
                             )}
+                            </div>
                           </div>
                         </div>
 
