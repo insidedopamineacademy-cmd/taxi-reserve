@@ -299,6 +299,22 @@ export default function ReservationsList({
     [rows, searchQuery, phoneSearchQuery]
   );
 
+  // Group the already-ordered rows by their (local) calendar date so each date
+  // shows a single divider heading. Rows are sorted by time, so same-date rows
+  // are always contiguous -> exactly one group per date, order preserved. The
+  // group key is the same shared DD MMM YYYY string rendered in the divider, so
+  // the label always matches and there is no timezone/UTC day drift.
+  const groupedRows = useMemo(() => {
+    const groups: Array<{ date: string; rows: Reservation[] }> = [];
+    for (const row of filteredRows) {
+      const { date } = fmtDateParts(row.startAt);
+      const current = groups[groups.length - 1];
+      if (current && current.date === date) current.rows.push(row);
+      else groups.push({ date, rows: [row] });
+    }
+    return groups;
+  }, [filteredRows]);
+
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
@@ -439,150 +455,174 @@ export default function ReservationsList({
       )}
 
       {filteredRows.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-white/10 p-6 text-center text-sm text-neutral-400">
+        <div className="mt-6 rounded-xl border border-app-border p-6 text-center text-sm text-muted">
           No reservations found for this search.
         </div>
       ) : (
-        <ul className="mt-2 grid gap-4">
-          {filteredRows.map((r) => {
-            const { date, time } = fmtDateParts(r.startAt);
-            const open = openId === r.id;
-            const statusLabel = reservationStatusLabel(r.status);
-
+        <div className="mt-2 flex flex-col gap-6">
+          {groupedRows.map((group) => {
+            const headingId = `reservation-group-${group.date.replace(/\s+/g, "-")}`;
             return (
-              <li
-                key={r.id}
-                className="rounded-xl border border-app-border bg-surface shadow-sm transition hover:border-app-border-strong"
-              >
-                {/* Header row */}
-                <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-                    <div className="text-base font-semibold text-white">{date}</div>
-                    <div className="text-sm text-subtle tnum">{time}</div>
-                    {showStatus && (
-                      <button
-                        type="button"
-                        disabled={statusBusyId === r.id}
-                        onClick={() => handleStatusCycle(r)}
-                        title={`Status: ${statusLabel}. Tap to change.`}
-                        aria-label={`Payment status: ${statusLabel}. Tap to change.`}
-                        className={`inline-flex h-8 min-w-0 max-w-[13rem] items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:text-xs ${statusChipClass(
-                          r.status
-                        )}`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`size-1.5 shrink-0 rounded-full ${statusDotClass(r.status)}`}
-                        />
-                        <span className="truncate">{statusLabel}</span>
-                      </button>
-                    )}
-                    {showDriverShortcut ? (
-                      <Link
-                        href={`/reservations/${r.id}/edit#driver-commission`}
-                        className="inline-flex h-8 max-w-full items-center rounded-full border border-brand/25 bg-brand/10 px-3 text-xs font-medium text-brand hover:bg-brand/15"
-                        title={r.driverName ? `Edit driver assignment: ${r.driverName}` : "Assign driver"}
-                      >
-                        <span className="truncate">
-                          {r.driverName ? `Driver: ${r.driverName}` : "Assign Driver"}
-                        </span>
-                      </Link>
-                    ) : null}
-                  </div>
-
-                  <div className="flex w-full min-w-0 flex-nowrap items-center justify-end gap-2 sm:w-auto">
-                    <button
-                      onClick={() => setOpenId(open ? null : r.id)}
-                      className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
-                    >
-                      {open ? "Hide" : "Details"}
-                    </button>
-
-                    {showEdit && (
-                      <Link
-                        href={`/reservations/${r.id}/edit`}
-                        className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
-                        title="Edit reservation"
-                      >
-                        Edit
-                      </Link>
-                    )}
-
-                    {showShare && (
-                      <button
-                        onClick={() => {
-                          window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
-                        }}
-                        title="Share to WhatsApp"
-                        aria-label="Share to WhatsApp"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-success/30 bg-success/15 text-success transition hover:bg-success/25"
-                      >
-                        <ShareIcon className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    {showRestore && (
-                      <button
-                        type="button"
-                        disabled={restoreBusyId === r.id}
-                        onClick={() => handleRestore(r.id)}
-                        title="Restore reservation"
-                        aria-label="Restore reservation"
-                        className="inline-flex h-9 shrink-0 items-center rounded-lg border border-success/30 bg-success/15 px-2.5 text-xs font-medium text-success transition hover:bg-success/25 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
-                      >
-                        {restoreBusyId === r.id ? "Restoring..." : "Restore"}
-                      </button>
-                    )}
-
-                    {showSoftDelete && (
-                      <button
-                        disabled={busyId === r.id}
-                        onClick={() => handleDelete(r.id)}
-                        title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
-                        aria-label="Move to Deleted list"
-                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${
-                          busyId === r.id
-                            ? "cursor-wait border-danger/30 bg-danger/15 text-danger opacity-60"
-                            : "border-danger/30 bg-danger/10 text-danger hover:bg-danger/20"
-                        }`}
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+              <section key={group.date} aria-labelledby={headingId}>
+                {/* Date divider: rule — date — rule (the rules stop before the text) */}
+                <div className="flex items-center gap-3">
+                  <span aria-hidden="true" className="h-px flex-1 bg-app-border" />
+                  <h2 id={headingId} className="text-sm font-semibold text-muted tnum">
+                    {group.date}
+                  </h2>
+                  <span aria-hidden="true" className="h-px flex-1 bg-app-border" />
                 </div>
 
-                {/* Details */}
-                {open && (
-                  <div className="grid gap-1.5 border-t border-app-border px-4 py-3">
-                    {r.pickupText && <Field label="Pickup" value={r.pickupText} />}
-                    {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
-                    <Field label="Pax" value={r.pax} />
-                    {typeof r.priceEuro === "number" && (
-                      <Field
-                        label="Price"
-                        value={<span className="tnum font-semibold text-white">{euroFmt.format(r.priceEuro)}</span>}
-                      />
-                    )}
-                    <PhoneActions phone={r.phone} />
-                    {r.flight && <Field label="Flight" value={r.flight} />}
-                    {statusLabel && <Field label="Status" value={statusLabel} />}
-                    {r.driverName && <Field label="Driver" value={r.driverName} />}
-                    {r.commissionAmount && (
-                      <Field
-                        label="Commission"
-                        value={<span className="tnum">{`€${r.commissionAmount}`}</span>}
-                      />
-                    )}
-                    {r.notes && (
-                      <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
-                    )}
-                  </div>
-                )}
-              </li>
+                <ul className="mt-3 grid gap-3">
+                  {group.rows.map((r) => {
+                    const { time } = fmtDateParts(r.startAt);
+                    const open = openId === r.id;
+                    const statusLabel = reservationStatusLabel(r.status);
+
+                    return (
+                      <li
+                        key={r.id}
+                        className="rounded-xl border border-app-border bg-surface shadow-sm transition hover:border-app-border-strong"
+                      >
+                        <div className="flex flex-col gap-2 px-4 py-3">
+                          {/* Time (primary temporal identifier) + payment status */}
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-lg font-semibold leading-none text-white tnum">
+                              {time}
+                            </span>
+                            {showStatus && (
+                              <button
+                                type="button"
+                                disabled={statusBusyId === r.id}
+                                onClick={() => handleStatusCycle(r)}
+                                title={`Status: ${statusLabel}. Tap to change.`}
+                                aria-label={`Payment status: ${statusLabel}. Tap to change.`}
+                                className={`inline-flex h-8 min-w-0 max-w-[15rem] items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium leading-none transition disabled:cursor-wait disabled:opacity-60 sm:text-xs ${statusChipClass(
+                                  r.status
+                                )}`}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={`size-1.5 shrink-0 rounded-full ${statusDotClass(r.status)}`}
+                                />
+                                <span className="truncate">{statusLabel}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Driver assignment — sits below the time/status row */}
+                          {showDriverShortcut ? (
+                            <div className="flex min-w-0">
+                              <Link
+                                href={`/reservations/${r.id}/edit#driver-commission`}
+                                className="inline-flex h-8 max-w-full items-center rounded-full border border-brand/25 bg-brand/10 px-3 text-xs font-medium text-brand hover:bg-brand/15"
+                                title={r.driverName ? `Edit driver assignment: ${r.driverName}` : "Assign driver"}
+                              >
+                                <span className="truncate">
+                                  {r.driverName ? `Driver: ${r.driverName}` : "Assign Driver"}
+                                </span>
+                              </Link>
+                            </div>
+                          ) : null}
+
+                          {/* Actions */}
+                          <div className="flex flex-nowrap items-center justify-end gap-2">
+                            <button
+                              onClick={() => setOpenId(open ? null : r.id)}
+                              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
+                            >
+                              {open ? "Hide" : "Details"}
+                            </button>
+
+                            {showEdit && (
+                              <Link
+                                href={`/reservations/${r.id}/edit`}
+                                className="inline-flex h-9 shrink-0 items-center rounded-lg border border-app-border px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-white sm:px-3 sm:text-sm"
+                                title="Edit reservation"
+                              >
+                                Edit
+                              </Link>
+                            )}
+
+                            {showShare && (
+                              <button
+                                onClick={() => {
+                                  window.open(buildWhatsAppShareLink(r), "_blank", "noopener,noreferrer");
+                                }}
+                                title="Share to WhatsApp"
+                                aria-label="Share to WhatsApp"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-success/30 bg-success/15 text-success transition hover:bg-success/25"
+                              >
+                                <ShareIcon className="h-4 w-4" />
+                              </button>
+                            )}
+
+                            {showRestore && (
+                              <button
+                                type="button"
+                                disabled={restoreBusyId === r.id}
+                                onClick={() => handleRestore(r.id)}
+                                title="Restore reservation"
+                                aria-label="Restore reservation"
+                                className="inline-flex h-9 shrink-0 items-center rounded-lg border border-success/30 bg-success/15 px-2.5 text-xs font-medium text-success transition hover:bg-success/25 disabled:cursor-wait disabled:opacity-60 sm:px-3 sm:text-sm"
+                              >
+                                {restoreBusyId === r.id ? "Restoring..." : "Restore"}
+                              </button>
+                            )}
+
+                            {showSoftDelete && (
+                              <button
+                                disabled={busyId === r.id}
+                                onClick={() => handleDelete(r.id)}
+                                title={busyId === r.id ? "Moving..." : "Move to Deleted list"}
+                                aria-label="Move to Deleted list"
+                                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${
+                                  busyId === r.id
+                                    ? "cursor-wait border-danger/30 bg-danger/15 text-danger opacity-60"
+                                    : "border-danger/30 bg-danger/10 text-danger hover:bg-danger/20"
+                                }`}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        {open && (
+                          <div className="grid gap-1.5 border-t border-app-border px-4 py-3">
+                            {r.pickupText && <Field label="Pickup" value={r.pickupText} />}
+                            {r.dropoffText && <Field label="Drop-off" value={r.dropoffText} />}
+                            <Field label="Pax" value={r.pax} />
+                            {typeof r.priceEuro === "number" && (
+                              <Field
+                                label="Price"
+                                value={<span className="tnum font-semibold text-white">{euroFmt.format(r.priceEuro)}</span>}
+                              />
+                            )}
+                            <PhoneActions phone={r.phone} />
+                            {r.flight && <Field label="Flight" value={r.flight} />}
+                            {statusLabel && <Field label="Status" value={statusLabel} />}
+                            {r.driverName && <Field label="Driver" value={r.driverName} />}
+                            {r.commissionAmount && (
+                              <Field
+                                label="Commission"
+                                value={<span className="tnum">{`€${r.commissionAmount}`}</span>}
+                              />
+                            )}
+                            {r.notes && (
+                              <Field label="Notes" value={<span className="whitespace-pre-wrap">{r.notes}</span>} />
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             );
           })}
-        </ul>
+        </div>
       )}
     </>
   );
