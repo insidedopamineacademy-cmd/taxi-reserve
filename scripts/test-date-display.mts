@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCalendarDateDisplay, parseCalendarDateInput } from "../src/lib/dateDisplay.ts";
+import {
+  formatCalendarDateDisplay,
+  formatLocalInstantWeekdayDisplay,
+  parseCalendarDateInput,
+  weekdayAbbreviationForCalendarDate,
+} from "../src/lib/dateDisplay.ts";
 
 test("formats canonical calendar dates with fixed English month abbreviations", () => {
   assert.equal(formatCalendarDateDisplay("2026-01-05"), "05 Jan 2026");
@@ -95,4 +100,34 @@ test("parseCalendarDateInput is timezone-independent (18 Aug 2026 never drifts a
     if (originalTimeZone === undefined) delete process.env.TZ;
     else process.env.TZ = originalTimeZone;
   }
+});
+
+test("weekdayAbbreviationForCalendarDate returns the fixed 3-letter English weekday", () => {
+  assert.equal(weekdayAbbreviationForCalendarDate("2026-08-19"), "WED");
+  assert.equal(weekdayAbbreviationForCalendarDate("2026-08-20"), "THU");
+  assert.equal(weekdayAbbreviationForCalendarDate("2026-08-21"), "FRI");
+  assert.equal(weekdayAbbreviationForCalendarDate("2027-01-05"), "TUE");
+});
+
+test("the reservation-divider weekday is timezone-independent (19 Aug 2026 stays WED)", () => {
+  const originalTimeZone = process.env.TZ;
+  try {
+    const outputs = ["UTC", "Europe/Madrid", "America/Los_Angeles", "Pacific/Kiritimati"].map(
+      (timeZone) => {
+        process.env.TZ = timeZone;
+        return weekdayAbbreviationForCalendarDate("2026-08-19");
+      },
+    );
+    assert.deepEqual(outputs, Array(4).fill("WED"));
+  } finally {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  }
+});
+
+test("formatLocalInstantWeekdayDisplay matches the local calendar date it is shown beside", () => {
+  // Constructed via the local-date constructor so the local calendar date is
+  // 19 Aug 2026 regardless of the runtime timezone offset.
+  assert.equal(formatLocalInstantWeekdayDisplay(new Date(2026, 7, 19, 12, 0)), "WED");
+  assert.equal(formatLocalInstantWeekdayDisplay(new Date(2026, 7, 20, 7, 40)), "THU");
 });

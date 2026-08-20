@@ -102,12 +102,54 @@ export function parseCalendarDateInput(input: string): string | null {
  * Preserves the runtime's existing local-instant conversion, then applies the
  * deterministic calendar-date presentation.
  */
-export function formatLocalInstantDateDisplay(instant: Date) {
+function localCalendarDate(instant: Date) {
   if (!Number.isFinite(instant.getTime())) throw new RangeError("Invalid instant");
-  const calendarDate = [
+  return [
     String(instant.getFullYear()).padStart(4, "0"),
     String(instant.getMonth() + 1).padStart(2, "0"),
     String(instant.getDate()).padStart(2, "0"),
   ].join("-");
-  return formatCalendarDateDisplay(calendarDate);
+}
+
+export function formatLocalInstantDateDisplay(instant: Date) {
+  return formatCalendarDateDisplay(localCalendarDate(instant));
+}
+
+const WEEKDAY_ABBREVIATIONS = [
+  "SUN",
+  "MON",
+  "TUE",
+  "WED",
+  "THU",
+  "FRI",
+  "SAT",
+] as const;
+
+/**
+ * Returns the 3-letter English weekday for a canonical `YYYY-MM-DD` date. The
+ * date is constructed in UTC purely to read its weekday, so the result is
+ * deterministic and identical under every runtime timezone — a calendar date's
+ * weekday never shifts.
+ */
+export function weekdayAbbreviationForCalendarDate(calendarDate: string) {
+  const match = CALENDAR_DATE_PATTERN.exec(calendarDate);
+  if (!match) throw new RangeError("Invalid calendar date");
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!isValidCalendarParts(year, month, day)) {
+    throw new RangeError("Invalid calendar date");
+  }
+
+  return WEEKDAY_ABBREVIATIONS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+}
+
+/**
+ * The weekday of the SAME local calendar date that
+ * {@link formatLocalInstantDateDisplay} shows for an instant, so the displayed
+ * date and its weekday can never disagree.
+ */
+export function formatLocalInstantWeekdayDisplay(instant: Date) {
+  return weekdayAbbreviationForCalendarDate(localCalendarDate(instant));
 }

@@ -4,7 +4,10 @@ import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PhoneActions } from "@/components/PhoneActions";
-import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
+import {
+  formatLocalInstantDateDisplay,
+  formatLocalInstantWeekdayDisplay,
+} from "@/lib/dateDisplay";
 import {
   nextReservationStatusCode,
   normalizeReservationStatusCode,
@@ -305,12 +308,14 @@ export default function ReservationsList({
   // group key is the same shared DD MMM YYYY string rendered in the divider, so
   // the label always matches and there is no timezone/UTC day drift.
   const groupedRows = useMemo(() => {
-    const groups: Array<{ date: string; rows: Reservation[] }> = [];
+    const groups: Array<{ date: string; weekday: string; rows: Reservation[] }> = [];
     for (const row of filteredRows) {
       const { date } = fmtDateParts(row.startAt);
       const current = groups[groups.length - 1];
       if (current && current.date === date) current.rows.push(row);
-      else groups.push({ date, rows: [row] });
+      // Weekday is derived from the same instant/local calendar date used for
+      // `date`, so the divider's date and weekday can never disagree.
+      else groups.push({ date, weekday: formatLocalInstantWeekdayDisplay(new Date(row.startAt)), rows: [row] });
     }
     return groups;
   }, [filteredRows]);
@@ -469,6 +474,7 @@ export default function ReservationsList({
                   <span aria-hidden="true" className="h-px flex-1 bg-app-border" />
                   <h2 id={headingId} className="text-sm font-semibold text-muted tnum">
                     {group.date}
+                    <span className="ml-1.5 font-medium text-subtle">{group.weekday}</span>
                   </h2>
                   <span aria-hidden="true" className="h-px flex-1 bg-app-border" />
                 </div>
