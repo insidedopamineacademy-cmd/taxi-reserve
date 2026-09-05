@@ -13,6 +13,7 @@ import {
   getDriverFinancialSummaries,
   getDriverFinancialSummary,
 } from "@/lib/drivers/financials";
+import { alphabeticalDriverPage } from "@/lib/drivers/driverOrder";
 import { prisma } from "@/lib/prisma";
 
 const driverSelect = {
@@ -192,14 +193,9 @@ export const assistantDriverFinanceRepository: AssistantDriverFinanceRepository 
           : {}),
       },
       orderBy: [{ name: "asc" }, { id: "asc" }],
-      skip: query.offset,
-      take: query.limit + 1,
       select: driverSelect,
     });
-    return {
-      drivers: rows.slice(0, query.limit),
-      hasMore: rows.length > query.limit,
-    };
+    return alphabeticalDriverPage(rows, query.offset, query.limit);
   },
 
   async getDriver(driverId) {

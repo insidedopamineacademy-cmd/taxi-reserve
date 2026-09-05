@@ -37,7 +37,7 @@ export default async function DriverBalancePage({ kind }: { kind: DriverBalanceK
         <p className={`tnum mt-2 break-words text-3xl font-semibold ${due ? "text-warning" : "text-success"}`}>{formatBalanceEuro(report.total)}</p>
         <p className="mt-2 text-xs text-muted">Total de todos los conductores de esta vista. La búsqueda solo filtra la lista.</p>
       </section>
-      {due && <p className="mt-4 text-sm leading-relaxed text-muted">Suscripción: cargo registrado de {month}. Ya reflejado en el saldo; no se suma al pendiente. Sin cargo registrado: € 0.00.</p>}
+      {due && <p className="mt-4 text-sm leading-relaxed text-muted">Suscripción de {month}. El estado de pago es independiente de las comisiones. El cargo registrado ya está reflejado en el saldo.</p>}
       <DriverBalanceList items={items} kind={kind} />
     </main>
   );

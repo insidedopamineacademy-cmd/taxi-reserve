@@ -1,6 +1,7 @@
 // src/app/reservations/[id]/edit/page.tsx
 export const revalidate = 0; // always fetch fresh data
 
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
 import { prisma } from "@/lib/prisma";
 import { DriverStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -68,7 +69,7 @@ export default async function EditReservationPage({ params }: PageProps) {
             currentDriverId: reservation.driverId,
             commissionAmount: linkedCommission?.commissionAmount.toFixed(2) ?? "",
             hasLinkedCommission: Boolean(linkedCommission),
-            drivers,
+            drivers: sortDriversByName(drivers),
           };
         })()
       : undefined;

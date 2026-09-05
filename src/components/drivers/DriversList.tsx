@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
+import SubscriptionStatusBadge from "@/components/drivers/SubscriptionStatusBadge";
+import type { SubscriptionDisplayStatus } from "@/lib/drivers/subscriptionStatus";
 
 type DriverListItem = {
   id: string;
@@ -13,6 +15,7 @@ type DriverListItem = {
   subscriptionExempt: boolean;
   status: "ACTIVE" | "INACTIVE";
   balance: string;
+  subscriptionStatus: SubscriptionDisplayStatus;
 };
 
 // A positive balance means the driver owes the company (commission to collect);
@@ -28,7 +31,7 @@ function balanceMeta(balance: string) {
     : { tone: "text-success", note: "Driver credit" };
 }
 
-export default function DriversList({ items }: { items: DriverListItem[] }) {
+export default function DriversList({ items, subscriptionMonth }: { items: DriverListItem[]; subscriptionMonth: string }) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredItems = useMemo(() => {
@@ -106,6 +109,7 @@ export default function DriversList({ items }: { items: DriverListItem[] }) {
                       Vehicle {driver.vehicleType ?? "Not set - configuration required"}
                       {driver.subscriptionExempt ? " · Subscription exempt" : ""}
                     </p>
+                    <p className="mt-2"><span className="sr-only">Monthly subscription: </span><SubscriptionStatusBadge status={driver.subscriptionStatus} month={subscriptionMonth} /></p>
                   </div>
                   <DriverStatusBadge status={driver.status} />
                 </div>

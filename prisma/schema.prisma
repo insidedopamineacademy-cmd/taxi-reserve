@@ -35,6 +35,12 @@ enum DriverPaymentMethod {
   OTHER
 }
 
+enum DriverSubscriptionPaymentStatus {
+  UNVERIFIED
+  UNPAID
+  PAID
+}
+
 enum DriverVehicleType {
   VAN
   SEDAN
@@ -77,10 +83,11 @@ model User {
   createdAt DateTime @default(now())
 
   // Relations
-  reservations     Reservation[]
-  reminders        Reminder[]
-  aiPendingActions AiPendingAction[]
-  aiWorkflowDrafts AiWorkflowDraft[]
+  reservations          Reservation[]
+  reminders             Reminder[]
+  aiPendingActions      AiPendingAction[]
+  aiWorkflowDrafts      AiWorkflowDraft[]
+  recordedSubscriptions DriverSubscriptionCharge[] @relation("SubscriptionRecordedBy")
 }
 
 model AiWorkflowDraft {
@@ -206,14 +213,20 @@ model DriverPayment {
 }
 
 model DriverSubscriptionCharge {
-  id          String   @id @default(cuid())
-  driverId    String
-  chargeMonth DateTime @db.Date
-  amount      Decimal  @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String                          @id @default(cuid())
+  driverId        String
+  chargeMonth     DateTime                        @db.Date
+  amount          Decimal                         @db.Decimal(10, 2)
+  paymentStatus   DriverSubscriptionPaymentStatus @default(UNPAID)
+  paidAt          DateTime?                       @db.Date
+  paidByUserId    String?
+  paymentNote     String?                         @db.VarChar(500)
+  paymentRevision Int                             @default(0)
+  createdAt       DateTime                        @default(now())
+  updatedAt       DateTime                        @updatedAt
 
-  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  driver     Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  paidByUser User?  @relation("SubscriptionRecordedBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
 
   @@unique([driverId, chargeMonth])
   @@index([chargeMonth])

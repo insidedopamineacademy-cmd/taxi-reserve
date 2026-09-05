@@ -53,6 +53,7 @@ const fixture: DueCommissionBalanceLine[] = Array.from(
           : index % 9 === 0
             ? "VTC"
             : String(1000 + index),
+    subscriptionStatus: index % 3 === 0 ? "UNVERIFIED" : index % 3 === 1 ? "PAID" : "UNPAID",
     currentMonthSubscription: index % 3 === 0 ? null : new Prisma.Decimal(index % 3 === 1 ? "20.00" : "7.00"),
     summary: {
       balance: new Prisma.Decimal(
@@ -69,6 +70,7 @@ fixture.push(
     name: "Excluded Zero Balance",
     licenseNumber: "ZERO",
     currentMonthSubscription: null,
+    subscriptionStatus: "NOT_RECORDED",
     summary: { balance: new Prisma.Decimal("0.00") },
   },
   {
@@ -76,6 +78,7 @@ fixture.push(
     name: "Excluded Credit Balance",
     licenseNumber: "CREDIT",
     currentMonthSubscription: null,
+    subscriptionStatus: "NOT_RECORDED",
     summary: { balance: new Prisma.Decimal("-85.00") },
   },
 );

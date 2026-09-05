@@ -27,6 +27,7 @@ function balanceLine(
     licenseNumber,
     summary: { balance: new Prisma.Decimal(balance) },
     currentMonthSubscription: null,
+    subscriptionStatus: "NOT_RECORDED",
   };
 }
 
@@ -47,9 +48,10 @@ async function pageTexts(bytes: Uint8Array) {
 }
 
 test("rendered PDF text keeps the subscription separate, repeats headers, and totals only on the final page", async () => {
-  const lines = Array.from({ length: 40 }, (_, index) => ({
+  const lines = Array.from({ length: 36 }, (_, index) => ({
     ...balanceLine(String(index), `Driver ${index}`, index === 1 ? "VTC-LONG-LICENCE-IDENTIFIER-048" : `VTC-${index}`, index === 0 ? "99999999.99" : "245.00"),
     currentMonthSubscription: index === 0 ? new Prisma.Decimal("20.00") : null,
+    subscriptionStatus: index % 3 === 0 ? "PAID" as const : index % 3 === 1 ? "UNPAID" as const : "UNVERIFIED" as const,
   }));
   const report = prepareDueCommissionsReport(lines);
   const pages = await pageTexts(await buildDueCommissionsPdf({
@@ -61,6 +63,7 @@ test("rendered PDF text keeps the subscription separate, repeats headers, and to
     assert.equal(text.includes("Total pendiente"), index === pages.length - 1);
   }
   assert.ok(pages[0].includes("€ 20.00"));
+  for (const status of ["PAGADO", "PENDIENTE", "SIN VERIFICAR"]) assert.ok(pages[0].includes(status));
   assert.ok(pages[0].includes("€ 0.00"));
   assert.ok(pages[0].includes("€ 99,999,999.99"), "the full large balance is one unwrapped text operation");
   assert.ok(pages.flat().includes(formatPendingEuro(report.totalDue)));
@@ -152,7 +155,7 @@ test("PDF generation rejects a total that does not reconcile with displayed rows
       generatedDate: "18 Aug 2026",
       subscriptionMonth: "agosto de 2026",
       totalDue: "100.00",
-      drivers: [{ id: "driver", name: "Driver", licenseNumber: "100", balance: "99.99", subscription: "20.00" }],
+      drivers: [{ id: "driver", name: "Driver", licenseNumber: "100", balance: "99.99", subscription: "20.00", subscriptionStatus: "UNPAID" }],
     }),
     /does not reconcile/,
   );

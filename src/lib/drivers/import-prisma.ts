@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { sortDriversByName } from "./driverOrder";
 import { prisma } from "@/lib/prisma";
 import type { DriverImportExistingRepository } from "./import-core";
 
@@ -30,12 +31,12 @@ export function createPrismaDriverImportExistingRepository(
         })),
       ];
       if (ors.length === 0) return [];
-      return database.driver.findMany({
+      const candidates = await database.driver.findMany({
         where: { OR: ors },
         orderBy: [{ name: "asc" }, { id: "asc" }],
-        take: 200,
         select: importDriverSelect,
       });
+      return sortDriversByName(candidates).slice(0, 200);
     },
   };
 }

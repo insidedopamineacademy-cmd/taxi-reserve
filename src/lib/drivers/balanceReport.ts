@@ -1,6 +1,8 @@
 import "server-only";
 
 import { Prisma } from "@prisma/client";
+import { compareDriversByName } from "./driverOrder.ts";
+import type { SubscriptionDisplayStatus } from "./subscriptionStatus.ts";
 import { calculateDriverFinancePosition } from "./financialMath.ts";
 
 export type DriverBalanceLine = {
@@ -9,15 +11,10 @@ export type DriverBalanceLine = {
   licenseNumber: string | null | undefined;
   summary: { balance: Prisma.Decimal };
   currentMonthSubscription: Prisma.Decimal | null;
+  subscriptionStatus: SubscriptionDisplayStatus;
 };
 
 export type DriverBalanceKind = "credits" | "due";
-
-function compareText(left: string, right: string) {
-  const a = left.normalize("NFKD").toLocaleLowerCase("en-US");
-  const b = right.normalize("NFKD").toLocaleLowerCase("en-US");
-  return a < b ? -1 : a > b ? 1 : left < right ? -1 : left > right ? 1 : 0;
-}
 
 /** Presentation of canonical balances only; subscription never adjusts them. */
 export function prepareDriverBalanceReport(
@@ -29,11 +26,7 @@ export function prepareDriverBalanceReport(
     .filter(({ summary }) => kind === "credits"
       ? summary.balance.lessThan(0)
       : summary.balance.greaterThan(0))
-    .sort((left, right) =>
-      right.summary.balance.abs().comparedTo(left.summary.balance.abs()) ||
-      compareText(left.name, right.name) ||
-      compareText(left.licenseNumber?.trim() ?? "", right.licenseNumber?.trim() ?? "") ||
-      compareText(left.id, right.id));
+    .sort(compareDriversByName);
 
   return {
     total: (kind === "credits" ? position.driverCredits : position.totalCommissionDue).toFixed(2),
@@ -44,6 +37,7 @@ export function prepareDriverBalanceReport(
       // Credit is displayed as the positive amount in the driver's favour.
       balance: line.summary.balance.abs().toFixed(2),
       subscription: (line.currentMonthSubscription ?? new Prisma.Decimal(0)).toFixed(2),
+      subscriptionStatus: line.subscriptionStatus,
     })),
   };
 }

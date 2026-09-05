@@ -4,6 +4,9 @@ export const runtime = "nodejs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
+import SubscriptionHistory from "@/components/drivers/SubscriptionHistory";
+import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
+import { currentSubscriptionStatus } from "@/lib/drivers/subscriptionStatus";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import FinancialEntryDeleteButton from "@/components/drivers/FinancialEntryDeleteButton";
 import { PdfShareButton } from "@/components/PdfShareButton";
@@ -79,12 +82,16 @@ export default async function DriverDetailPage({ params }: PageProps) {
       },
       subscriptionCharges: {
         orderBy: [{ chargeMonth: "desc" }, { createdAt: "desc" }],
-        take: 100,
         select: {
           id: true,
           chargeMonth: true,
           amount: true,
           createdAt: true,
+          paymentStatus: true,
+          paidAt: true,
+          paidByUser: { select: { name: true, email: true } },
+          paymentNote: true,
+          paymentRevision: true,
         },
       },
     },
@@ -93,6 +100,17 @@ export default async function DriverDetailPage({ params }: PageProps) {
   if (!driver) notFound();
 
   const summary = await getDriverFinancialSummary(driver.id);
+  const { monthStart, today } = getMadridFinancialPeriods();
+  const currentMonth = monthStart.toISOString().slice(0, 7);
+  const currentCharge = driver.subscriptionCharges.find((charge) => charge.chargeMonth.getTime() === monthStart.getTime());
+  const subscriptionMonths = driver.subscriptionCharges.map((charge) => ({
+    id: charge.id, month: charge.chargeMonth.toISOString().slice(0, 7),
+    monthLabel: formatSubscriptionMonthDisplay(charge.chargeMonth), amount: formatEuro(charge.amount),
+    status: charge.paymentStatus, paidDate: charge.paidAt?.toISOString().slice(0, 10) ?? null,
+    paidDateLabel: charge.paidAt ? formatFinancialDateDisplay(charge.paidAt) : null,
+    paidBy: charge.paidByUser?.name || charge.paidByUser?.email || null,
+    note: charge.paymentNote, revision: charge.paymentRevision,
+  }));
   const balPositive = summary.balance.greaterThan(0);
   const balNegative = summary.balance.lessThan(0);
   const balTone = balPositive ? "text-warning" : balNegative ? "text-success" : "text-white";
@@ -244,6 +262,12 @@ export default async function DriverDetailPage({ params }: PageProps) {
         </div>
       </section>
 
+      <SubscriptionHistory
+        driverId={driver.id} driverName={driver.name} months={subscriptionMonths}
+        currentMonth={currentMonth} currentMonthLabel={formatSubscriptionMonthDisplay(monthStart)}
+        currentStatus={currentSubscriptionStatus(driver, currentCharge)} today={today.toISOString().slice(0, 10)}
+      />
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section aria-labelledby="commission-history">
           <h2 id="commission-history" className="text-lg font-semibold text-white">
@@ -355,40 +379,6 @@ export default async function DriverDetailPage({ params }: PageProps) {
           )}
         </section>
       </div>
-
-      <section aria-labelledby="subscription-history" className="mt-6">
-        <h2 id="subscription-history" className="text-lg font-semibold text-white">
-          Subscription history
-        </h2>
-        {driver.subscriptionCharges.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-app-border bg-surface p-8 text-center text-sm text-muted">
-            No subscription charges recorded yet.
-          </div>
-        ) : (
-          <ol className="mt-3 grid gap-3 sm:grid-cols-2">
-            {driver.subscriptionCharges.map((charge) => (
-              <li
-                key={charge.id}
-                className="rounded-xl border border-app-border bg-surface p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-neutral-200">
-                      {formatSubscriptionMonthDisplay(charge.chargeMonth)}
-                    </p>
-                    <p className="mt-1 text-xs text-subtle">
-                      Created {formatDate(charge.createdAt)}
-                    </p>
-                  </div>
-                  <p className="shrink-0 font-semibold text-white tnum">
-                    {formatEuro(charge.amount)}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
     </main>
   );
 }

@@ -33,6 +33,9 @@
     "test:driver-one-time-import": "node --experimental-transform-types --test scripts/test-driver-one-time-import.mts",
     "test:pending-commissions-pdf": "node --conditions=react-server --experimental-transform-types --test scripts/test-pending-commissions-pdf.mts",
     "test:driver-balance-reports": "node --conditions=react-server --experimental-transform-types --test scripts/test-driver-balance-reports.mts",
+    "test:driver-order": "node --conditions=react-server --experimental-transform-types --test scripts/test-driver-order.mts",
+    "test:subscription-payment-input": "node --experimental-transform-types --test scripts/test-subscription-payment-input.mts",
+    "test:subscription-payments": "node --conditions=react-server --experimental-transform-types scripts/test-subscription-payments.mjs",
     "test:pdf-share": "node --experimental-transform-types --test scripts/test-pdf-share.mts",
     "import:drivers": "dotenv -e .env.local -- node --experimental-transform-types scripts/import-drivers-one-time.mts",
     "postinstall": "prisma generate"

@@ -10,11 +10,14 @@ import {
   formatEuro,
 } from "@/lib/drivers/financials";
 import { getDriverBalanceLines } from "@/lib/drivers/overview";
+import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 
 export default async function DriversPage() {
   await requireDriverAdminPage();
 
-  const drivers = await getDriverBalanceLines();
+  const now = new Date();
+  const drivers = await getDriverBalanceLines(now);
+  const subscriptionMonth = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(getMadridFinancialPeriods(now).monthStart);
   const summaries = drivers.map((driver) => driver.summary);
   const overview = combineDriverFinancialSummaries(summaries);
   // Gross pending (drivers who owe) and credits (drivers in credit). Pending
@@ -30,6 +33,7 @@ export default async function DriversPage() {
     subscriptionExempt: driver.subscriptionExempt,
     status: driver.status,
     balance: formatEuro(driver.summary.balance),
+    subscriptionStatus: driver.subscriptionStatus,
   }));
 
   return (
@@ -83,7 +87,7 @@ export default async function DriversPage() {
         </div>
       </section>
 
-      <DriversList items={items} />
+      <DriversList items={items} subscriptionMonth={subscriptionMonth} />
     </main>
   );
 }

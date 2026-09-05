@@ -7,6 +7,7 @@ import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { getDriverFinancialSummaries } from "@/lib/drivers/financials";
 import { buildFullDriverLedgerPdf } from "@/lib/drivers/pdf";
 import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
 import { prisma } from "@/lib/prisma";
 import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
 
@@ -72,7 +73,7 @@ export async function GET() {
 
   const pdf = await buildFullDriverLedgerPdf({
     generatedAt: generatedDateTime(),
-    drivers: drivers.map((driver) => {
+    drivers: sortDriversByName(drivers).map((driver) => {
       const summary = summaries.get(driver.id)!;
       return {
         name: driver.name,

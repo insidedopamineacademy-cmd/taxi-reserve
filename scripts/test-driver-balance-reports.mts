@@ -13,6 +13,7 @@ const line = (id: string, commissions: string, payments: string, subscriptions: 
   id, name: id, licenseNumber: `VTC-${id}`,
   summary: calculateDriverFinancialSummary(dec(commissions), dec(payments), dec(subscriptions)),
   currentMonthSubscription: current === null ? null : dec(current),
+  subscriptionStatus: "UNPAID" as const,
 });
 
 test("opposite datasets exclude zero and reconcile exactly to the canonical KPI totals", () => {
@@ -29,7 +30,7 @@ test("opposite datasets exclude zero and reconcile exactly to the canonical KPI 
   const due = prepareDriverBalanceReport(lines, "due");
   const pdf = prepareDueCommissionsReport(lines);
   assert.deepEqual(credits.drivers.map(({ id }) => id), ["credit", "credit-2"]);
-  assert.deepEqual(due.drivers.map(({ id }) => id), ["due", "cents"]);
+  assert.deepEqual(due.drivers.map(({ id }) => id), ["cents", "due"]);
   assert.equal(credits.total, "19.22");
   assert.equal(credits.total, position.driverCredits.toFixed(2));
   assert.equal(due.total, "225.40");
@@ -53,13 +54,13 @@ test("monthly subscription is the stored current charge, with past months alread
   await buildDueCommissionsPdf({ ...report, generatedDate: "05 Sep 2026", subscriptionMonth: "septiembre de 2026" });
 });
 
-test("credit order is largest credit first with stable name, licence and id ties", () => {
+test("credit order is alphabetical with stable name, licence and id ties", () => {
   const a = line("a", "0", "10", "0", null);
   const b = { ...a, id: "b" };
   const c = { ...a, id: "c", licenseNumber: "ZZZ" };
   const biggest = line("biggest", "0", "20", "0", null);
   const lines = [c, b, biggest, a];
-  assert.deepEqual(prepareDriverBalanceReport(lines, "credits").drivers.map(({ id }) => id), ["biggest", "a", "b", "c"]);
+  assert.deepEqual(prepareDriverBalanceReport(lines, "credits").drivers.map(({ id }) => id), ["a", "b", "c", "biggest"]);
   assert.deepEqual(prepareDriverBalanceReport([], "credits"), { total: "0.00", drivers: [] });
   assert.deepEqual(prepareDriverBalanceReport([], "due"), { total: "0.00", drivers: [] });
 });

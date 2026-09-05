@@ -1,4 +1,5 @@
 import type { AssistantDriverImportDraft } from "./types";
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
 
 const groups = [
   ["NEEDS_REVIEW", "Needs review"],
@@ -50,7 +51,10 @@ export function DriverImportDraftCard({ draft }: { draft: AssistantDriverImportD
 
       <div className="divide-y divide-white/[0.06]">
         {groups.map(([state, label]) => {
-          const rows = draft.rows.filter((row) => row.state === state);
+          const rows = sortDriversByName(draft.rows.filter((row) => row.state === state).map((row) => ({
+            ...row,
+            name: row.name || row.possibleNames.join(" / ") || "Name missing",
+          })));
           if (rows.length === 0) return null;
           const critical = state === "NEEDS_REVIEW" || state === "CONFLICT";
           const visibleRows = critical ? rows : rows.slice(0, 12);
@@ -65,7 +69,7 @@ export function DriverImportDraftCard({ draft }: { draft: AssistantDriverImportD
                   <div key={row.id} className="min-w-0 py-2.5">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <p className="min-w-0 break-words font-medium text-slate-100">
-                        {row.name || row.possibleNames.join(" / ") || "Name missing"}
+                        {row.name}
                       </p>
                       <span className="shrink-0 text-xs text-slate-400">
                         {row.licenseNumber || "Code missing"}

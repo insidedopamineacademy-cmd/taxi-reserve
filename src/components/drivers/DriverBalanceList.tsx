@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import SubscriptionStatusBadge from "@/components/drivers/SubscriptionStatusBadge";
+import type { SubscriptionDisplayStatus } from "@/lib/drivers/subscriptionStatus";
 
 export type DriverBalanceListItem = {
   id: string;
@@ -9,6 +11,7 @@ export type DriverBalanceListItem = {
   licenseNumber: string;
   balance: string;
   subscription: string;
+  subscriptionStatus: SubscriptionDisplayStatus;
 };
 
 export default function DriverBalanceList({ items, kind }: {
@@ -31,7 +34,7 @@ export default function DriverBalanceList({ items, kind }: {
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre o número de licencia" className="h-11 w-full rounded-lg border border-app-border bg-surface-2 px-3 text-base text-white outline-none placeholder:text-subtle focus:border-brand/50 focus:ring-2 focus:ring-brand/25" />
       </label>
       <p role="status" className="text-xs text-subtle">
-        {filtered.length} de {items.length} conductores · Mayor importe primero
+        {filtered.length} de {items.length} conductores · Nombre A–Z
       </p>
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-app-border bg-surface p-8 text-center text-sm text-muted">
@@ -52,7 +55,7 @@ export default function DriverBalanceList({ items, kind }: {
                 </Link>
                 <p className="break-all text-sm text-muted">Licencia {driver.licenseNumber}</p>
                 <dl className="mt-4 space-y-2 border-t border-app-border pt-3">
-                  {due && <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"><dt className="text-muted">Suscripción</dt><dd className="tnum whitespace-nowrap text-muted">{driver.subscription}</dd></div>}
+                  {due && <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"><dt className="text-muted">Suscripción</dt><dd className="text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscription}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></dd></div>}
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt className="text-sm text-muted">{balanceLabel}</dt><dd className={`tnum whitespace-nowrap text-lg font-semibold ${tone}`}>{driver.balance}</dd></div>
                 </dl>
               </li>
@@ -69,7 +72,7 @@ export default function DriverBalanceList({ items, kind }: {
                   <tr key={driver.id} className="even:bg-white/[0.015] hover:bg-white/[0.03]">
                     <th scope="row" className="max-w-0 px-4 py-1 font-medium"><Link href={`/drivers/${driver.id}`} className="flex min-h-11 items-center break-words py-2 text-white hover:text-brand">{driver.name}<span className="sr-only"> — Ver cuenta</span></Link></th>
                     <td className="max-w-40 break-all px-4 py-3 text-muted">{driver.licenseNumber}</td>
-                    {due && <td className="tnum whitespace-nowrap px-4 py-3 text-right text-muted">{driver.subscription}</td>}
+                    {due && <td className="px-4 py-3 text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscription}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></td>}
                     <td className={`tnum whitespace-nowrap px-4 py-3 text-right font-semibold ${tone}`}>{driver.balance}</td>
                   </tr>
                 ))}

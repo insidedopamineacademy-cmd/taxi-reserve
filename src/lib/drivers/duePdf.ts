@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma } from "@prisma/client";
+import { subscriptionStatusLabel } from "./subscriptionStatus.ts";
 import {
   formatBalanceEuro,
   prepareDriverBalanceReport,
@@ -20,7 +21,7 @@ const MARGIN = 44;
 const CONTENT_BOTTOM = 54;
 const TABLE_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const TABLE_HEADER_HEIGHT = 26;
-const MINIMUM_ROW_HEIGHT = 22;
+const MINIMUM_ROW_HEIGHT = 30;
 const TOTAL_GAP = 8;
 const TOTAL_HEIGHT = 42;
 
@@ -186,10 +187,10 @@ function drawDocumentHeader(writer: Writer, continued: boolean) {
     font: fonts.regular,
     color: MUTED_COLOR,
   });
-  page.drawText(`Suscripción: cargo registrado de ${pdfSafeText(writer.subscriptionMonth)}.`, {
+  page.drawText(`Mes de suscripción: ${pdfSafeText(writer.subscriptionMonth)}.`, {
     x: MARGIN, y: PAGE_HEIGHT - 139, size: 8, font: fonts.regular, color: MUTED_COLOR,
   });
-  page.drawText("Ya reflejado en el saldo; no se suma al pendiente.", {
+  page.drawText("Estado de pago mensual independiente de las comisiones. El cargo ya está reflejado en el saldo.", {
     x: MARGIN, y: PAGE_HEIGHT - 151, size: 8, font: fonts.regular, color: MUTED_COLOR,
   });
   writer.y = PAGE_HEIGHT - 169;
@@ -320,9 +321,18 @@ function drawDriverRow(
     writer.page,
     formatPendingEuro(driver.subscription),
     AMOUNT_X - 8,
-    writer.y - layout.height / 2 - 3.5,
+    writer.y - layout.height / 2 + 2,
     writer.fonts.regular,
     writer.moneySize,
+    MUTED_COLOR,
+  );
+  drawRightAlignedText(
+    writer.page,
+    subscriptionStatusLabel(driver.subscriptionStatus, "es").toUpperCase(),
+    AMOUNT_X - 8,
+    writer.y - layout.height / 2 - 9,
+    writer.fonts.regular,
+    7,
     MUTED_COLOR,
   );
   drawRightAlignedText(

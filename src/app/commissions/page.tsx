@@ -10,6 +10,7 @@ import {
   formatFinancialDateInput,
 } from "@/lib/drivers/financialValidation";
 import { formatEuro } from "@/lib/drivers/financials";
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
 import { prisma } from "@/lib/prisma";
 
 export default async function CommissionsPage() {
@@ -62,7 +63,7 @@ export default async function CommissionsPage() {
           Review reservation-linked and manual driver commissions.
         </p>
       </div>
-      <DriverEntryLauncher drivers={activeDrivers} kind="commission" />
+      <DriverEntryLauncher drivers={sortDriversByName(activeDrivers)} kind="commission" />
       <CommissionsList items={items} />
     </main>
   );

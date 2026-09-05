@@ -6,6 +6,7 @@ import PaymentsList from "@/components/drivers/PaymentsList";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { formatEuro } from "@/lib/drivers/financials";
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
 import { prisma } from "@/lib/prisma";
 
 function paymentMethodLabel(method: "CASH" | "BANK" | "OTHER") {
@@ -54,7 +55,7 @@ export default async function PaymentsPage() {
           Review and record aggregate driver-account payments.
         </p>
       </div>
-      <DriverEntryLauncher drivers={activeDrivers} kind="payment" />
+      <DriverEntryLauncher drivers={sortDriversByName(activeDrivers)} kind="payment" />
       <PaymentsList items={items} />
     </main>
   );

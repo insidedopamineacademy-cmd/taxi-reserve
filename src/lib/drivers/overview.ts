@@ -6,6 +6,8 @@ import {
   calculateDriverFinancePosition,
   getDriverFinancialSummaries,
 } from "@/lib/drivers/financials";
+import { sortDriversByName } from "@/lib/drivers/driverOrder";
+import { currentSubscriptionStatus } from "@/lib/drivers/subscriptionStatus";
 import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 
 export function getMadridPaymentPeriods(now = new Date()) {
@@ -27,7 +29,7 @@ export async function getDriverBalanceLines(now = new Date()) {
       subscriptionExempt: true,
       subscriptionCharges: {
         where: { chargeMonth: monthStart },
-        select: { amount: true },
+        select: { amount: true, paymentStatus: true, paidAt: true },
       },
     },
   });
@@ -35,10 +37,11 @@ export async function getDriverBalanceLines(now = new Date()) {
     drivers.map((driver) => driver.id),
   );
 
-  return drivers.map(({ subscriptionCharges, ...driver }) => ({
+  return sortDriversByName(drivers).map(({ subscriptionCharges, ...driver }) => ({
     ...driver,
     summary: summaries.get(driver.id)!,
     currentMonthSubscription: subscriptionCharges[0]?.amount ?? null,
+    subscriptionStatus: currentSubscriptionStatus(driver, subscriptionCharges[0]),
   }));
 }
 
