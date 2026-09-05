@@ -27,7 +27,9 @@ const names = [
 ];
 
 const visualMoneyFixtures = [
-  "1234567.89",
+  "99999999.99",
+  "2025.00",
+  "245.00",
   "1935.00",
   "161.00",
   "78.00",
@@ -36,7 +38,7 @@ const visualMoneyFixtures = [
 ] as const;
 
 const fixture: DueCommissionBalanceLine[] = Array.from(
-  { length: 52 },
+  { length: Number(process.argv[3] ?? 52) },
   (_, index) => ({
     id: `fixture-${String(index + 1).padStart(2, "0")}`,
     name:
@@ -51,6 +53,7 @@ const fixture: DueCommissionBalanceLine[] = Array.from(
           : index % 9 === 0
             ? "VTC"
             : String(1000 + index),
+    currentMonthSubscription: index % 3 === 0 ? null : new Prisma.Decimal(index % 3 === 1 ? "20.00" : "7.00"),
     summary: {
       balance: new Prisma.Decimal(
         visualMoneyFixtures[index] ??
@@ -65,19 +68,22 @@ fixture.push(
     id: "fixture-zero",
     name: "Excluded Zero Balance",
     licenseNumber: "ZERO",
+    currentMonthSubscription: null,
     summary: { balance: new Prisma.Decimal("0.00") },
   },
   {
     id: "fixture-credit",
     name: "Excluded Credit Balance",
     licenseNumber: "CREDIT",
+    currentMonthSubscription: null,
     summary: { balance: new Prisma.Decimal("-85.00") },
   },
 );
 
 const report = prepareDueCommissionsReport(fixture);
 const bytes = await buildDueCommissionsPdf({
-  generatedDate: "18 Aug 2026",
+  generatedDate: "05 Sep 2026",
+  subscriptionMonth: "septiembre de 2026",
   ...report,
 });
 

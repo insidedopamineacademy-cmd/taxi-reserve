@@ -9,9 +9,8 @@ import {
 import { getDriverBalanceLines } from "@/lib/drivers/overview";
 import { formatMadridDateDisplay } from "@/lib/time/madrid";
 
-function generatedDate() {
-  return formatMadridDateDisplay(new Date());
-}
+import { formatBalanceSubscriptionMonth } from "@/lib/drivers/balanceReport";
+import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 
 export async function GET() {
   const access = await getDriverAdminAccess();
@@ -22,9 +21,11 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const report = prepareDueCommissionsReport(await getDriverBalanceLines());
+  const now = new Date();
+  const report = prepareDueCommissionsReport(await getDriverBalanceLines(now));
   const pdf = await buildDueCommissionsPdf({
-    generatedDate: generatedDate(),
+    generatedDate: formatMadridDateDisplay(now),
+    subscriptionMonth: formatBalanceSubscriptionMonth(getMadridFinancialPeriods(now).monthStart),
     ...report,
   });
 

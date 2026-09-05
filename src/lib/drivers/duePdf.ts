@@ -2,6 +2,11 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import {
+  formatBalanceEuro,
+  prepareDriverBalanceReport,
+  type DriverBalanceLine,
+} from "./balanceReport.ts";
+import {
   PDFDocument,
   StandardFonts,
   rgb,
@@ -19,10 +24,12 @@ const MINIMUM_ROW_HEIGHT = 22;
 const TOTAL_GAP = 8;
 const TOTAL_HEIGHT = 42;
 
-const NAME_COLUMN_WIDTH = 260;
-const LICENSE_COLUMN_WIDTH = 130;
+const NAME_COLUMN_WIDTH = 217;
+const LICENSE_COLUMN_WIDTH = 84;
+const SUBSCRIPTION_COLUMN_WIDTH = 92;
 const LICENSE_X = MARGIN + NAME_COLUMN_WIDTH;
-const AMOUNT_X = LICENSE_X + LICENSE_COLUMN_WIDTH;
+const SUBSCRIPTION_X = LICENSE_X + LICENSE_COLUMN_WIDTH;
+const AMOUNT_X = SUBSCRIPTION_X + SUBSCRIPTION_COLUMN_WIDTH;
 const AMOUNT_RIGHT = MARGIN + TABLE_WIDTH;
 
 const TEXT_COLOR = rgb(0.1, 0.12, 0.16);
@@ -37,79 +44,28 @@ const ACCENT_COLOR = rgb(0.73, 0.5, 0.08);
 export const PENDING_COMMISSIONS_COLUMNS = [
   "Conductor",
   "Licencia",
+  "Suscripción",
   "Pendiente",
 ] as const;
 
-export type DueCommissionBalanceLine = {
-  id: string;
-  name: string;
-  licenseNumber: string | null | undefined;
-  summary: {
-    balance: Prisma.Decimal;
-  };
-};
+export type DueCommissionBalanceLine = DriverBalanceLine;
 
 export type DueCommissionsReport = {
   totalDue: string;
-  drivers: Array<{
-    name: string;
-    licenseNumber: string;
-    balance: string;
-  }>;
+  drivers: ReturnType<typeof prepareDriverBalanceReport>["drivers"];
 };
 
 export type DueCommissionsPdfInput = DueCommissionsReport & {
   generatedDate: string;
+  subscriptionMonth: string;
 };
 
-function compareText(left: string, right: string) {
-  const normalizedLeft = left.normalize("NFKD").toLocaleLowerCase("en-US");
-  const normalizedRight = right.normalize("NFKD").toLocaleLowerCase("en-US");
-  if (normalizedLeft < normalizedRight) return -1;
-  if (normalizedLeft > normalizedRight) return 1;
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
-
-/**
- * Selects and orders the authoritative balances for presentation. It does not
- * derive balances; those come directly from getDriverBalanceLines().
- */
+/** Uses the same selection and canonical KPI total as the pending detail page. */
 export function prepareDueCommissionsReport(
   lines: readonly DueCommissionBalanceLine[],
 ): DueCommissionsReport {
-  const dueLines = lines
-    .filter((line) => line.summary.balance.greaterThan(0))
-    .slice()
-    .sort((left, right) => {
-      const balanceOrder = right.summary.balance.comparedTo(left.summary.balance);
-      if (balanceOrder !== 0) return balanceOrder;
-
-      const nameOrder = compareText(left.name, right.name);
-      if (nameOrder !== 0) return nameOrder;
-
-      const licenseOrder = compareText(
-        left.licenseNumber?.trim() ?? "",
-        right.licenseNumber?.trim() ?? "",
-      );
-      if (licenseOrder !== 0) return licenseOrder;
-      return compareText(left.id, right.id);
-    });
-
-  const totalDue = dueLines.reduce(
-    (total, line) => total.plus(line.summary.balance),
-    new Prisma.Decimal(0),
-  );
-
-  return {
-    totalDue: totalDue.toFixed(2),
-    drivers: dueLines.map((line) => ({
-      name: line.name,
-      licenseNumber: line.licenseNumber?.trim() || "-",
-      balance: line.summary.balance.toFixed(2),
-    })),
-  };
+  const report = prepareDriverBalanceReport(lines, "due");
+  return { totalDue: report.total, drivers: report.drivers };
 }
 
 function pdfSafeText(value: unknown) {
@@ -120,13 +76,7 @@ function pdfSafeText(value: unknown) {
     .replace(/[^\x20-\x7E]/g, "?");
 }
 
-export function formatPendingEuro(value: string) {
-  const amount = new Prisma.Decimal(value);
-  const isNegative = amount.lessThan(0);
-  const [whole, fraction] = amount.abs().toFixed(2).split(".");
-  const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${isNegative ? "-" : ""}€ ${groupedWhole}.${fraction}`;
-}
+export const formatPendingEuro = formatBalanceEuro;
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
   const words = pdfSafeText(text).split(/\s+/).filter(Boolean);
@@ -195,6 +145,8 @@ type Writer = {
   page: PDFPage;
   fonts: Fonts;
   generatedDate: string;
+  subscriptionMonth: string;
+  moneySize: number;
   y: number;
 };
 
@@ -234,7 +186,13 @@ function drawDocumentHeader(writer: Writer, continued: boolean) {
     font: fonts.regular,
     color: MUTED_COLOR,
   });
-  writer.y = PAGE_HEIGHT - 148;
+  page.drawText(`Suscripción: cargo registrado de ${pdfSafeText(writer.subscriptionMonth)}.`, {
+    x: MARGIN, y: PAGE_HEIGHT - 139, size: 8, font: fonts.regular, color: MUTED_COLOR,
+  });
+  page.drawText("Ya reflejado en el saldo; no se suma al pendiente.", {
+    x: MARGIN, y: PAGE_HEIGHT - 151, size: 8, font: fonts.regular, color: MUTED_COLOR,
+  });
+  writer.y = PAGE_HEIGHT - 169;
 }
 
 function drawRightAlignedText(
@@ -282,6 +240,15 @@ function drawTableHeader(writer: Writer) {
   drawRightAlignedText(
     writer.page,
     PENDING_COMMISSIONS_COLUMNS[2].toUpperCase(),
+    AMOUNT_X - 8,
+    baseline,
+    writer.fonts.bold,
+    8,
+    MUTED_COLOR,
+  );
+  drawRightAlignedText(
+    writer.page,
+    PENDING_COMMISSIONS_COLUMNS[3].toUpperCase(),
     AMOUNT_RIGHT - 8,
     baseline,
     writer.fonts.bold,
@@ -351,11 +318,20 @@ function drawDriverRow(
   });
   drawRightAlignedText(
     writer.page,
+    formatPendingEuro(driver.subscription),
+    AMOUNT_X - 8,
+    writer.y - layout.height / 2 - 3.5,
+    writer.fonts.regular,
+    writer.moneySize,
+    MUTED_COLOR,
+  );
+  drawRightAlignedText(
+    writer.page,
     formatPendingEuro(driver.balance),
     AMOUNT_RIGHT - 8,
     writer.y - layout.height / 2 - 3.5,
     writer.fonts.bold,
-    10,
+    writer.moneySize,
   );
   writer.page.drawLine({
     start: { x: MARGIN, y: bottom },
@@ -398,7 +374,7 @@ function drawTotal(writer: Writer, totalDue: string) {
     AMOUNT_RIGHT - 8,
     baseline,
     writer.fonts.bold,
-    12,
+    Math.min(12, (AMOUNT_RIGHT - AMOUNT_X - 16) / writer.fonts.bold.widthOfTextAtSize(formatPendingEuro(totalDue), 1)),
   );
   writer.y = bottom;
 }
@@ -469,6 +445,13 @@ export async function buildDueCommissionsPdf(input: DueCommissionsPdfInput) {
     page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]),
     fonts,
     generatedDate: input.generatedDate,
+    subscriptionMonth: input.subscriptionMonth,
+    // One size for every money cell, fitted to the largest complete value.
+    // Financial values stay on one line even at the Decimal(10,2) limit.
+    moneySize: Math.min(10, ...input.drivers.flatMap((driver) => [
+      (SUBSCRIPTION_COLUMN_WIDTH - 16) / fonts.regular.widthOfTextAtSize(formatPendingEuro(driver.subscription), 1),
+      (AMOUNT_RIGHT - AMOUNT_X - 16) / fonts.bold.widthOfTextAtSize(formatPendingEuro(driver.balance), 1),
+    ])),
     y: 0,
   };
   drawDocumentHeader(writer, false);

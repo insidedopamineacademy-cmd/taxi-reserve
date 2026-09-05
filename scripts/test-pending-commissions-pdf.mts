@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Prisma } from "@prisma/client";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFArray, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 import {
   PENDING_COMMISSIONS_COLUMNS,
   buildDueCommissionsPdf,
@@ -26,8 +26,46 @@ function balanceLine(
     name,
     licenseNumber,
     summary: { balance: new Prisma.Decimal(balance) },
+    currentMonthSubscription: null,
   };
 }
+
+async function pageTexts(bytes: Uint8Array) {
+  const pdf = await PDFDocument.load(bytes);
+  return pdf.getPages().map((page) => {
+    const contents = page.node.Contents();
+    const streams = contents instanceof PDFArray
+      ? contents.asArray().map((ref) => pdf.context.lookup(ref))
+      : [contents];
+    return streams.flatMap((stream) => {
+      assert.ok(stream instanceof PDFRawStream);
+      const operators = Buffer.from(decodePDFRawStream(stream).decode()).toString("latin1");
+      return [...operators.matchAll(/<([0-9A-F]+)>\s*Tj/g)].map((match) =>
+        Buffer.from(match[1], "hex").toString("latin1").replace(/\x80/g, "€"));
+    });
+  });
+}
+
+test("rendered PDF text keeps the subscription separate, repeats headers, and totals only on the final page", async () => {
+  const lines = Array.from({ length: 40 }, (_, index) => ({
+    ...balanceLine(String(index), `Driver ${index}`, index === 1 ? "VTC-LONG-LICENCE-IDENTIFIER-048" : `VTC-${index}`, index === 0 ? "99999999.99" : "245.00"),
+    currentMonthSubscription: index === 0 ? new Prisma.Decimal("20.00") : null,
+  }));
+  const report = prepareDueCommissionsReport(lines);
+  const pages = await pageTexts(await buildDueCommissionsPdf({
+    ...report, generatedDate: "05 Sep 2026", subscriptionMonth: "septiembre de 2026",
+  }));
+  assert.equal(pages.length, 2);
+  for (const [index, text] of pages.entries()) {
+    for (const column of PENDING_COMMISSIONS_COLUMNS) assert.ok(text.includes(column.toUpperCase()));
+    assert.equal(text.includes("Total pendiente"), index === pages.length - 1);
+  }
+  assert.ok(pages[0].includes("€ 20.00"));
+  assert.ok(pages[0].includes("€ 0.00"));
+  assert.ok(pages[0].includes("€ 99,999,999.99"), "the full large balance is one unwrapped text operation");
+  assert.ok(pages.flat().includes(formatPendingEuro(report.totalDue)));
+  assert.ok(pages[0].some((text) => text.includes("septiembre de 2026")));
+});
 
 test("only positive authoritative balances appear and total with Decimal arithmetic", () => {
   const source = [
@@ -75,10 +113,11 @@ test("licence values are preserved and a missing value gets a safe fallback", ()
   assert.equal(report.drivers.find((driver) => driver.name === "Blank")?.licenseNumber, "-");
 });
 
-test("the report contract contains exactly the three requested columns", () => {
+test("the report contract contains exactly the four requested columns", () => {
   assert.deepEqual(PENDING_COMMISSIONS_COLUMNS, [
     "Conductor",
     "Licencia",
+    "Suscripción",
     "Pendiente",
   ]);
   const source = readFileSync(
@@ -111,8 +150,9 @@ test("PDF generation rejects a total that does not reconcile with displayed rows
   await assert.rejects(
     () => buildDueCommissionsPdf({
       generatedDate: "18 Aug 2026",
+      subscriptionMonth: "agosto de 2026",
       totalDue: "100.00",
-      drivers: [{ name: "Driver", licenseNumber: "100", balance: "99.99" }],
+      drivers: [{ id: "driver", name: "Driver", licenseNumber: "100", balance: "99.99", subscription: "20.00" }],
     }),
     /does not reconcile/,
   );
@@ -132,6 +172,7 @@ test("a long report paginates and an empty report remains a valid single-page PD
   const report = prepareDueCommissionsReport(lines);
   const bytes = await buildDueCommissionsPdf({
     generatedDate: "18 Aug 2026",
+      subscriptionMonth: "agosto de 2026",
     ...report,
   });
   const pdf = await PDFDocument.load(bytes);
@@ -139,6 +180,7 @@ test("a long report paginates and an empty report remains a valid single-page PD
 
   const emptyBytes = await buildDueCommissionsPdf({
     generatedDate: "18 Aug 2026",
+      subscriptionMonth: "agosto de 2026",
     totalDue: "0.00",
     drivers: [],
   });
@@ -185,6 +227,6 @@ test("the protected endpoint keeps authentication, authorization, authoritative 
   assert.match(route, /status: 401/);
   assert.match(route, /!access\.authorized/);
   assert.match(route, /status: 403/);
-  assert.match(route, /getDriverBalanceLines\(\)/);
-  assert.match(route, /formatMadridDateDisplay\(new Date\(\)\)/);
+  assert.match(route, /getDriverBalanceLines\(now\)/);
+  assert.match(route, /formatMadridDateDisplay\(now\)/);
 });

@@ -67,7 +67,7 @@ export type DriverFinancePosition = {
  * not make another driver owe less. `netPosition` = pending − credits.
  */
 export function calculateDriverFinancePosition(
-  summaries: Iterable<DriverFinancialSummary>,
+  summaries: Iterable<Pick<DriverFinancialSummary, "balance">>,
 ): DriverFinancePosition {
   let totalCommissionDue = new Prisma.Decimal(0);
   let driverCredits = new Prisma.Decimal(0);

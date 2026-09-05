@@ -13,7 +13,9 @@ export function getMadridPaymentPeriods(now = new Date()) {
   return { weekStart, weekEnd, monthStart, monthEnd };
 }
 
-export async function getDriverBalanceLines() {
+export async function getDriverBalanceLines(now = new Date()) {
+  // chargeMonth is a civil DATE, normalized to day 1 in the Madrid month.
+  const { monthStart } = getMadridFinancialPeriods(now);
   const drivers = await prisma.driver.findMany({
     orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
     select: {
@@ -21,15 +23,22 @@ export async function getDriverBalanceLines() {
       name: true,
       licenseNumber: true,
       status: true,
+      vehicleType: true,
+      subscriptionExempt: true,
+      subscriptionCharges: {
+        where: { chargeMonth: monthStart },
+        select: { amount: true },
+      },
     },
   });
   const summaries = await getDriverFinancialSummaries(
     drivers.map((driver) => driver.id),
   );
 
-  return drivers.map((driver) => ({
+  return drivers.map(({ subscriptionCharges, ...driver }) => ({
     ...driver,
     summary: summaries.get(driver.id)!,
+    currentMonthSubscription: subscriptionCharges[0]?.amount ?? null,
   }));
 }
 
