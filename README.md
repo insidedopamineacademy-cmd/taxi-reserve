@@ -61,6 +61,17 @@ APIs and server actions also enforce location verification, which expires after
 fresh position; foreground checks detect session revocation within 60 seconds or
 on the next API request. Denied/blocked access requires browser/device settings;
 unsupported browsers and insecure connections remain blocked with an explanation.
+The Permissions API is advisory because WebKit can report a stale or incomplete
+state; Allow location and Try again always make a new Geolocation request. A
+current high-accuracy request uses an 18-second bound and retries once at normal
+accuracy only after timeout or temporary unavailability.
+
+The location bootstrap endpoint requires a dedicated non-safelisted request marker.
+It still rejects a foreign Origin and cross-site Fetch Metadata. If a Home Screen
+WebKit request omits Origin, the marker provides the CSRF proof because another
+origin cannot add it without a CORS preflight, which this endpoint does not permit.
+This compatibility path does not change authentication, session binding, coordinate
+validation or the location gate.
 
 ADMIN users can open `/admin/sessions` from Admin or their account menu, search
 accounts, inspect active/recent sessions, and confirm individual or counted bulk
@@ -80,12 +91,13 @@ resume and last-seen checks do not create login events.
 `GET /api/admin/sessions/cleanup` runs daily at 04:10 UTC with `CRON_SECRET`.
 
 See [SESSION_LOCATION_SECURITY_REPORT.md](SESSION_LOCATION_SECURITY_REPORT.md)
-for the audit, browser evidence, limits and deployment sequence. Apply additive
-migration `20260906090000_device_sessions_location` with `prisma migrate deploy`
-in the reviewed deployment process before enabling this build. This change has
-only been migrated and tested against disposable local PostgreSQL, not production.
+for the audit, browser evidence, limits and deployment sequence. The incident
+operator reports that additive migration `20260906090000_device_sessions_location`
+is already applied in production. The iOS compatibility fix adds no schema or
+migration and has not been deployed from this checkout.
 
-Security regression commands: `npm run test:session-security` and
+Regression commands: `npm test` (the full non-database suite),
+`npm run test:session-security` for the focused session/location unit suite, and
 `SESSION_TEST_DATABASE_URL=<disposable-local-test-database> npm run test:device-sessions`.
 The database script rejects non-local/non-test database URLs. Optional repeatable
 browser QA uses `npm run test:session-browser` with `SESSION_TEST_DATABASE_URL`,
@@ -146,7 +158,7 @@ The development server uses the standard Next.js port unless one is supplied. `n
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string used by Prisma |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production secret for JWT/session signing |
-| `NEXTAUTH_URL` | Required canonical HTTPS production origin for authentication and security-action Origin checks |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for authentication, exact-origin actions, and validation when location requests include Origin |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for replies and SMTP health checks |
 | `EMAIL_INBOX_ALLOWED_USERS` | Comma-separated email allowlist; authentication or ADMIN status alone does not grant inbox access |
@@ -186,7 +198,7 @@ No AI write, reservation/driver/finance mutation, unrestricted Prisma/SQL access
 
 For local visual QA only, set both flags to `true` while running the development server and visit `/assistant-preview`. This route presents clearly labelled static fixtures and returns 404 in production. It must never be used as a source of operational truth.
 
-Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve has no manifest or service worker. iPhone Add to Home Screen entry and resume still require physical-device location/permission checks; no standalone support is inferred from browser emulation.
+Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve has no manifest or service worker. Current iOS can still launch a site added to the Home Screen as a web app by default, so that execution context is detected for diagnostics and tested without granting it any security exception. Physical iPhone location prompts, OS permission recovery and lifecycle suspension still require hardware verification.
 
 Production rollout, read-only smoke tests, deterministic answer evaluation, monitoring, and rollback are documented in `ASSISTANT_RELEASE_RUNBOOK.md`.
 

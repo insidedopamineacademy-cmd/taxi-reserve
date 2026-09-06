@@ -74,6 +74,15 @@ src/middleware.ts           Page-level NextAuth protection
 - Every token decode checks the registry for ownership, revocation and absolute 30-day expiry and reloads the canonical database role. Role changes apply immediately; password changes revoke other sessions.
 - Node.js middleware protects application pages (including `/`) and APIs, with explicit authentication/location bootstrap and independently authorized cron exceptions.
 - Normal server sessions require location verification within 30 minutes. The root client gate additionally obtains a fresh position at bootstrap and after a five-minute absence. Missing verification yields API 428 or the blocking `/location` page.
+- Location bootstrap treats the Permissions API as advisory and makes a fresh
+  Geolocation request on every user retry. It starts with high accuracy and retries
+  once at normal accuracy only for timeout/unavailable errors. Standalone detection
+  affects diagnostics and guidance only.
+- Location POST/DELETE require a non-safelisted Taxi Reserve marker. Exact foreign
+  origins and cross-site Fetch Metadata fail closed; a missing Origin is accepted
+  only with that marker to support iOS Home Screen WebKit. Cross-origin JavaScript
+  cannot add the marker without a CORS preflight, and the route sends no permissive
+  CORS response.
 - `/admin`, `/drivers`, `/commissions`, `/payments` and their ADMIN API paths require the canonical `ADMIN` role in middleware.
 - Driver/finance pages and APIs repeat authorization through server session checks. Middleware is not the sole security boundary.
 
@@ -474,7 +483,7 @@ Never commit real values. Configure production values in the deployment platform
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production session/JWT secret |
-| `NEXTAUTH_URL` | Required canonical HTTPS production origin for auth and security-action Origin checks |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for auth, exact-origin actions, and validation when location requests include Origin |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for email replies/health |
 | `EMAIL_INBOX_ALLOWED_USERS` | Required comma-separated inbox allowlist |
@@ -571,6 +580,14 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 - Permanent reservation deletion is irreversible and can sever reservation route context from preserved linked commissions.
 - Date/time behavior depends on browser-local conversion for reservations; timezone changes need dedicated regression testing.
 - A strict Content Security Policy is not yet enabled.
+- The iOS Home Screen compatibility path is covered by Chromium browser emulation
+  and direct HTTP boundary tests. The available Playwright WebKit runtime launches
+  but stalls before completing a page, and no physical iPhone was attached, so the
+  native prompt, per-app settings entry and real suspend/resume behavior remain a
+  manual release check. Development diagnostics expose only secure-context,
+  visibility, standalone flags, protocol, coarse browser/platform class and
+  sanitized Geolocation error code/message; they never include coordinates,
+  cookies, tokens, session IDs or raw user agents.
 
 ## QA checklist
 

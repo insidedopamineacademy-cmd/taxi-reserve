@@ -1,5 +1,97 @@
 # Device sessions and mandatory location — implementation record
 
+## 2026-09-06 iOS Home Screen production incident
+
+### Root cause and observed failure
+
+The reported text “Location access could not be checked. Try again.” existed only
+in the rejection path of the preliminary `DELETE /api/security/location` call.
+That request ran before the secure-context check, Permissions API query or
+`navigator.geolocation.getCurrentPosition`. The endpoint required an exact
+`Origin` header as its sole CSRF proof. An iOS Home Screen WebKit request that
+omitted Origin was therefore rejected and every Retry repeated the same
+pre-geolocation failure.
+
+The exact browser Geolocation error in the reported failure was **none**:
+`getCurrentPosition` was never called. The exact local reproduction is HTTP 403
+`INVALID_LOCATION_REQUEST` after intentionally removing the new request marker,
+with a verified geolocation call count of zero. The original production build did
+not retain response status/code diagnostics, so its on-device HTTP status cannot
+be recovered after the fact; the source path and repeated symptom identify the
+failed operation, while the missing/opaque iOS Origin behavior remains the
+request-header explanation to confirm with Web Inspector on hardware.
+
+Server coordinate parsing and persistence did not contribute to the reported loop
+because no coordinates reached the server. Automated coverage separately proves
+that a browser-success/server-save failure now shows “Location could not be saved”
+instead of a browser-permission error.
+
+### Compatibility and security fix
+
+Location POST/DELETE now require `X-Taxi-Location-Request: location-v1`, a
+non-safelisted application marker. A present Origin must still exactly match the
+canonical application origin, and present Fetch Metadata must be `same-origin`
+or `none`. A request with a foreign Origin, cross-site Fetch Metadata, or no
+marker fails with 403. A cross-origin page cannot add the custom header without a
+CORS preflight, and the endpoint exposes no permissive CORS policy. This retains
+CSRF protection while allowing a same-origin Home Screen request with no Origin.
+Authentication, registered-session ownership, freshness and coordinate validation
+remain unchanged.
+
+Permissions API results are advisory. Initial `granted` may start verification
+automatically; other/unsupported/thrown results wait for a user gesture. Every
+Allow location or Try again action calls Geolocation directly, even if a cached
+`PermissionStatus` says denied. WebKit itself documents that its geolocation
+permission query may report `prompt` until Geolocation has been used since page
+load ([WebKit change 295237](https://results.webkit.org/commit?id=295237%40main&repository_id=webkit)).
+The actual Geolocation success/error callback is authoritative.
+
+Each attempt requests a current value with `maximumAge: 0`, high accuracy and an
+18-second timeout. Only `POSITION_UNAVAILABLE` or `TIMEOUT` triggers one
+18-second normal-accuracy fallback; `PERMISSION_DENIED` does not. Each Retry
+constructs a new request sequence and clears the transient UI state. The success
+path now chooses either bootstrap route replacement or an in-place refresh, fixing
+a race that could navigate to the default Reservations page.
+
+### Diagnostics and error states
+
+Development builds record a bounded on-screen/console diagnostic containing:
+Geolocation availability, secure-context status, visibility, both standalone
+signals, protocol, coarse browser/platform class, permission-query outcome,
+server status/safe error code and sanitized Geolocation `code`/`message`.
+Codes map to `PERMISSION_DENIED` (1), `POSITION_UNAVAILABLE` (2), and
+`TIMEOUT` (3). Production builds do not expose these diagnostics. Neither path
+logs coordinates, raw user agent, session ID, cookies, tokens, passwords or secrets.
+
+Browser permission failures, insecure/unsupported contexts, session preparation
+failures and coordinate-save failures have separate concise UI states. Permission
+guidance follows Apple's documented path under Settings → Privacy & Security →
+Location Services and the app entry that requested access
+([Apple Location Services guidance](https://support.apple.com/en-ie/102647)).
+The exact Home Screen entry must still be recorded during physical release QA.
+
+### iOS standalone findings and test limit
+
+Safari 26 opens sites added to the Home Screen as web apps by default unless the
+user turns off “Open as Web App”; a manifest or service worker is not required for
+that launch mode ([WebKit Safari 26 notes](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/)).
+Standalone detection therefore applies to Taxi Reserve, but it changes diagnostics
+and guidance only. WebKit documents that a foreground Home Screen web app can be
+inspected from Safari's Develop menu
+([Apple inspection guide](https://developer.apple.com/documentation/safari-developer-tools/inspecting-ios)).
+
+The browser suite passed Chromium emulations for normal iOS Safari UA, normal iOS
+Chrome UA and `navigator.standalone`/standalone-display mode. All stayed blocked
+before location, persisted a valid latest position, cleared the gate afterward and
+kept one LOGIN event. The installed Playwright WebKit runtime launched but stalled
+before completing a page; it was stopped after bounded waits. No physical iPhone
+was available, so no native Safari or Home Screen permission result is claimed.
+
+The incident operator reports that migration
+`20260906090000_device_sessions_location` is already applied in production.
+This fix changes no Prisma schema or migration. It has not been committed, pushed
+or deployed from this checkout.
+
 ## Audit before implementation
 
 The repository was clean at the start of this task. Authentication is NextAuth
@@ -156,8 +248,10 @@ application logs. Existing HttpOnly, SameSite=Lax and HTTPS Secure cookie behavi
 is retained. The server expiry is 30 days from login even if the JWT cookie rolls.
 Legacy/malformed/expired/revoked/foreign-owner tokens fail closed. Login locks the
 User row and rechecks the verified password hash, preventing a concurrent password
-change from admitting the old password. Location/admin/password mutations validate
-Origin; new JSON endpoints enforce bounded bodies and strict permitted fields.
+change from admitting the old password. Admin/password mutations require exact
+Origin. Location mutations require the non-safelisted application marker and
+strictly validate Origin/Fetch Metadata when present. New JSON endpoints enforce
+bounded bodies and strict permitted fields.
 
 ### 7. Device information captured
 
@@ -179,9 +273,10 @@ No external or paid geocoder was introduced. See [Vercel request headers](https:
 ### 9. Location flow
 
 An authenticated root boundary begins in a blocking state with normal navigation
-and assistant unmounted. It clears previous verification, checks secure context
-and Geolocation support, queries permission if supported, and requests one fresh
-position. The server derives session identity from the cookie, validates and
+and assistant unmounted. It clears previous verification with the location request
+marker, checks secure context and Geolocation support, reads permission only as an
+advisory hint, and requests one fresh position. The server derives session identity
+from the cookie, validates and
 rounds the input, writes the current session only, and timestamps verification.
 Only then does the normal application mount. Server failures remain blocked with
 Retry and Sign out. Permission withdrawal also clears server verification,
@@ -194,10 +289,10 @@ including withdrawal racing with a successful location save.
 | Granted | Obtain one fresh position automatically; enter only after server acceptance. |
 | Prompt | Explain purpose and wait for the Allow location button/user gesture. |
 | Denied request | Remain blocked, explain permission is required and offer retry/settings guidance. |
-| Browser reports denied/blocked | Show settings instructions; repeated Retry does not call geolocation or force another native prompt. |
+| Browser reports denied/blocked | Show settings instructions; a user Retry makes a fresh authoritative Geolocation request. |
 | Permissions API absent/throws | Treat status as unknown; use the same user-initiated Geolocation request. |
-| Timeout | Explain failure, keep the gate, allow deliberate retry. |
-| Unavailable/OS services off | Explain Location Services/connection recovery, keep the gate. |
+| Timeout | Try normal accuracy once, then show the timeout state, keep the gate and allow a fresh retry. |
+| Unavailable/OS services off | Try normal accuracy once, then explain GPS/network recovery and keep the gate. |
 | Geolocation unsupported | Explain browser support requirement; never expose normal UI. |
 | Insecure context | Require HTTPS; never attempt to bypass browser restrictions. |
 
@@ -211,8 +306,9 @@ and [MDN Permissions Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/R
 
 Fresh at each authenticated document bootstrap; refresh after at least five minutes
 backgrounded, on back/forward-cache restoration, and when the server's 30-minute
-verification expires. Requests use maximumAge 0, a 12-second timeout and ordinary
-accuracy mode. Accepted capture times must be within five minutes past/one minute
+verification expires. Requests use maximumAge 0, high accuracy and an 18-second
+timeout. Timeout/unavailable gets one normal-accuracy attempt with the same bounds.
+Accepted capture times must be within five minutes past/one minute
 future; bounds reject impossible coordinates, non-finite numbers and excessive
 accuracy values. No watchPosition, movement stream or background polling.
 lastSeen writes are conditionally throttled to at most once per five minutes.
@@ -307,7 +403,23 @@ releasing the new application build.
 
 ### 20. Tests and results
 
-- 262 tests across 21 non-database suites passed, covering session policy, dates,
+The iOS incident regression pass added and passed 12 focused unit tests through
+`npm run test:session-security`: Permissions API absent/throw/unexpected behavior, exact error mapping,
+fresh retry calls, high-to-normal fallback, standalone diagnostics, safe diagnostic
+sanitization and location CSRF-marker rules. The disposable PostgreSQL session
+suite passed all LOGIN/session/location/revocation/retention assertions.
+
+The repeatable Chrome browser suite passed with no uncaught page errors. It covered
+the original 403 before Geolocation, marker omission/foreign Origin rejection,
+successful missing-Origin requests, normal iOS Safari and Chrome UA paths, Home
+Screen standalone signals, permission denied, timeout, unavailable, retry success,
+refresh, five-minute resume, cached-page restoration, persistence failure,
+permission/save race, logout and genuine relogin. Each failure/retry/resume retained
+exactly one LOGIN for its session; relogin created one new independent LOGIN.
+Playwright WebKit launched but stalled before page completion and was terminated
+after bounded waits, so it is an environment limitation rather than a pass.
+
+- 267 tests across 21 non-database suites passed, covering session policy, dates,
   reservation/assistant authorization and actions, driver finance, imports,
   subscription input, alphabetical order, balance/pending reports and PDF sharing.
 - Device-session PostgreSQL integration passed: independent login/ownership,
@@ -341,26 +453,32 @@ error/permission states use explicit API mocks, not claims about real OS dialogs
 Keyboard Cancel/Escape/focus behavior was verified. Physical iPhone Safari,
 Add to Home Screen and Android OS permission/Location Services remain unverified.
 The downloaded macOS-14 WebKit build is frozen and could not complete a page probe.
+The incident regression additionally captured new preparation/save and exact
+permission error screens at 360, 390, 430 and 1280 CSS pixels with no horizontal
+overflow.
 
 ### 22. Documentation updated
 
 README, CHANGELOG, PROJECT_AUDIT, ASSISTANT_RELEASE_RUNBOOK,
 ASSISTANT_MOBILE_QA, this report and blank auth/database fields in `.env.example`.
 The old assertion that all home-screen testing is inapplicable has been corrected:
-there is no manifest/service worker, but home-screen entry/permissions/resume still
-need physical-device verification. Repeatable browser-test configuration is in README.
+there is no manifest/service worker, but iOS 26 can still open a Home Screen site
+as a web app and its permission/resume flow needs physical-device verification.
+Repeatable browser-test configuration is in README.
 
 ### 23. Deployment/migration steps required (not executed)
 
+The incident operator confirms the DeviceSession migration is already applied in
+production. This fix adds no migration, so do not run another Prisma migration for
+it.
+
 1. Review this diff and validate physical Safari/Home Screen/Android permission
    flows in a non-production environment. Notify users of location and one-time login.
-2. Confirm backup/recovery readiness and the existing migration baseline. Configure
+2. Confirm backup/recovery readiness and the existing migration state. Configure
    DATABASE_URL, stable NEXTAUTH_SECRET, canonical HTTPS NEXTAUTH_URL and CRON_SECRET.
-3. In the separately authorized release process, run the reviewed additive migration
-   with `prisma migrate deploy` against the intended database, then regenerate Prisma
-   and deploy the reviewed application build. Do not use reset, schema push or
-   migration development commands against production. The repository's npm migration
-   wrapper reads `.env.local`; verify its target explicitly before using it.
+3. In a separately authorized release process, deploy the reviewed application
+   build without a migration step. Do not use reset, schema push or migration
+   development commands against production.
 4. Confirm Permissions-Policy permits self geolocation and Vercel proxy metadata
    behaves as expected. Schedule session cleanup at 04:10 UTC; retain the existing
    monthly subscription cron. Monitor cleanup failure, session-check availability
@@ -385,14 +503,16 @@ pages check on resume. Offline operation stays blocked.
 Vercel header handling is unit-verified, not exercised on production. Other reverse
 proxies are intentionally unconfigured. No physical iOS/Safari/Home Screen or
 Android hardware testing was available; WebKit runtime failure limits Safari
-coverage to explicit Permissions API fallback tests. Existing empty-database
+coverage to explicit permission fallbacks, WebKit-informed design and iOS
+UA/standalone browser emulation. Existing empty-database
 migration-history repair remains separate. This work does not add fingerprinting,
 MFA, geolocation attestation, a PWA service worker or a paid geocoding service.
 
 ### 25. git diff --stat
 
-Final tracked-file statistics and the new-file inventory follow below. New files
-are still untracked because no commit or staging action was requested.
+The statistics below preserve the original session/location implementation record.
+They do not describe the later iOS incident fix. Use the current `git diff --stat`
+for the reviewable incident patch; no commit or staging action was requested.
 
 ```text
 .env.example                              |  3 ++

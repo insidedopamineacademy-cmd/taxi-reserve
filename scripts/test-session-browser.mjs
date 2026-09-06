@@ -23,6 +23,7 @@ const adminEmail = 'admin@security.qa.example.test';
 const userEmail = 'operator@security.qa.example.test';
 const password = 'TaxiSessionQA2026!';
 const headers = { origin: base };
+const locationHeaders = { ...headers, 'x-taxi-location-request': 'location-v1' };
 const geo = { latitude: 41.3879, longitude: 2.1699, accuracy: 34 };
 const widths = [360, 390, 430, 1280];
 const contexts = [];
@@ -49,23 +50,32 @@ async function assertOneLogin(sessionId) {
  assert.equal(events.length, 1, 'refresh/resume/location/logout must not duplicate or delete LOGIN');
  return events[0];
 }
-async function location(context, extra = {}) { return context.request.post(base + '/api/security/location', { headers, data: { ...geo, capturedAt: new Date().toISOString(), ...extra } }); }
+async function location(context, extra = {}) { return context.request.post(base + '/api/security/location', { headers: locationHeaders, data: { ...geo, capturedAt: new Date().toISOString(), ...extra } }); }
 async function context(browser, options = {}) { const c = await browser.newContext(options); c.setDefaultTimeout(15000); c.setDefaultNavigationTimeout(20000); contexts.push(c); return c; }
 async function page(c) { const p = await c.newPage(); p.on('pageerror', e => pageErrors.push(e.message)); return p; }
-function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUnsupported = false, insecure = false } = {}) {
- const state = { permission, mode, calls: 0 };
+function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUnsupported = false, permissionsAbsent = false, insecure = false, standalone = false } = {}) {
+ const state = { permission, mode, calls: 0, fallbackExpected: false };
  const status = { get state() { return state.permission; }, onchange: null };
  window.__geo = state;
  state.setPermission = value => { state.permission = value; status.onchange?.(); };
- Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: async () => { if (permissionsUnsupported) throw new Error('Unsupported query'); return status; } } });
+ state.setMode = value => { state.mode = value; };
+ Object.defineProperty(navigator, 'standalone', { configurable: true, value: standalone });
+ const originalMatchMedia = window.matchMedia.bind(window);
+ window.matchMedia = query => query === '(display-mode: standalone)' ? { matches: standalone, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } } : originalMatchMedia(query);
+ Object.defineProperty(navigator, 'permissions', { configurable: true, value: permissionsAbsent ? undefined : { query: async () => { if (permissionsUnsupported) throw new TypeError('Unsupported query'); return status; } } });
  Object.defineProperty(navigator, 'geolocation', { configurable: true, value: mode === 'unsupported' ? undefined : {
   getCurrentPosition(success, failure, options) {
    state.calls++;
-   if (options.maximumAge !== 0 || options.enableHighAccuracy || options.timeout !== 12000) throw new Error('Unexpected geolocation options');
+   if (options.maximumAge !== 0 || options.timeout !== 18000) throw new Error('Unexpected geolocation options');
+   if (options.enableHighAccuracy) state.fallbackExpected = true;
+   else {
+    if (!state.fallbackExpected) throw new Error('Normal accuracy requires a preceding high-accuracy attempt');
+    state.fallbackExpected = false;
+   }
    setTimeout(() => {
-    if (state.mode === 'denied') return failure({ code: 1 });
-    if (state.mode === 'unavailable') return failure({ code: 2 });
-    if (state.mode === 'timeout') return failure({ code: 3 });
+    if (state.mode === 'denied') return failure({ code: 1, message: 'Permission denied by test browser' });
+    if (state.mode === 'unavailable') return failure({ code: 2, message: 'Position unavailable in test browser' });
+    if (state.mode === 'timeout') return failure({ code: 3, message: 'Position request timed out in test browser' });
     state.permission = 'granted';
     success({ coords: { latitude: 41.3879123, longitude: 2.1699123, accuracy: 34 }, timestamp: Date.now() });
    }, 10);
@@ -84,7 +94,7 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
  let wk;
  try {
   const anon = await context(browser);
-  assert.equal((await anon.request.post(base + '/api/security/location', { headers, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 401);
+  assert.equal((await anon.request.post(base + '/api/security/location', { headers: locationHeaders, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 401);
   assert.equal((await anon.request.get(base + '/api/admin/sessions')).status(), 401);
   const loginPage = await page(anon);
   await loginPage.goto(base + '/login');
@@ -123,13 +133,16 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
   assert.equal((await location(b, { sessionId: aSession.id })).status(), 400);
   assert.equal((await location(b, { latitude: 91 })).status(), 400);
   assert.equal((await location(b, { accuracy: 100001 })).status(), 400);
-  assert.equal((await b.request.post(base + '/api/security/location', { headers: { origin: 'https://foreign.example' }, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 403);
+  assert.equal((await b.request.post(base + '/api/security/location', { headers, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 403, 'same-origin request without the location marker');
+  assert.equal((await b.request.post(base + '/api/security/location', { headers: { origin: 'https://foreign.example', 'x-taxi-location-request': 'location-v1' }, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 403);
+  assert.equal((await b.request.post(base + '/api/security/location', { headers: { 'x-taxi-location-request': 'location-v1' }, data: { ...geo, capturedAt: new Date().toISOString() } })).status(), 200, 'iOS-compatible request without Origin');
+  assert.equal((await b.request.delete(base + '/api/security/location', { headers: { 'x-taxi-location-request': 'location-v1' } })).status(), 200);
   assert.equal((await location(b)).status(), 200);
   assert.equal((await b.request.get(base + '/api/admin/sessions')).status(), 200);
   const bPage = await page(b);
   await bPage.goto(base + '/reservations');
   await bPage.getByRole('heading', { name: 'Reservations', exact: true }).waitFor();
-  console.log('PASS: independent same-account sessions, direct-route/API location enforcement, validation and origin checks.');
+  console.log('PASS: independent same-account sessions, direct-route/API location enforcement, validation and CSRF checks including omitted Origin.');
 
   const u = await context(browser, { permissions: ['geolocation'], geolocation: geo });
   const uSession = await apiLogin(u, userEmail);
@@ -176,18 +189,40 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
   await auditPage.close();
   console.log('PASS: keyboard confirmation/cancel, individual revoke, old-cookie rejection, immediate client login redirect and privacy scrubbing.');
 
+  const rootCause = await context(browser);
+  const rootCauseSession = await apiLogin(rootCause);
+  await rootCause.addInitScript(installGeoMock, { permission: 'granted' });
+  const rootCausePage = await page(rootCause);
+  await rootCausePage.route('**/api/security/location', route => {
+   if (route.request().method() !== 'DELETE') return route.continue();
+   const requestHeaders = { ...route.request().headers() };
+   delete requestHeaders['x-taxi-location-request'];
+   return route.continue({ headers: requestHeaders });
+  });
+  const rejectedPreparation = rootCausePage.waitForResponse(r => r.url().endsWith('/api/security/location') && r.request().method() === 'DELETE');
+  await rootCausePage.goto(base + '/drivers');
+  assert.equal((await rejectedPreparation).status(), 403);
+  await rootCausePage.getByRole('heading', { name: 'Location security check failed', exact: true }).waitFor();
+  assert.equal(await rootCausePage.evaluate(() => window.__geo.calls), 0, 'the rejected preparation request prevents geolocation');
+  assert.match(await rootCausePage.locator('details').textContent(), /INVALID_LOCATION_REQUEST/);
+  await assertOneLogin(rootCauseSession.id);
+  await rootCause.close();
+  console.log('PASS: the production failure path reproduces as a 403 preparation rejection before geolocation.');
+
   for (const [label, config, heading, needsClick] of [
    ['prompt', { permission: 'prompt' }, 'Location access required', false],
    ['denied', { permission: 'prompt', mode: 'denied' }, 'Location access is required', true],
    ['blocked', { permission: 'denied' }, 'Location is blocked', false],
-   ['timeout', { permission: 'granted', mode: 'timeout' }, 'Location request timed out', false],
-   ['unavailable', { permission: 'granted', mode: 'unavailable' }, 'Location is unavailable', false],
-   ['unsupported', { mode: 'unsupported' }, 'Location is not supported', false],
-   ['insecure', { insecure: true }, 'A secure connection is required', false],
-   ['safari-fallback', { permissionsUnsupported: true }, 'Location access required', false],
+   ['timeout', { permission: 'granted', mode: 'timeout' }, 'Location verification took too long', false],
+   ['unavailable', { permission: 'granted', mode: 'unavailable' }, 'Location is temporarily unavailable', false],
+   ['unsupported', { mode: 'unsupported' }, 'Location verification is unavailable', false],
+   ['insecure', { insecure: true }, 'Location verification is unavailable', false],
+   ['permissions-throws', { permissionsUnsupported: true }, 'Location access required', false],
+   ['permissions-absent', { permissionsAbsent: true }, 'Location access required', false],
   ]) {
    const c = await context(browser);
-   await apiLogin(c);
+   const testedSession = await apiLogin(c);
+   const originalLogin = await assertOneLogin(testedSession.id);
    await c.addInitScript(installGeoMock, config);
    const p = await page(c);
    await p.goto(base + '/drivers');
@@ -196,22 +231,43 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
    assert.equal(await p.locator('nav').count(), 0, 'normal navigation must not be behind the gate');
    assert.equal((await c.request.get(base + '/api/drivers')).status(), 428);
    for (const width of widths) await screenshot(p, 'location-' + label, width);
+   assert.deepEqual(await assertOneLogin(testedSession.id), originalLogin, 'a location failure must not create another LOGIN');
    if (label === 'blocked') {
     assert.equal(await p.evaluate(() => window.__geo.calls), 0);
     await p.getByRole('button', { name: 'Try again' }).click();
-    await p.getByRole('heading', { name: heading, exact: true }).waitFor();
-    assert.equal(await p.evaluate(() => window.__geo.calls), 0, 'no repeated prompt when browser reports denied');
+    await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
+    await p.waitForURL('**/drivers');
+    assert.equal(await p.evaluate(() => window.__geo.calls), 1, 'a retry reaches geolocation even when PermissionStatus was denied');
    }
-   if (label === 'prompt' || label === 'safari-fallback') {
+   if (label === 'prompt' || label.startsWith('permissions-')) {
     assert.equal(await p.evaluate(() => window.__geo.calls), 0, 'prompt waits for user gesture');
     await p.getByRole('button', { name: 'Allow location' }).click();
-    await p.waitForURL('**/drivers');
     await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
+    await p.waitForURL('**/drivers');
     assert.equal((await c.request.get(base + '/api/admin/sessions')).status(), 200);
    }
+   if (label === 'denied' || label === 'timeout' || label === 'unavailable') {
+    const expectedCode = label === 'denied' ? 'PERMISSION_DENIED' : label === 'timeout' ? 'TIMEOUT' : 'POSITION_UNAVAILABLE';
+    assert.match(await p.locator('details').textContent(), new RegExp(expectedCode));
+    let failedCalls = await p.evaluate(() => window.__geo.calls);
+    assert.equal(failedCalls, label === 'denied' ? 1 : 2, 'timeout/unavailable use one controlled fallback');
+    if (label === 'denied') {
+     await p.getByRole('button', { name: 'Try again' }).click();
+     await p.getByRole('heading', { name: heading, exact: true }).waitFor();
+     const repeatedFailureCalls = await p.evaluate(() => window.__geo.calls);
+     assert.equal(repeatedFailureCalls, failedCalls + 1, 'a failed retry must still make a fresh geolocation call');
+     assert.deepEqual(await assertOneLogin(testedSession.id), originalLogin, 'a failed retry must not create another LOGIN');
+     failedCalls = repeatedFailureCalls;
+    }
+    await p.evaluate(() => window.__geo.setMode('success'));
+    await p.getByRole('button', { name: 'Try again' }).click();
+    await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
+    await p.waitForURL('**/drivers');
+    assert.equal(await p.evaluate(callsBefore => window.__geo.calls > callsBefore, failedCalls), true, 'retry creates a fresh geolocation call');
+    assert.equal((await c.request.get(base + '/api/admin/sessions')).status(), 200, 'successful retry clears the gate');
+   }
    if (label === 'prompt') {
-   const own = await (await c.request.get(base + '/api/security/session')).json();
-    const originalLogin = await assertOneLogin(own.id);
+    const own = await (await c.request.get(base + '/api/security/session')).json();
     const withdrawn = p.waitForResponse(r => r.url().endsWith('/api/security/location') && r.request().method() === 'DELETE');
     await p.evaluate(() => window.__geo.setPermission('denied'));
     await p.getByRole('heading', { name: 'Location is blocked', exact: true }).waitFor();
@@ -234,6 +290,7 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
     assert.equal((await freshOnResume).status(), 200);
     await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
     await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await p.waitForTimeout(250);
     const freshOnRestore = p.waitForResponse(r => r.url().endsWith('/api/security/location') && r.request().method() === 'POST');
     await p.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })); window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
     assert.equal((await freshOnRestore).status(), 200);
@@ -243,8 +300,10 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
     const staleRecovery = p.waitForResponse(r => r.url().endsWith('/api/security/location') && r.request().method() === 'POST');
     await p.evaluate(() => fetch('/api/admin/sessions'));
     assert.equal((await staleRecovery).status(), 200);
-    await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
+    await p.locator('nav').waitFor();
+    assert.equal((await c.request.get(base + '/api/admin/sessions')).status(), 200, 'stale-location recovery clears the gate');
     await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await p.waitForTimeout(250);
     let race = true;
     await p.route('**/api/security/location', async route => {
      if (route.request().method() === 'POST' && race) {
@@ -259,16 +318,62 @@ function installGeoMock({ permission = 'prompt', mode = 'success', permissionsUn
     await p.waitForFunction(() => window.__geo.permission === 'denied');
     assert.equal((await c.request.get(base + '/api/admin/sessions')).status(), 428);
     assert.equal(await p.locator('nav').count(), 0);
-    assert.deepEqual(await assertOneLogin(own.id), originalLogin, 'location refresh and simulated PWA resumes leave LOGIN immutable');
+    assert.deepEqual(await assertOneLogin(own.id), originalLogin, 'location refresh and simulated app resumes leave LOGIN immutable');
     await p.getByRole('button', { name: 'Sign out', exact: true }).click();
     await p.waitForURL('**/login');
     assert.ok((await db.deviceSession.findUniqueOrThrow({ where: { id: own.id } })).revokedAt);
     assert.equal((await c.request.get(base + '/api/security/session')).status(), 401);
     assert.deepEqual(await assertOneLogin(own.id), originalLogin, 'logout retains original LOGIN history');
-    console.log('PASS: permission withdrawal/recovery, five-minute resume, cached-page restore, stale-location rejection/recovery, permission/save race and real sign-out.');
+    const relogin = await apiLogin(c);
+    assert.notEqual(relogin.id, own.id, 'a genuine login after logout creates an independent session');
+    await assertOneLogin(relogin.id);
+    assert.deepEqual(await assertOneLogin(own.id), originalLogin, 'relogin retains the previous session login event');
+    console.log('PASS: permission withdrawal/recovery, five-minute resume, cached-page restore, stale-location rejection/recovery, permission/save race, sign-out and genuine relogin.');
    }
+   assert.deepEqual(await assertOneLogin(testedSession.id), originalLogin, 'retry must leave LOGIN immutable');
    await c.close();
    console.log('PASS: location ' + label + ', all four widths.');
+  }
+
+  const saveFailure = await context(browser);
+  const saveFailureSession = await apiLogin(saveFailure);
+  await saveFailure.addInitScript(installGeoMock, { permission: 'granted' });
+  const saveFailurePage = await page(saveFailure);
+  await saveFailurePage.route('**/api/security/location', async route => {
+   if (route.request().method() === 'POST') return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'SECURITY_UNAVAILABLE' }) });
+   return route.continue();
+  });
+  await saveFailurePage.goto(base + '/drivers');
+  await saveFailurePage.getByRole('heading', { name: 'Location could not be saved', exact: true }).waitFor();
+  assert.equal((await saveFailure.request.get(base + '/api/drivers')).status(), 428);
+  assert.match(await saveFailurePage.locator('details').textContent(), /SECURITY_UNAVAILABLE/);
+  await assertOneLogin(saveFailureSession.id);
+  await saveFailure.close();
+  console.log('PASS: browser success and server persistence failure remain distinct.');
+
+  for (const [label, userAgent, standalone, expectedPlatform] of [
+   ['ios-safari-tab', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', false, 'iOS Safari'],
+   ['ios-chrome-tab', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0.0.0 Mobile/15E148 Safari/604.1', false, 'iOS Chrome'],
+   ['ios-home-screen', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', true, 'iOS Safari'],
+  ]) {
+   const c = await context(browser, { userAgent });
+   const testedSession = await apiLogin(c);
+   const login = await assertOneLogin(testedSession.id);
+   await c.addInitScript(installGeoMock, { permission: 'prompt', standalone });
+   const p = await page(c);
+   await p.goto(base + '/drivers');
+   await p.getByRole('heading', { name: 'Location access required', exact: true }).waitFor();
+   assert.equal((await c.request.get(base + '/api/drivers')).status(), 428, 'standalone detection must never bypass the location gate');
+   const diagnostic = await p.locator('details').textContent();
+   assert.match(diagnostic, new RegExp(expectedPlatform));
+   assert.match(diagnostic, new RegExp(`"navigatorStandalone": ${standalone}`));
+   await p.getByRole('button', { name: 'Allow location' }).click();
+   await p.getByRole('heading', { name: 'Drivers', exact: true }).waitFor();
+   await p.waitForURL('**/drivers');
+   assert.equal((await c.request.get(base + '/api/admin/sessions')).status(), 200);
+   assert.deepEqual(await assertOneLogin(testedSession.id), login);
+   await c.close();
+   console.log('PASS: ' + label + ' compatibility path, required location and one LOGIN.');
   }
 
   const d = await context(browser); const dSession = await apiLogin(d);

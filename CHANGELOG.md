@@ -6,12 +6,26 @@ Notable project changes are recorded here in reverse chronological order.
 
 ### Device sessions and mandatory location
 
+- Fixed the iOS Home Screen location loop caused by treating an exact `Origin`
+  header as the only CSRF proof on the preliminary location-clear request. Location
+  POST/DELETE now require a non-safelisted application marker, still reject foreign
+  origins/cross-site Fetch Metadata, and support WebKit requests that omit Origin.
+- Made Permissions API results advisory: a user Allow/Try again action always
+  performs a fresh Geolocation request. Added an 18-second high-accuracy attempt,
+  one normal-accuracy fallback for timeout/unavailable errors, distinct browser
+  and server-save states, and development-only privacy-safe diagnostics.
+- Removed a bootstrap navigation race between route replacement and refresh.
+  Added browser regressions for the original pre-geolocation 403, missing Origin,
+  normal iOS Safari/Chrome user-agent paths, standalone mode, exact geolocation
+  error classes, successful retry, refresh/resume, logout/relogin and LOGIN
+  immutability. The installed WebKit runtime still stalls before page completion,
+  so no physical Safari/Home Screen pass is claimed.
 - Added an additive `DeviceSession` registry and encrypted-cookie session IDs, immediate server revocation/expiry checks, canonical database roles, throttled activity timestamps and transactional security audits.
 - Added exactly one immutable LOGIN audit for each successful fresh authentication, with safe session/user, parsed device and trusted IP/network metadata; readable login cards remain after session logout or cleanup without storing GPS, raw user agents, tokens or credentials.
 - Added ADMIN account search, active/recent device details, current-device protection, individual logout and counted logout of other devices with stale-confirmation rejection.
 - Added a full application location gate and server enforcement, explicit browser permission/error states, fresh location on bootstrap/resume, and foreground session checks. The assistant is mounted only after the gate succeeds.
 - Added latest-location privacy limits, trusted Vercel network metadata, daily cleanup, 30-day ended-session retention and password-change revocation of other sessions. Existing stateless cookies require one-time sign-in.
-- Added security unit/database regressions and documented migration, browser/mobile QA and operational limits in `SESSION_LOCATION_SECURITY_REPORT.md`. No production migration or deployment has been performed.
+- Added security unit/database regressions and documented migration, browser/mobile QA and operational limits in `SESSION_LOCATION_SECURITY_REPORT.md`. The incident operator reports the existing DeviceSession migration is already applied in production; this fix adds no migration and was not committed, pushed or deployed.
 
 ### Documentation
 

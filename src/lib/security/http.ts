@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions, identityAuthOptions } from "@/lib/auth";
 import { SecurityError } from "./policy";
+import { isTrustedLocationRequest, LOCATION_REQUEST_HEADER } from "./locationRequestGuard";
 
 export async function requireSecuritySession(options: { location?: boolean; admin?: boolean } = {}) {
   const session = await getServerSession(options.location === false ? identityAuthOptions : authOptions);
@@ -14,6 +15,16 @@ export async function requireSecuritySession(options: { location?: boolean; admi
 export function requireSameOrigin(request: Request) {
   const expectedOrigin = new URL(process.env.NEXTAUTH_URL ?? request.url).origin;
   if (request.headers.get("origin") !== expectedOrigin) throw new SecurityError(403, "INVALID_ORIGIN", "This action must be submitted from Taxi Reserve.");
+}
+
+export function requireTrustedLocationRequest(request: Request) {
+  const expectedOrigin = new URL(process.env.NEXTAUTH_URL ?? request.url).origin;
+  if (!isTrustedLocationRequest({
+    expectedOrigin,
+    origin: request.headers.get("origin"),
+    secFetchSite: request.headers.get("sec-fetch-site"),
+    marker: request.headers.get(LOCATION_REQUEST_HEADER),
+  })) throw new SecurityError(403, "INVALID_LOCATION_REQUEST", "This location request must be submitted from Taxi Reserve.");
 }
 
 export async function readSecurityJson(request: Request, maxBytes = 4096) {

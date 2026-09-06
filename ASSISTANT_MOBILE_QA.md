@@ -4,7 +4,14 @@ This runbook covers the Phase 1B.1 mobile shell, the Phase 1C.2 read-only reserv
 
 ## PWA finding
 
-Taxi Reserve does not currently include a web app manifest, service worker, or standalone-display configuration. That historical Phase 1B.1 scope did not include standalone support. The session/location release additionally requires physical iPhone Add to Home Screen entry, permission recovery and resume checks, even without a manifest. The assistant does use `viewport-fit=cover` so safe-area insets work in ordinary mobile browsers; this does not add PWA support.
+Taxi Reserve does not currently include a web app manifest, service worker, or
+standalone-display configuration. On iOS 26, Safari opens every site added to the
+Home Screen as a web app by default unless the user disables “Open as Web App,”
+so the absence of a manifest does not make the standalone runtime inapplicable.
+The location boundary detects `navigator.standalone` and the standalone display
+media query only for diagnostics/guidance; neither can bypass authentication or
+location. Physical iPhone permission recovery and resume checks remain required.
+The assistant uses `viewport-fit=cover` so safe-area insets work in mobile contexts.
 
 ## Automated and browser-supplemental evidence
 
@@ -21,6 +28,8 @@ Taxi Reserve does not currently include a web app manifest, service worker, or s
 | Driver/finance authorization and Decimal DTOs | VERIFIED | `npm run test:assistant-driver-finance` |
 | Five-tool loop and permission-safe finance failures | VERIFIED | `npm run test:assistant-driver-tool-loop` |
 | Rate limit, cancellation release, cost caps, headers, telemetry, dependency smoke | VERIFIED | `npm run test:assistant-production` |
+| iOS Safari/Chrome UA and Home Screen standalone location paths | VERIFIED IN EMULATION | Browser suite; location remains required and LOGIN stays singular |
+| Real WebKit page run | BLOCKED BY TEST RUNTIME | Installed runtime launches but stalls before completing a page |
 | Open/close, scroll lock restoration, draft preservation | VERIFIED | Browser interaction |
 | Narrow reservation card and long-address wrapping | VERIFIED | Browser screenshots at target widths |
 | Driver, ledger-summary, and transaction card wrapping | VERIFIED | Browser measurements at 320×700, 375×812, and 430×932; no card/dialog horizontal overflow |
@@ -85,3 +94,11 @@ background/resume, back/forward restoration, permission withdrawal while open,
 and remote session revocation. Verify the account stays blocked after timeout,
 unavailable location, or insecure HTTP. Physical Safari/Home Screen permission
 controls and OS Location Services cannot be certified by desktop emulation.
+Every Retry must increase the Geolocation call count. When Permissions API is
+absent, throws or reports denied, the user action must still reach Geolocation.
+Verify distinct UI for permission denied, position unavailable, timeout, insecure/
+unsupported context, server preparation failure and server persistence failure.
+On iPhone, Apple documents permission recovery under Settings → Privacy & Security
+→ Location Services and the entry that requested access. Record the exact Home
+Screen entry shown by the tested iOS release rather than assuming Safari's tab
+permission applies.
