@@ -40,7 +40,7 @@ export default function SettingsPage() {
       <section className="rounded-2xl border border-app-border bg-surface p-6 shadow-sm">
         <h2 className="text-base font-semibold text-white">Change password</h2>
         <p className="mt-1 text-sm text-muted">
-          Use at least 8 characters. You&apos;ll stay signed in after changing it.
+          Use at least 8 characters. You&apos;ll stay signed in on this device; your other devices will be signed out.
         </p>
 
         <form onSubmit={submit} className="mt-5 grid gap-4">

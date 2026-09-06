@@ -4,6 +4,14 @@ This runbook covers controlled production validation of the existing five-tool, 
 
 ## Release gate
 
+The session/location build also requires the additive DeviceSession migration
+before application rollout, a canonical HTTPS `NEXTAUTH_URL`, and the configured
+daily cleanup cron. Existing cookies require one-time sign-in. Validate the
+blocking location gate first: the assistant must not mount before verification,
+and assistant API requests must reject missing/stale location and revoked cookies.
+Use `SESSION_LOCATION_SECURITY_REPORT.md` for the coordinated migration sequence
+and the additional session/location physical-device checks.
+
 Automated security, authorization, schema, rate-limit, streaming, dependency, type, lint, and build checks must pass before enabling the assistant. The physical-device matrix in `ASSISTANT_MOBILE_QA.md` remains a manual release gate. Until that matrix is completed, the correct verdict is **PRODUCTION READY WITH MANUAL MOBILE QA**.
 
 ## Production environment contract
@@ -97,4 +105,4 @@ Secondary rollback: revert the application deployment to the last reviewed build
 
 ## Manual mobile gate
 
-Complete every applicable physical-device row in `ASSISTANT_MOBILE_QA.md`, including iPhone Safari, Android Chrome, repeated keyboard cycles, rotation, slow streams, Stop/Retry, radio switching, background/foreground, VoiceOver, TalkBack, and long reservation/driver/finance cards. PWA/standalone is `NOT APPLICABLE` because the app has no manifest or service worker. All other physical rows remain `NEEDS PHYSICAL DEVICE` until actually executed on hardware.
+Complete every applicable physical-device row in `ASSISTANT_MOBILE_QA.md`, including iPhone Safari, Android Chrome, repeated keyboard cycles, rotation, slow streams, Stop/Retry, radio switching, background/foreground, VoiceOver, TalkBack, and long reservation/driver/finance cards. The app has no manifest or service worker; nevertheless, iPhone Add to Home Screen entry/resume and its permission behavior require a physical-device check for the session/location release. All other physical rows remain `NEEDS PHYSICAL DEVICE` until actually executed on hardware.

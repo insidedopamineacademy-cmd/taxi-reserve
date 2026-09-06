@@ -153,7 +153,7 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
                 >
                   Activity
                 </Link>
-                <UserMenu email={userEmail} />
+                <UserMenu email={userEmail} isAdmin={isAdmin} />
               </div>
             ) : (
               <div className="ml-1 flex items-center gap-2 border-l border-white/10 pl-3">
@@ -213,7 +213,7 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
                     Activity Log
                   </Link>
                   <div className="mt-1 border-t border-white/10 pt-2">
-                    <UserMenu email={userEmail} />
+                    <UserMenu email={userEmail} isAdmin={isAdmin} />
                   </div>
                 </>
               ) : (

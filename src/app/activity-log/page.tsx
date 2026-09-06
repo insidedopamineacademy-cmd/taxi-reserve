@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
+import { loginActivityDetails } from "@/lib/security/loginActivity";
 
 type ActivitySearchParams = {
   q?: string | string[];
@@ -160,18 +161,22 @@ export default async function ActivityLogPage({
       ) : (
         <ol className="grid gap-3">
           {logs.map((log) => {
-            const metadata = metadataSummary(log.metadata);
+            const login = loginActivityDetails(log, session?.id);
+            const metadata = login ? null : metadataSummary(log.metadata);
             return (
               <li
                 key={log.id}
+                data-activity-id={log.id}
                 className="min-w-0 rounded-xl border border-white/10 bg-[#0e1426] p-4"
               >
                 <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <p className="break-words font-medium text-white">{log.action}</p>
+                    <p className="break-words font-medium text-white">{login?.label ?? log.action}
+                      {login?.isCurrentSession && <span className="ml-2 inline-block rounded-full bg-yellow-500/10 px-2 py-1 align-middle text-xs text-yellow-400">THIS SESSION</span>}
+                    </p>
                     <p className="mt-1 break-words text-sm text-neutral-300">
-                      {log.entityType}
-                      {log.entityId ? (
+                      {login ? login.device : log.entityType}
+                      {!login && log.entityId ? (
                         <span className="text-neutral-500"> · {log.entityId}</span>
                       ) : null}
                     </p>
@@ -187,6 +192,16 @@ export default async function ActivityLogPage({
                 <dl className="mt-3 grid min-w-0 gap-2 border-t border-white/10 pt-3 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
                   <dt className="text-neutral-500">User</dt>
                   <dd className="min-w-0 break-all text-neutral-300">{log.userEmail ?? "System"}</dd>
+                  {login && <>
+                    <dt className="text-neutral-500">Network at login</dt>
+                    <dd className="min-w-0 break-words text-neutral-300">{login.network}<span className="mt-1 block text-xs text-neutral-500">Approximate IP location; browser GPS is recorded separately.</span></dd>
+                    <dt className="text-neutral-500">IP at login</dt>
+                    <dd className="min-w-0 break-all text-neutral-300">{login.ipAddress ?? "Unavailable"}</dd>
+                    {login.sessionId && <>
+                      <dt className="text-neutral-500">Session</dt>
+                      <dd className="min-w-0 break-all font-mono text-xs leading-5 text-neutral-300">{login.sessionId}</dd>
+                    </>}
+                  </>}
                   {metadata ? (
                     <>
                       <dt className="text-neutral-500">Metadata</dt>

@@ -2,10 +2,14 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { logActivity } from "@/lib/activityLog";
+import { createDeviceSession, logoutDeviceSession } from "@/lib/security/sessionCore";
+import { decodeRegisteredToken } from "@/lib/security/token";
+import { hasFreshLocation, SESSION_MAX_AGE_SECONDS } from "@/lib/security/policy";
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS },
+  jwt: { decode: decodeRegisteredToken },
+  pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -13,7 +17,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password;
         if (!email || !password) return null;
@@ -24,50 +28,52 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(password, user.password);
         if (!ok) return null;
 
-        await logActivity({
-          action: "user_login",
-          entityType: "user",
-          entityId: user.id,
-          userEmail: user.email,
-          metadata: { role: user.role },
-        });
-
-        if (user.role === "ADMIN") {
-          await logActivity({
-            action: "admin_login",
-            entityType: "user",
-            entityId: user.id,
-            userEmail: user.email,
-          });
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(request.headers ?? {})) {
+          if (typeof value === "string") headers.set(key, value);
         }
+        const registered = await createDeviceSession(prisma, user.id, user.password, headers);
 
         return {
           id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
+          email: registered.user.email,
+          name: registered.user.name,
+          role: registered.user.role,
+          sid: registered.session.id,
         };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user?.role) token.role = user.role;
+      if (user) { token.role = user.role; token.sid = user.sid; }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) session.user.role = token.role;
-      return session;
+      // Default server sessions cannot authorize app data before location.
+      if (!hasFreshLocation(token.locationVerifiedAt)) return { ...session, user: undefined, locationRequired: true };
+      return identitySession(session, token);
     },
   },
   events: {
     async signOut(message) {
-      await logActivity({
-        action: "user_logout",
-        entityType: "user",
-        userEmail: message.token?.email ?? null,
-      });
+      if (message.token) await logoutDeviceSession(prisma, message.token);
     },
   },
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+};
+
+function identitySession(session: import("next-auth").Session, token: import("next-auth/jwt").JWT) {
+  return {
+    ...session,
+    user: { ...session.user, id: token.sub, email: token.email, name: token.name, role: token.role },
+    id: token.sid, expires: token.sessionExpiresAt ?? session.expires, expiresAt: token.sessionExpiresAt,
+    locationVerifiedAt: token.locationVerifiedAt ?? null,
+  };
+}
+
+// Narrow exception for authentication bootstrap/logout/location only.
+export const identityAuthOptions: NextAuthOptions = {
+  ...authOptions,
+  callbacks: { ...authOptions.callbacks, async session({ session, token }) { return identitySession(session, token); } },
 };

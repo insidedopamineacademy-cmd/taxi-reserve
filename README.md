@@ -21,7 +21,7 @@ A capability-parity review of the driver/commission surface against the legacy `
 
 - Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS 4
 - Node.js 22 or newer (required by the installed official OpenAI Node SDK)
-- NextAuth 4 credentials authentication with JWT sessions
+- NextAuth 4 credentials authentication with encrypted JWT cookies and a revocable database session registry
 - Prisma 6 and PostgreSQL/Neon
 - IMAPFlow, Mailparser, and Nodemailer-compatible SMTP
 - `pdf-lib` for driver ledger reports
@@ -45,6 +45,56 @@ A capability-parity review of the driver/commission surface against the legacy `
 | `POST /api/assistant/chat` | Streamed Phase 1D read-only reservation, driver, and finance assistant | Authenticated; driver/finance tools require ADMIN |
 
 The homepage keeps the original reservation and inbox cards. ADMIN users additionally receive direct access to Drivers and the Full Ledger PDF. The navigation exposes Overview, Drivers, Commissions, and Payments only to ADMIN users.
+
+## Device sessions and required location
+
+Every sign-in creates a database-backed device session. The existing NextAuth
+encrypted JWT cookie references that record; authorization checks its ownership,
+revocation, absolute 30-day expiry and current database role on every request.
+Existing cookies without a registered session ID require one-time sign-in after
+rollout. Password changes keep the current session and revoke the account's others.
+
+Authenticated users enter through `/location`. Normal navigation and the assistant
+remain unavailable until a fresh browser position is accepted. Protected pages,
+APIs and server actions also enforce location verification, which expires after
+30 minutes. Each browser bootstrap and return after five minutes away requests a
+fresh position; foreground checks detect session revocation within 60 seconds or
+on the next API request. Denied/blocked access requires browser/device settings;
+unsupported browsers and insecure connections remain blocked with an explanation.
+
+ADMIN users can open `/admin/sessions` from Admin or their account menu, search
+accounts, inspect active/recent sessions, and confirm individual or counted bulk
+logout. The current device is protected from admin revocation; use normal Sign out.
+Device labels are user-agent estimates. IP/city metadata is accepted only from
+Vercel-controlled headers; other hosts show unavailable unless their trusted proxy
+integration is explicitly implemented. No reverse-geocoding service is used.
+
+Only the latest browser-reported coordinates, rounded to four decimals, accuracy
+and timestamps are stored. They are not proof of physical presence. Location,
+network details and full user agent are cleared at logout/revocation and scrubbed
+daily after expiry. Ended records are retained for 30 days. Each fresh authentication
+creates exactly one immutable LOGIN audit with user/session, parsed device and trusted
+IP/network metadata available at login. It never contains GPS, full user agent,
+plaintext cookies/tokens, credentials or secrets. Location refresh, page refresh,
+resume and last-seen checks do not create login events.
+`GET /api/admin/sessions/cleanup` runs daily at 04:10 UTC with `CRON_SECRET`.
+
+See [SESSION_LOCATION_SECURITY_REPORT.md](SESSION_LOCATION_SECURITY_REPORT.md)
+for the audit, browser evidence, limits and deployment sequence. Apply additive
+migration `20260906090000_device_sessions_location` with `prisma migrate deploy`
+in the reviewed deployment process before enabling this build. This change has
+only been migrated and tested against disposable local PostgreSQL, not production.
+
+Security regression commands: `npm run test:session-security` and
+`SESSION_TEST_DATABASE_URL=<disposable-local-test-database> npm run test:device-sessions`.
+The database script rejects non-local/non-test database URLs. Optional repeatable
+browser QA uses `npm run test:session-browser` with `SESSION_TEST_DATABASE_URL`,
+`SESSION_TEST_BASE_URL` (localhost app using that database),
+`SESSION_TEST_AUTH_SECRET` (matching test server secret), and `PLAYWRIGHT_MODULE`
+(absolute path to Playwright's `index.mjs`). Set `CHROME_EXECUTABLE` for system
+Chrome, or use installed Playwright Chromium. `SESSION_TEST_WEBKIT=1` also requires
+a working installed WebKit runtime. The script creates only synthetic QA accounts
+in the disposable database and writes screenshots under the system temporary folder.
 
 ## Driver finance rules
 
@@ -96,12 +146,12 @@ The development server uses the standard Next.js port unless one is supplied. `n
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string used by Prisma |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production secret for JWT/session signing |
-| `NEXTAUTH_URL` | Recommended canonical production URL |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for authentication and security-action Origin checks |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for replies and SMTP health checks |
 | `EMAIL_INBOX_ALLOWED_USERS` | Comma-separated email allowlist; authentication or ADMIN status alone does not grant inbox access |
 | `EMAIL_INITIAL_SYNC_LIMIT` | Optional positive initial-sync limit; application default is 100 and maximum is 5,000 |
-| `CRON_SECRET` | Required production Bearer secret for the monthly driver-subscription endpoint |
+| `CRON_SECRET` | Required production Bearer secret for monthly subscriptions and daily session cleanup |
 | `AI_ASSISTANT_ENABLED` | Optional server-side Phase 1B UI flag; defaults to disabled unless set exactly to `true` |
 | `AI_ASSISTANT_PREVIEW` | Development-only fixture switch; requires `AI_ASSISTANT_ENABLED=true` and is always disabled in production |
 | `OPENAI_API_KEY` | Required server-only secret when the enabled assistant transport makes a Responses API call |
@@ -136,7 +186,7 @@ No AI write, reservation/driver/finance mutation, unrestricted Prisma/SQL access
 
 For local visual QA only, set both flags to `true` while running the development server and visit `/assistant-preview`. This route presents clearly labelled static fixtures and returns 404 in production. It must never be used as a source of operational truth.
 
-Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve does not currently provide a manifest or service worker, so standalone/PWA testing is not applicable.
+Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve has no manifest or service worker. iPhone Add to Home Screen entry and resume still require physical-device location/permission checks; no standalone support is inferred from browser emulation.
 
 Production rollout, read-only smoke tests, deterministic answer evaluation, monitoring, and rollback are documented in `ASSISTANT_RELEASE_RUNBOOK.md`.
 

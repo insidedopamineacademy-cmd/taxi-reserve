@@ -4,6 +4,15 @@ Notable project changes are recorded here in reverse chronological order.
 
 ## Unreleased
 
+### Device sessions and mandatory location
+
+- Added an additive `DeviceSession` registry and encrypted-cookie session IDs, immediate server revocation/expiry checks, canonical database roles, throttled activity timestamps and transactional security audits.
+- Added exactly one immutable LOGIN audit for each successful fresh authentication, with safe session/user, parsed device and trusted IP/network metadata; readable login cards remain after session logout or cleanup without storing GPS, raw user agents, tokens or credentials.
+- Added ADMIN account search, active/recent device details, current-device protection, individual logout and counted logout of other devices with stale-confirmation rejection.
+- Added a full application location gate and server enforcement, explicit browser permission/error states, fresh location on bootstrap/resume, and foreground session checks. The assistant is mounted only after the gate succeeds.
+- Added latest-location privacy limits, trusted Vercel network metadata, daily cleanup, 30-day ended-session retention and password-change revocation of other sessions. Existing stateless cookies require one-time sign-in.
+- Added security unit/database regressions and documented migration, browser/mobile QA and operational limits in `SESSION_LOCATION_SECURITY_REPORT.md`. No production migration or deployment has been performed.
+
 ### Documentation
 
 - Added `DRIVER_COMMISSION_PARITY_AUDIT.md`: a capability-parity audit of the driver/commission surface against the legacy `admin.bookataxibarcelona.com` (`admin-dashboard`) reference system. Verdict: Taxi Reserve is mostly feature-complete and materially exceeds the legacy system (Decimal money, RBAC, audit trail, concurrency safety, reservation integration, subscriptions, bulk import). Genuine gaps are one capability regression (on-screen "commission due" list is now PDF-only), a set of small worker conveniences (filtered-row totals, date filters, unpaid quick filter, booking-reference tag, driver phone/notes), and one out-of-scope legacy module (facturación / driver self-invoicing). No production code changed.

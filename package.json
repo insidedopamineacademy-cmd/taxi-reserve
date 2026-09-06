@@ -6,6 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "test:session-browser": "node scripts/test-session-browser.mjs",
+    "test:session-security": "node --experimental-transform-types --test scripts/test-session-security.mts",
+    "test:device-sessions": "node --conditions=react-server --experimental-transform-types scripts/test-device-sessions.mjs",
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",

@@ -6,7 +6,7 @@ import { Inter } from "next/font/google";
 import { getServerSession } from "next-auth";
 import ServerNavbar from "@/components/ServerNavbar";
 import { Providers } from "@/components/Providers";
-import { authOptions } from "@/lib/auth";
+import { identityAuthOptions } from "@/lib/auth";
 import {
   isAssistantEmailAllowed,
   isAssistantEnabled,
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const assistantEnabled = isAssistantEnabled();
   const assistantPreviewMode = assistantEnabled && isAssistantPreviewEnabled();
-  const session = assistantEnabled ? await getServerSession(authOptions) : null;
+  const session = await getServerSession(identityAuthOptions);
   let assistantAllowed = false;
   if (assistantEnabled) {
     try {
@@ -50,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Providers
           assistantEnabled={assistantShellEnabled}
           assistantPreviewMode={assistantPreviewMode}
+          session={session}
         >
           <ServerNavbar assistantEnabled={assistantShellEnabled} />
           <main className="min-h-screen">{children}</main>

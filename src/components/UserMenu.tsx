@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect } from "react";
 import { signOut } from "next-auth/react";
 
-export default function UserMenu({ email }: { email: string }) {
+export default function UserMenu({ email, isAdmin = false }: { email: string; isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -34,6 +34,7 @@ export default function UserMenu({ email }: { email: string }) {
             Signed in as<br /><span className="text-gray-200">{email}</span>
           </div>
           <ul className="py-1 text-sm">
+            {isAdmin && <li><a href="/admin/sessions" className="block min-h-11 px-4 py-3 hover:bg-gray-800">Devices &amp; sessions</a></li>}
             <li>
               <a href="/reservations" className="block px-4 py-2 hover:bg-gray-800">My reservations</a>
             </li>

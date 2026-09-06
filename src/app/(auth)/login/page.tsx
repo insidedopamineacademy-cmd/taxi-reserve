@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     if (res?.ok) {
       // Force rerender of server components that read session + navigate
-      router.push("/reservations");
+      router.push("/location?next=%2Freservations");
       router.refresh();
     } else {
       setError("Invalid email or password");

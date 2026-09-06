@@ -88,6 +88,39 @@ model User {
   aiPendingActions      AiPendingAction[]
   aiWorkflowDrafts      AiWorkflowDraft[]
   recordedSubscriptions DriverSubscriptionCharge[] @relation("SubscriptionRecordedBy")
+  deviceSessions        DeviceSession[]            @relation("DeviceSessionOwner")
+  revokedDeviceSessions DeviceSession[]            @relation("DeviceSessionRevoker")
+}
+
+model DeviceSession {
+  id                 String    @id @default(uuid())
+  userId             String
+  createdAt          DateTime  @default(now())
+  lastSeenAt         DateTime  @default(now())
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  revokedByUserId    String?
+  revokeReason       String?   @db.VarChar(40)
+  userAgent          String?   @db.VarChar(512)
+  device             String    @db.VarChar(40)
+  browser            String    @db.VarChar(40)
+  os                 String    @db.VarChar(40)
+  ipAddress          String?   @db.VarChar(45)
+  networkCity        String?   @db.VarChar(80)
+  networkRegion      String?   @db.VarChar(80)
+  networkCountry     String?   @db.VarChar(80)
+  latitude           Float?
+  longitude          Float?
+  accuracy           Float?
+  locationCapturedAt DateTime?
+  locationVerifiedAt DateTime?
+
+  user      User  @relation("DeviceSessionOwner", fields: [userId], references: [id], onDelete: Restrict)
+  revokedBy User? @relation("DeviceSessionRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([expiresAt])
+  @@index([revokedAt])
 }
 
 model AiWorkflowDraft {

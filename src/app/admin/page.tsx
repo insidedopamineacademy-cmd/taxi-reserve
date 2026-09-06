@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
 
 type User = {
@@ -71,6 +72,7 @@ export default function AdminPage() {
       {error && <p className="text-red-500 mb-2">{error}</p>}
 
       <p className="mb-4 font-medium">Total users: {data.count}</p>
+      <Link href="/admin/sessions" className="mb-5 inline-flex min-h-11 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg">Manage devices &amp; sessions</Link>
 
       <div className="overflow-x-auto">
         <table className="border w-full">

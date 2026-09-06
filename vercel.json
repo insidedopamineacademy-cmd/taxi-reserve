@@ -4,6 +4,10 @@
     {
       "path": "/api/admin/driver-subscriptions/run-monthly",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/admin/sessions/cleanup",
+      "schedule": "10 4 * * *"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # Taxi Reserve — Current Architecture and Operations Handoff
 
-Last audited: 2026-08-10
+Last audited: 2026-09-06
 
 ## Project purpose and system boundary
 
@@ -70,11 +70,31 @@ src/middleware.ts           Page-level NextAuth protection
 ### Authentication and roles
 
 - `User.role` is the Prisma `Role` enum: `USER` or `ADMIN`; registrations default to `USER`.
-- NextAuth normalizes the login email, verifies the stored password hash, and copies the database role into the JWT and session.
-- Because the role is held in the JWT, a database role change is reflected after the user starts a new authenticated session.
-- Middleware protects reservation, inbox, settings, activity, admin, driver, commission, and payment pages.
-- `/admin`, `/drivers`, `/commissions`, and `/payments` page paths require an `ADMIN` token role in middleware.
+- NextAuth normalizes login email, verifies the password hash, creates a `DeviceSession` and puts its opaque ID in the existing encrypted JWT cookie.
+- Every token decode checks the registry for ownership, revocation and absolute 30-day expiry and reloads the canonical database role. Role changes apply immediately; password changes revoke other sessions.
+- Node.js middleware protects application pages (including `/`) and APIs, with explicit authentication/location bootstrap and independently authorized cron exceptions.
+- Normal server sessions require location verification within 30 minutes. The root client gate additionally obtains a fresh position at bootstrap and after a five-minute absence. Missing verification yields API 428 or the blocking `/location` page.
+- `/admin`, `/drivers`, `/commissions`, `/payments` and their ADMIN API paths require the canonical `ADMIN` role in middleware.
 - Driver/finance pages and APIs repeat authorization through server session checks. Middleware is not the sole security boundary.
+
+`/admin/sessions` lists all active and up to 50 recently ended sessions for a
+selected account. Individual and counted bulk revocation are transactional with
+audits; the current admin session is protected. Latest browser location and trusted
+Vercel network metadata are restricted to the admin DTO; normal auth sessions and
+assistant context contain no coordinates/IP. Daily cron scrubs expired private data
+and removes records ended over 30 days ago. The full security/migration record is
+in `SESSION_LOCATION_SECURITY_REPORT.md`.
+
+Every successful Credentials authentication transaction creates one `user_login`
+ActivityLog entry tied to the new device-session ID before GPS verification. Its
+immutable snapshot contains the canonical user, parsed device labels and trusted
+Vercel IP/network metadata available at that moment. It excludes GPS, raw user
+agent, cookies/tokens, passwords and secrets. Page reload, visibility/resume,
+lastSeen and location refresh never create LOGIN entries; logout/revocation does
+not delete them. Failed credential attempts are not currently persisted: the public
+Credentials callback has no bounded abuse-event store/rate-limit contract, so adding
+unbounded attacker-controlled email/IP rows to the operational ActivityLog was not
+included in this change.
 
 ### Reservation ownership
 
@@ -101,7 +121,7 @@ src/middleware.ts           Page-level NextAuth protection
 
 | Route | Purpose | Access |
 | --- | --- | --- |
-| `/` | Reservation dashboard, allowlisted unread Inbox card, ADMIN Drivers and Full Ledger PDF actions | Public shell; content adapts to session/permissions |
+| `/` | Reservation dashboard, allowlisted unread Inbox card, ADMIN Drivers and Full Ledger PDF actions | Authenticated with location verification; content adapts to permissions |
 | `/login`, `/register` | Credentials sign-in and account registration | Public |
 | `/reservations` | Owned active reservations, free-text search, optional URL date range, sort, status, phone, sharing, edit, assignment shortcut, and soft delete | Authenticated |
 | `/reservations/new` | Create an owned reservation | Authenticated |
@@ -341,11 +361,11 @@ There is no current driver-delete API. The restrictive financial foreign keys pr
 
 ## Activity logging
 
-`ActivityLog` records action, entity type, optional entity ID, optional normalized user email, optional JSON metadata, and timestamp. `logActivity` is deliberately best-effort: logging failure is reported but never fails the originating operation.
+`ActivityLog` records action, entity type, optional entity ID, optional normalized user email, optional JSON metadata, and timestamp. The generic `logActivity` helper is deliberately best-effort. Session creation, revocation, password and logout security audits use their database mutation transaction instead, so a required audit failure rolls back the security mutation.
 
 Implemented action families include:
 
-- authentication/administration: registration, login/logout, admin login, admin user-list view;
+- authentication/administration: registration, exactly one fresh-session LOGIN, logout, legacy admin-login history, and admin user-list view;
 - reservations: create/update/delete/restore contexts, assignment changes, linked-commission create/update/remove;
 - drivers: create/update/activate/deactivate;
 - manual commissions: create/update/delete;
@@ -454,12 +474,12 @@ Never commit real values. Configure production values in the deployment platform
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production session/JWT secret |
-| `NEXTAUTH_URL` | Recommended canonical production URL |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for auth and security-action Origin checks |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for email replies/health |
 | `EMAIL_INBOX_ALLOWED_USERS` | Required comma-separated inbox allowlist |
 | `EMAIL_INITIAL_SYNC_LIMIT` | Optional positive initial-sync limit; default 100, maximum 5,000 |
-| `CRON_SECRET` | Required production Bearer secret for monthly subscriptions |
+| `CRON_SECRET` | Required production Bearer secret for monthly subscriptions and daily session cleanup |
 | `AI_ASSISTANT_ENABLED` | Optional server-side feature flag; disabled unless exactly `true` |
 | `AI_ASSISTANT_PREVIEW` | Development-only fixture flag; always false in production |
 | `OPENAI_API_KEY` | Required server-only OpenAI secret for enabled assistant model calls |
@@ -470,7 +490,7 @@ Never commit real values. Configure production values in the deployment platform
 | `AI_ASSISTANT_MAX_OUTPUT_TOKENS` | Optional per-round output ceiling from 100-4,000; default 1,200 |
 | `AI_ASSISTANT_ALLOWED_EMAILS` | Optional normalized comma-separated rollout allowlist; maximum 100 addresses |
 
-`.env.example` contains mail variables and `CRON_SECRET`. Database and authentication names are documented here/README but real values must remain outside version control.
+`.env.example` contains blank database/authentication fields, mail variables and `CRON_SECRET`. Real values must remain outside version control.
 
 ## Setup, validation, and deployment
 
@@ -533,7 +553,7 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 
 ## Response and browser hardening
 
-- `next.config.ts` denies framing, prevents MIME sniffing, applies a conservative referrer policy, and disables camera/microphone/geolocation.
+- `next.config.ts` denies framing, prevents MIME sniffing, applies a conservative referrer policy, and disables camera/microphone and permits same-origin geolocation with `geolocation=(self)`.
 - CSP remains intentionally deferred until Next.js, NextAuth, inbox HTML, and interactive flows can be tested together.
 - Global/mobile CSS hardens native date/time controls for iOS without changing date conversion logic.
 
