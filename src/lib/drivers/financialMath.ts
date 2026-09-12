@@ -24,7 +24,9 @@ export function calculateDriverFinancialSummary(
     totalCommissions,
     totalPayments,
     totalSubscriptionCharges,
-    balance: totalCommissions.minus(totalPayments).minus(totalSubscriptionCharges),
+    // Both commissions and subscription charges are amounts owed to the
+    // company. A DriverPayment reduces their combined outstanding balance.
+    balance: totalCommissions.plus(totalSubscriptionCharges).minus(totalPayments),
   };
 }
 

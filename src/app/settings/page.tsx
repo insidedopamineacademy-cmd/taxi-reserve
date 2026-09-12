@@ -1,7 +1,10 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -31,7 +34,7 @@ export default function SettingsPage() {
     "h-11 rounded-lg border border-app-border bg-surface-2 px-3 text-[15px] text-white outline-none placeholder:text-subtle focus:border-brand/50 focus:ring-2 focus:ring-brand/25";
 
   return (
-    <main className="mx-auto max-w-lg px-4 py-8">
+    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-white">Settings</h1>
         <p className="mt-1 text-sm text-muted">Manage your account security.</p>
@@ -90,6 +93,21 @@ export default function SettingsPage() {
           </div>
         </form>
       </section>
+
+      {session?.user?.role === "ADMIN" ? (
+        <section aria-labelledby="admin-settings-heading" className="mt-6 rounded-2xl border border-app-border bg-surface p-5 shadow-sm sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">Admin</p>
+          <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 id="admin-settings-heading" className="text-base font-semibold text-white">Administration</h2>
+              <p className="mt-1 text-sm text-muted">Manage users, devices and security.</p>
+            </div>
+            <Link href="/admin" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg hover:bg-brand-hover">
+              Open Admin
+            </Link>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

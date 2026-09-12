@@ -13,6 +13,15 @@ require one-time sign-in. Validate that authenticated assistant requests accept 
 valid registered session without browser location and reject revoked cookies. Use
 `SESSION_LOCATION_SECURITY_REPORT.md` for the session rollout sequence.
 
+Local code also expects additive driver-finance migration
+`20260912120000_add_driver_subscription_payment_allocations`. Before any application
+instance runs this build, take a reviewed backup, verify the target and existing
+migration history, run `npm run prisma:validate` and `npm run prisma:generate`, then
+apply `npm run migrate:deploy`. Confirm the allocation table, unique payment/charge
+index, charge lookup index, positive-amount check and both foreign keys. Smoke-test
+one synthetic/non-production partial payment and deletion reversal before enabling
+worker traffic. Do not use `prisma migrate dev`, reset or `db push` on production.
+
 Automated security, authorization, schema, rate-limit, streaming, dependency, type, lint, and build checks must pass before enabling the assistant. The physical-device matrix in `ASSISTANT_MOBILE_QA.md` remains a manual release gate. Until that matrix is completed, the correct verdict is **PRODUCTION READY WITH MANUAL MOBILE QA**.
 
 ## Production environment contract

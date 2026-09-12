@@ -345,11 +345,16 @@ type PdfPaymentHistoryEntry = {
   date: string;
   method: string;
   amount: string;
+  subscriptionAllocations?: Array<{ month: string; amount: string }>;
+  commissionAmount?: string;
 };
 
 type PdfSubscriptionHistoryEntry = {
   month: string;
   amount: string;
+  paid?: string;
+  remaining?: string;
+  status?: string;
 };
 
 function commissionEntryHeight(
@@ -417,9 +422,11 @@ function paymentEntryHeight(
 ) {
   const amount = formatPdfMoney(payment.amount);
   const method = `Method: ${payment.method}`;
+  const allocationLines = (payment.subscriptionAllocations?.length ?? 0) + (payment.commissionAmount !== undefined ? 1 : 0);
   return (
     entryHeaderLayout(writer, payment.date, amount).height +
     wrapText(method, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13 +
+    allocationLines * 13 +
     18
   );
 }
@@ -448,6 +455,18 @@ function drawPaymentHistory(
       size: 9,
       color: MUTED_COLOR,
     });
+    for (const allocation of payment.subscriptionAllocations ?? []) {
+      drawWrappedText(writer, `Subscription ${allocation.month}: ${formatPdfMoney(allocation.amount)}`, {
+        size: 9,
+        color: MUTED_COLOR,
+      });
+    }
+    if (payment.commissionAmount !== undefined) {
+      drawWrappedText(writer, `Commission settlement: ${formatPdfMoney(payment.commissionAmount)}`, {
+        size: 9,
+        color: MUTED_COLOR,
+      });
+    }
     drawEntryDivider(writer);
   }
 }
@@ -456,11 +475,12 @@ function subscriptionEntryHeight(
   writer: ReportWriter,
   subscription: PdfSubscriptionHistoryEntry,
 ) {
+  const detailLines = [subscription.paid, subscription.remaining, subscription.status].filter((value) => value !== undefined).length;
   return entryHeaderLayout(
     writer,
     subscription.month,
     formatPdfMoney(subscription.amount),
-  ).height + 18;
+  ).height + detailLines * 13 + 18;
 }
 
 function drawSubscriptionHistory(
@@ -490,6 +510,9 @@ function drawSubscriptionHistory(
       subscription.month,
       formatPdfMoney(subscription.amount),
     );
+    if (subscription.paid !== undefined) drawWrappedText(writer, `Paid: ${formatPdfMoney(subscription.paid)}`, { size: 9, color: MUTED_COLOR });
+    if (subscription.remaining !== undefined) drawWrappedText(writer, `Remaining: ${formatPdfMoney(subscription.remaining)}`, { size: 9, color: MUTED_COLOR });
+    if (subscription.status !== undefined) drawWrappedText(writer, `Status: ${subscription.status}`, { size: 9, color: MUTED_COLOR });
     drawEntryDivider(writer);
   }
 }

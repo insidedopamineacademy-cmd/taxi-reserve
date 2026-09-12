@@ -1,7 +1,11 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { logActivity } from "@/lib/activityLog";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
+import {
+  deleteDriverPayment,
+  DriverPaymentError,
+  editDriverPaymentMetadata,
+} from "@/lib/drivers/paymentAllocationCore";
 import {
   parseFinancialDate,
   parseFinancialNotes,
@@ -29,14 +33,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const { id: driverId, paymentId } = await params;
-  const current = await prisma.driverPayment.findFirst({
-    where: { id: paymentId, driverId },
-    select: { id: true, amount: true, paymentDate: true, method: true, notes: true },
-  });
-  if (!current) {
-    return NextResponse.json({ error: "Payment not found." }, { status: 404 });
-  }
-
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
@@ -53,41 +49,21 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const notes = parseFinancialNotes(input.notes);
   if (!notes.ok) return NextResponse.json({ error: notes.error }, { status: 400 });
 
-  const changedFields: string[] = [];
-  if (!current.amount.equals(amount.value)) changedFields.push("amount");
-  if (current.paymentDate.getTime() !== paymentDate.value.getTime()) {
-    changedFields.push("paymentDate");
-  }
-  if (current.method !== method.value) changedFields.push("method");
-  if (current.notes !== notes.value) changedFields.push("notes");
-
-  if (changedFields.length === 0) {
-    return NextResponse.json({ payment: { id: current.id, driverId } });
-  }
-
   try {
-    const payment = await prisma.driverPayment.update({
-      where: { id: current.id },
-      data: {
-        amount: amount.value,
-        paymentDate: paymentDate.value,
-        method: method.value,
-        notes: notes.value,
-      },
-      select: { id: true, driverId: true },
-    });
-
-    await logActivity({
-      action: "driver_payment_updated",
-      entityType: "driver_payment",
-      entityId: payment.id,
-      userEmail: access.email,
-      metadata: { driverId, changedFields },
+    const payment = await editDriverPaymentMetadata(prisma, access.email!, driverId, {
+      paymentId,
+      amount: amount.value,
+      paymentDate: paymentDate.value,
+      method: method.value,
+      notes: notes.value,
     });
 
     revalidateDriverLedger(driverId);
     return NextResponse.json({ payment });
   } catch (error) {
+    if (error instanceof DriverPaymentError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Driver payment update failed:", error);
     return NextResponse.json({ error: "Could not update the payment." }, { status: 500 });
   }
@@ -105,24 +81,14 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   const { id: driverId, paymentId } = await params;
 
   try {
-    const result = await prisma.driverPayment.deleteMany({
-      where: { id: paymentId, driverId },
-    });
-    if (result.count === 0) {
-      return NextResponse.json({ error: "Payment not found." }, { status: 404 });
-    }
-
-    await logActivity({
-      action: "driver_payment_deleted",
-      entityType: "driver_payment",
-      entityId: paymentId,
-      userEmail: access.email,
-      metadata: { driverId },
-    });
+    const result = await deleteDriverPayment(prisma, access.email!, driverId, paymentId);
 
     revalidateDriverLedger(driverId);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, changed: result.changed });
   } catch (error) {
+    if (error instanceof DriverPaymentError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Driver payment deletion failed:", error);
     return NextResponse.json({ error: "Could not delete the payment." }, { status: 500 });
   }

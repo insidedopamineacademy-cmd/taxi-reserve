@@ -79,6 +79,13 @@ function pdfSafeText(value: unknown) {
 
 export const formatPendingEuro = formatBalanceEuro;
 
+export function formatSubscriptionProgress(driver: DueCommissionsPdfInput["drivers"][number]) {
+  if (driver.subscriptionStatus === "PARTIAL") {
+    return `€${new Prisma.Decimal(driver.subscriptionPaid).toFixed(2)}/€${new Prisma.Decimal(driver.subscription).toFixed(2)}`;
+  }
+  return formatPendingEuro(driver.subscription);
+}
+
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
   const words = pdfSafeText(text).split(/\s+/).filter(Boolean);
   if (words.length === 0) return [""];
@@ -319,7 +326,7 @@ function drawDriverRow(
   });
   drawRightAlignedText(
     writer.page,
-    formatPendingEuro(driver.subscription),
+    formatSubscriptionProgress(driver),
     AMOUNT_X - 8,
     writer.y - layout.height / 2 + 2,
     writer.fonts.regular,

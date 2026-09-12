@@ -20,7 +20,10 @@ export default function FinancialEntryDeleteButton({
 
   async function deleteEntry() {
     const label = kind === "commission" ? "commission" : "payment";
-    if (!window.confirm(`Delete this ${label}? This will update the driver's balance.`)) {
+    const detail = kind === "payment"
+      ? " This also reverses its subscription allocations and updates the driver's balance."
+      : " This will update the driver's balance.";
+    if (!window.confirm(`Delete this ${label}?${detail}`)) {
       return;
     }
 

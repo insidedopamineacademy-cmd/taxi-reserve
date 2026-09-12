@@ -59,8 +59,17 @@ export async function updateSubscriptionPayment(
   return client.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { email }, select: { id: true, role: true } });
     if (!user || !isDriverAdminRole(user.role)) throw new SubscriptionPaymentError(403, "Forbidden");
-    const current = await tx.driverSubscriptionCharge.findFirst({ where: { id: subscriptionId, driverId } });
+    // Share the driver lock with payment creation/deletion so reconciliation
+    // cannot race automatic allocation.
+    await tx.$queryRaw`SELECT "id" FROM "Driver" WHERE "id" = ${driverId} FOR UPDATE`;
+    const current = await tx.driverSubscriptionCharge.findFirst({
+      where: { id: subscriptionId, driverId },
+      include: { paymentAllocations: { select: { id: true } } },
+    });
     if (!current) throw new SubscriptionPaymentError(404, "Subscription month not found.");
+    if (current.paymentAllocations.length > 0) {
+      throw new SubscriptionPaymentError(409, "This month has automatic payment allocations. Delete and re-enter the related payment to correct it.");
+    }
 
     const unchanged = current.paymentStatus === input.status &&
       current.paidAt?.getTime() === input.paidDate?.getTime() && current.paymentNote === input.note;

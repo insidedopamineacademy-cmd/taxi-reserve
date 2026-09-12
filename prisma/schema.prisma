@@ -240,7 +240,8 @@ model DriverPayment {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
-  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  driver                  Driver                                @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  subscriptionAllocations DriverSubscriptionPaymentAllocation[]
 
   @@index([driverId, paymentDate])
 }
@@ -258,11 +259,26 @@ model DriverSubscriptionCharge {
   createdAt       DateTime                        @default(now())
   updatedAt       DateTime                        @updatedAt
 
-  driver     Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  paidByUser User?  @relation("SubscriptionRecordedBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
+  driver             Driver                                @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  paidByUser         User?                                 @relation("SubscriptionRecordedBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
+  paymentAllocations DriverSubscriptionPaymentAllocation[]
 
   @@unique([driverId, chargeMonth])
   @@index([chargeMonth])
+}
+
+model DriverSubscriptionPaymentAllocation {
+  id                   String   @id @default(cuid())
+  driverPaymentId      String
+  subscriptionChargeId String
+  amount               Decimal  @db.Decimal(10, 2)
+  createdAt            DateTime @default(now())
+
+  driverPayment      DriverPayment            @relation(fields: [driverPaymentId], references: [id], onDelete: Cascade)
+  subscriptionCharge DriverSubscriptionCharge @relation(fields: [subscriptionChargeId], references: [id], onDelete: Restrict)
+
+  @@unique([driverPaymentId, subscriptionChargeId], map: "DriverSubscriptionAllocation_payment_charge_key")
+  @@index([subscriptionChargeId])
 }
 
 model Reminder {

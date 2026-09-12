@@ -20,7 +20,7 @@ test("opposite datasets exclude zero and reconcile exactly to the canonical KPI 
   const lines = [
     line("due", "300.30", "35.10", "40.00", "20.00"),
     line("credit", "10.10", "22.22", "7.00", "7.00"),
-    line("zero", "20", "13", "7", "7"),
+    line("zero", "20", "27", "7", "7"),
     line("cents", "0.30", "0.10", "0", null),
     line("credit-2", "0", "0.10", "0", null),
   ];
@@ -31,9 +31,9 @@ test("opposite datasets exclude zero and reconcile exactly to the canonical KPI 
   const pdf = prepareDueCommissionsReport(lines);
   assert.deepEqual(credits.drivers.map(({ id }) => id), ["credit", "credit-2"]);
   assert.deepEqual(due.drivers.map(({ id }) => id), ["cents", "due"]);
-  assert.equal(credits.total, "19.22");
+  assert.equal(credits.total, "5.22");
   assert.equal(credits.total, position.driverCredits.toFixed(2));
-  assert.equal(due.total, "225.40");
+  assert.equal(due.total, "305.40");
   assert.equal(due.total, position.totalCommissionDue.toFixed(2));
   assert.equal(pdf.totalDue, due.total);
   assert.deepEqual(pdf.drivers, due.drivers);
@@ -43,11 +43,11 @@ test("opposite datasets exclude zero and reconcile exactly to the canonical KPI 
 test("monthly subscription is the stored current charge, with past months already in final balance", async () => {
   const source = line("multiple-months", "300.30", "35.10", "40.00", "20.00");
   const report = prepareDueCommissionsReport([source, line("no-charge", "1.10", "0.90", "0", null)]);
-  assert.equal(source.summary.balance.toFixed(2), "225.20", "300.30 - 35.10 - 40.00");
+  assert.equal(source.summary.balance.toFixed(2), "305.20", "300.30 + 40.00 - 35.10");
   assert.equal(report.drivers[0].subscription, "20.00", "current month only, not all 40.00");
-  assert.equal(report.drivers[0].balance, "225.20", "subscription is neither added nor deducted again");
+  assert.equal(report.drivers[0].balance, "305.20", "subscription is included once and allocation is not deducted again");
   assert.equal(report.drivers[1].subscription, "0.00");
-  assert.equal(report.totalDue, "225.40");
+  assert.equal(report.totalDue, "305.40");
   // Missing current month must not fall back to historical charges or a vehicle rate.
   assert.equal(prepareDueCommissionsReport([{ ...source, currentMonthSubscription: null }]).drivers[0].subscription, "0.00");
   assert.equal(prepareDueCommissionsReport([{ ...source, currentMonthSubscription: dec("12.34") }]).drivers[0].subscription, "12.34");

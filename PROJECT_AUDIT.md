@@ -254,7 +254,9 @@ The commission list, driver ledger, finance overview, individual PDF, and full P
 ## Payments and financial calculations
 
 - `DriverPayment` records a date, positive Decimal amount, method (`CASH`, `BANK`, or `OTHER`), optional notes, and driver.
-- Manual commissions and payments can be created for ACTIVE drivers and later edited/deleted from ADMIN workflows.
+- A new payment first settles eligible generated subscription charges through its payment month, oldest month first. Any remainder settles commission liability.
+- Each subscription portion is stored as `DriverSubscriptionPaymentAllocation`. These rows are reconciliation evidence and do not participate independently in balance arithmetic.
+- Manual commissions can be edited/deleted. A payment's method and notes can be edited, but changing amount or date requires delete-and-re-entry so the original allocations are reversed safely.
 - Commission/payment date inputs are validated as `YYYY-MM-DD` and stored as UTC-midnight financial dates for stable display.
 - All ledger arithmetic uses Prisma `Decimal`; no floating-point arithmetic is used for driver money.
 - Reservation `priceEuro` intentionally remains the pre-existing `Float` field and is not part of driver ledger arithmetic.
@@ -262,13 +264,13 @@ The commission list, driver ledger, finance overview, individual PDF, and full P
 The centralized balance formula is:
 
 ```text
-balance = totalCommissions - totalPayments - totalSubscriptionCharges
+balance = totalCommissions + totalSubscriptionCharges - totalPayments
 ```
 
 Interpretation:
 
-- positive balance: Taxi Reserve still owes the driver;
-- negative balance: driver credit/amount on the business side;
+- positive balance: the driver still owes the business;
+- negative balance: credit in the driver's favour;
 - zero: settled.
 
 `/drivers` shows aggregate commission, payment, subscription, and outstanding totals. `/drivers/overview` derives Total Commission Due, Driver Credits, and Net Position from final per-driver balances, and also shows payments this week/month, subscriptions this month, active-driver count, and recent commission/payment activity.
@@ -302,6 +304,15 @@ Inactive, exempt, and unconfigured drivers are skipped and counted. A charge use
 - `UNIQUE(driverId, chargeMonth)` enforces at most one monthly charge per driver.
 - The generator checks for an existing row before insert and also catches the uniqueness race, so repeated or concurrent execution cannot duplicate the charge.
 - No arbitrary manual subscription amount editor exists.
+
+### Payment allocation and settlement state
+
+- Allocation considers only stored, non-PAID charges whose month is not later than the payment month; it never invents a missing monthly charge.
+- `PARTIAL` is a derived display state. The stored compatibility enum remains `UNVERIFIED`, `UNPAID`, or `PAID`; paid and remaining amounts come from exact allocation sums.
+- Existing PAID rows without allocation evidence remain paid. Existing UNVERIFIED rows remain unverified when unallocated and become PARTIAL/PAID only as automatic money is applied.
+- The payment, allocation rows and structured ActivityLog entry commit in one transaction. A driver row lock serializes competing payments and prevents over-allocation.
+- Deleting a payment cascades only its allocation rows in the same audited transaction. The monthly charges remain and their state is derived again from surviving allocations.
+- Historical manual reconciliation remains available for rows without automatic allocations. It is rejected once allocations exist.
 
 ### Cron endpoint
 
@@ -343,7 +354,8 @@ The homepage exposes the Full Ledger PDF directly to ADMIN users. The finance ov
 - `Driver`: non-unique license/code, status, nullable vehicle type, exemption flag, and `Driver.id` relations to reservations and all ledger records.
 - `CommissionEntry`: Decimal commission, financial date, optional notes, optional unique reservation, and optional manual route fields.
 - `DriverPayment`: Decimal payment, date, method, optional notes, and driver.
-- `DriverSubscriptionCharge`: Decimal monthly charge and PostgreSQL date, with unique driver/month constraint.
+- `DriverSubscriptionCharge`: Decimal monthly charge and PostgreSQL date, with unique driver/month constraint and allocation history.
+- `DriverSubscriptionPaymentAllocation`: positive Decimal portion joining one payment to one monthly charge, unique per payment/charge pair.
 - `Reservation.driverId`: optional driver assignment indexed for lookup.
 
 ### Relationship behavior
@@ -355,6 +367,8 @@ The homepage exposes the Full Ledger PDF directly to ADMIN users. The finance ov
 | `CommissionEntry.reservationId -> Reservation.id` | `SET NULL` | Financial entry survives permanent reservation deletion |
 | `DriverPayment.driverId -> Driver.id` | `RESTRICT` | Payment history prevents driver deletion |
 | `DriverSubscriptionCharge.driverId -> Driver.id` | `RESTRICT` | Subscription history prevents driver deletion |
+| `DriverSubscriptionPaymentAllocation.driverPaymentId -> DriverPayment.id` | `CASCADE` | Deleting a payment atomically reverses only its allocations |
+| `DriverSubscriptionPaymentAllocation.subscriptionChargeId -> DriverSubscriptionCharge.id` | `RESTRICT` | An allocated monthly charge cannot be removed independently |
 
 There is no current driver-delete API. The restrictive financial foreign keys provide an additional database-level preservation boundary.
 
@@ -368,7 +382,7 @@ There is no current driver-delete API. The restrictive financial foreign keys pr
 
 ## Activity logging
 
-`ActivityLog` records action, entity type, optional entity ID, optional normalized user email, optional JSON metadata, and timestamp. The generic `logActivity` helper is deliberately best-effort. Session creation, revocation, password and logout security audits use their database mutation transaction instead, so a required audit failure rolls back the security mutation.
+`ActivityLog` records action, entity type, optional entity ID, optional normalized user email, optional JSON metadata, and timestamp. The generic `logActivity` helper is deliberately best-effort. Session creation, revocation, password, logout, payment creation/allocation, payment metadata edits and payment deletion/reversal use their database mutation transaction instead, so a required audit failure rolls back the associated mutation.
 
 Implemented action families include:
 
@@ -379,7 +393,7 @@ Implemented action families include:
 - payments: create/update/delete; and
 - subscriptions: per-charge generation and monthly batch run.
 
-Normal users query only rows with their own normalized email. ADMIN users query all rows, including system subscription events whose `userEmail` is null. Financial activity metadata follows the existing minimal policy and does not copy commission/payment/subscription amounts.
+Normal users query only rows with their own normalized email. ADMIN users query all rows, including system subscription events whose `userEmail` is null. Payment audit metadata records exact amount, subscription allocation months/amounts/status transitions and the commission remainder or reversal. It excludes payment credentials, tokens and secrets.
 
 ## Date and timezone behavior
 
@@ -556,6 +570,7 @@ The repository's `00000000000000_baseline/migration.sql` is empty. Therefore, th
 | `20260809210000_add_manual_commission_route` | Adds optional manual pickup/drop-off fields without changing reservation-linked route ownership |
 | `20260810120000_add_driver_subscriptions` | Adds vehicle enum/configuration, exemption flag, DriverSubscriptionCharge, month index, unique driver/month constraint, and restrictive driver relation |
 | `20260906090000_device_sessions_location` | Adds the DeviceSession registry required by current authentication; its nullable legacy GPS columns remain unused pending a separately reviewed cleanup migration |
+| `20260912120000_add_driver_subscription_payment_allocations` | Adds explicit positive Decimal payment-to-subscription allocations, lookup/uniqueness indexes and preservation-oriented foreign keys |
 
 All are additive relative to the live Taxi Reserve architecture. No migration imports or reinterprets financial history from an external standalone system.
 
@@ -597,8 +612,9 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 - [ ] Verify Inbox visibility for an allowlisted user and denial for authenticated users not on the allowlist.
 - [ ] Create/edit/activate/deactivate a driver, including an existing driver whose vehicle is initially unset.
 - [ ] Assign/change/unassign an ACTIVE driver and create/update/remove the reservation-linked commission with confirmation.
-- [ ] Create/edit/delete manual commissions and payments; verify route source labels.
-- [ ] Confirm finance balances and overview use commissions minus payments minus subscriptions.
+- [ ] Create/edit/delete manual commissions and payments; verify route source labels and delete-and-re-entry protection for payment amount/date.
+- [ ] Confirm new payments allocate oldest subscription first, partial/excess states reconcile, deletion reverses allocations, and audit history remains visible.
+- [ ] Confirm finance balances and overview use commissions plus subscriptions minus payments without counting allocations again.
 - [ ] Generate individual, due, and full ledger PDFs and inspect multi-page route/payment/subscription layout.
 - [ ] Run monthly subscription tests on disposable PostgreSQL data for rates, skips, two months, idempotency, history preservation, and uniqueness.
 - [ ] Call the cron route with missing/wrong/valid Bearer values only in a non-production environment.

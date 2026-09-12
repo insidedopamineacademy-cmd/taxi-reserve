@@ -11,6 +11,8 @@ export type DriverBalanceListItem = {
   licenseNumber: string;
   balance: string;
   subscription: string;
+  subscriptionPaid: string;
+  subscriptionRemaining: string;
   subscriptionStatus: SubscriptionDisplayStatus;
 };
 
@@ -55,7 +57,7 @@ export default function DriverBalanceList({ items, kind }: {
                 </Link>
                 <p className="break-all text-sm text-muted">Licencia {driver.licenseNumber}</p>
                 <dl className="mt-4 space-y-2 border-t border-app-border pt-3">
-                  {due && <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"><dt className="text-muted">Suscripción</dt><dd className="text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscription}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></dd></div>}
+                  {due && <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm"><dt className="text-muted">Suscripción</dt><dd className="text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscriptionPaid} / {driver.subscription}</span><span className="block text-xs text-subtle">Resta {driver.subscriptionRemaining}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></dd></div>}
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt className="text-sm text-muted">{balanceLabel}</dt><dd className={`tnum whitespace-nowrap text-lg font-semibold ${tone}`}>{driver.balance}</dd></div>
                 </dl>
               </li>
@@ -72,7 +74,7 @@ export default function DriverBalanceList({ items, kind }: {
                   <tr key={driver.id} className="even:bg-white/[0.015] hover:bg-white/[0.03]">
                     <th scope="row" className="max-w-0 px-4 py-1 font-medium"><Link href={`/drivers/${driver.id}`} className="flex min-h-11 items-center break-words py-2 text-white hover:text-brand">{driver.name}<span className="sr-only"> — Ver cuenta</span></Link></th>
                     <td className="max-w-40 break-all px-4 py-3 text-muted">{driver.licenseNumber}</td>
-                    {due && <td className="px-4 py-3 text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscription}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></td>}
+                    {due && <td className="px-4 py-3 text-right"><span className="tnum block whitespace-nowrap text-muted">{driver.subscriptionPaid} / {driver.subscription}</span><span className="block whitespace-nowrap text-xs text-subtle">Resta {driver.subscriptionRemaining}</span><SubscriptionStatusBadge status={driver.subscriptionStatus} language="es" /></td>}
                     <td className={`tnum whitespace-nowrap px-4 py-3 text-right font-semibold ${tone}`}>{driver.balance}</td>
                   </tr>
                 ))}

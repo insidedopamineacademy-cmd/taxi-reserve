@@ -4,6 +4,37 @@ Notable project changes are recorded here in reverse chronological order.
 
 ## Unreleased
 
+### Automatic driver-payment allocation and admin navigation
+
+- Added an ADMIN-only Settings entry point to `/admin` and responsive Administration
+  action cards for Users and Devices & Sessions. Existing middleware remains the
+  server-side authorization boundary.
+- Changed the canonical driver liability formula to `commissions + subscription
+  charges - payments`. Positive remains due to the business, zero settled, and
+  negative driver credit.
+- Added atomic oldest-first allocation of each new `DriverPayment` to eligible
+  stored monthly subscription charges, with any remainder applied to commissions.
+  Partial, exact, excess, no-charge and multi-month payments use Prisma Decimal.
+- Added explicit `DriverSubscriptionPaymentAllocation` rows. Allocations are
+  reconciliation evidence only and are never counted a second time in balances.
+- Made payment amount/date immutable in the edit workflow. Deleting a payment
+  atomically removes its allocations and records one reversal audit; a repeated
+  delete is idempotent. Method and notes remain editable.
+- Preserved historical PAID/UNVERIFIED subscription rows and retained manual
+  reconciliation only for rows untouched by automatic allocations.
+- Updated driver ledger screens, allocation preview, pending views, due PDF,
+  individual ledger PDF, full ledger PDF and ActivityLog metadata with allocation,
+  paid, remaining and commission-settlement details.
+- Added focused unit, disposable-PostgreSQL, concurrency, audit rollback and
+  responsive browser coverage at 360, 390, 430 and 1280 pixels.
+
+### Database
+
+- Added additive migration
+  `20260912120000_add_driver_subscription_payment_allocations` with payment and
+  charge foreign keys, a unique payment/charge pair, charge lookup index and
+  positive-amount constraint. No historical rows are fabricated or reclassified.
+
 ### Device sessions without mandatory location
 
 - Removed the blocking location page, browser permission flow, GPS collection API,
@@ -82,7 +113,9 @@ Notable project changes are recorded here in reverse chronological order.
 
 ### Changed
 
-- Extended the centralized driver balance to `commissions - payments - subscription charges` using Prisma Decimal.
+- Initially extended the driver balance with subscription charges. The current
+  canonical formula is documented under Unreleased as `commissions + subscription
+  charges - payments`.
 - Added subscription configuration, totals, and history to driver directory/detail/edit screens and monthly subscription totals to the finance overview.
 - Extended individual, due, and full driver PDFs with subscription totals/history and final subscription-adjusted balances.
 

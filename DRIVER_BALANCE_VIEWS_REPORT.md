@@ -1,6 +1,8 @@
 # Driver credits, pending commissions and subscription display
 
-Validated on 5 September 2026. No commit, push, deployment, production-data changes, schema changes or migrations were made.
+Originally validated on 5 September 2026 and updated on 12 September 2026 for
+automatic subscription allocation. No commit, push, deployment or production-data
+change was made. The current checkout adds one unapplied additive migration.
 
 1. **Existing architecture.** Next.js App Router server pages use Prisma Decimal summaries from `financials.ts` / `financialMath.ts`. `getDriverBalanceLines()` supplies all drivers and their canonical summaries. `calculateDriverFinancePosition()` separates gross pending and credits. The PDF uses `pdf-lib`. Driver pages and financial PDF endpoints are ADMIN-only.
 
@@ -28,17 +30,17 @@ Validated on 5 September 2026. No commit, push, deployment, production-data chan
 | `package.json` | `test:driver-balance-reports` command |
 | `DRIVER_BALANCE_VIEWS_REPORT.md` | This report |
 
-5. **Verified formula.** `balance = totalCommissions - totalPayments - totalSubscriptionCharges`. The three totals aggregate all commission entries (manual and reservation-linked), all driver payments, and all stored subscription charges respectively. Subscriptions are deliberately deducted in the existing domain. This is also documented in `PROJECT_AUDIT.md`; the calculation was preserved exactly.
+5. **Current verified formula.** `balance = totalCommissions + totalSubscriptionCharges - totalPayments`. The three totals aggregate all commission entries (manual and reservation-linked), all stored subscription charges and all driver payments respectively. Positive is due to the business; negative is credit in the driver's favour. Payment-allocation rows explain the subscription/commission split and are not counted again.
 
 6. **Meaning of Suscripción.** The actual `DriverSubscriptionCharge.amount` whose `chargeMonth` is the first civil date of the current Madrid calendar month. The unique `(driverId, chargeMonth)` constraint permits one record per month. The amount is read from the record, including historical configuration/exemption changes; it is never reconstructed from VAN/SEDAN rates. Missing current-month records display `€ 0.00`. Both PDF and web identify the month and explain that the amount is already reflected in the balance. Prior-month records continue to affect the canonical balance, but are not included in this monthly column.
 
-7. **No double counting.** A regression and the actual database/browser fixture use commissions `300.30`, payments `35.10`, historical plus current subscriptions `40.00`, and current-month subscription `20.00`. Both views show Suscripción `€ 20.00` and Pendiente `€ 225.20`, exactly `300.30 - 35.10 - 40.00`. The presentation does not add or subtract the monthly column again. The downloaded PDF also correctly displayed a stored nonstandard charge of `€ 12.34`, and `€ 0.00` for a driver with only a prior-month charge.
+7. **No double counting.** The current regression fixture uses commissions `244.00`, payments `60.00`, and a stored subscription of `20.00`. The final liability is `204.00`, exactly `244.00 + 20.00 - 60.00`, even though `20.00` of the payments has an allocation row. The presentation never adds or subtracts that allocation again. The subscription column also shows exact paid and remaining amounts.
 
 8. **Credits reconciliation.** Only `balance < 0` is selected, displayed as the positive amount in the driver's favour. Positive and zero balances are excluded. Totals use `calculateDriverFinancePosition()`, also used by the KPI. Unit fixture: `€ 19.22` in both. Authenticated browser fixture: `€ 378.12` in both.
 
 9. **Pending reconciliation.** Only `balance > 0` is selected; credits and zero balances are excluded. The same position helper returns the gross pending total. Unit fixture: `€ 225.40` in both. Authenticated browser fixture: `€ 617.06` in both. Search changes only visible rows, with an explicit note that the overall total is unchanged.
 
-10. **PDF reconciliation.** PDF preparation delegates to the same report preparation used by the pending page. Its existing assertion checks the Decimal sum of displayed final balances against Total pendiente. The downloaded PDF contained `€ 617.06`, matching both the KPI and pending page. No subscription total was added: this column is monthly information for the selected debtors, not a second amount to collect.
+10. **PDF reconciliation.** PDF preparation delegates to the same report preparation used by the pending page. Its assertion checks the Decimal sum of displayed final balances against Total pendiente. Subscription presentation includes paid/total and remaining values, including `PARCIAL`, while the final balance remains authoritative. Allocation amounts are never treated as a second amount to collect.
 
 11. **Responsive QA.** Actual production-built, authenticated routes `/drivers`, `/drivers/credits` and `/drivers/due` were exercised and screenshots inspected at 360, 390, 430 and 1280 pixels. All 12 combinations passed page-overflow checks. Tested click and keyboard KPI navigation, visible focus, case-insensitive driver/licence search, deterministic order, ledger navigation, no-results/reset and unchanged overall totals. Additional 360px checks covered very large Decimal amounts, reduced motion, both empty datasets and zero totals. No page overflow or clipped detail monetary cells was found. Browser page-error collection was empty. Anonymous and USER-role access was rejected; PDF returned 401 and 403 respectively. ADMIN requests succeeded.
 
@@ -74,7 +76,7 @@ node --conditions=react-server --experimental-transform-types scripts/render-pen
 
 Poppler `pdftoppm` rendered these and the actual/empty API downloads. The bundled `pdftotext -layout` extracted the actual download and confirmed the rows and `€ 617.06` total. QA screenshots and PDFs remain under `/private/tmp/taxi-driver-qa/`. The temporary Next.js server and PostgreSQL cluster were stopped after validation.
 
-14. **Subscription semantics still unresolved.** None for the implemented current-month display. The model does not allocate payments to individual subscription records, so it cannot authoritatively identify an outstanding/unpaid subscription subtotal. This implementation makes no such claim and does not change financial meaning.
+14. **Subscription settlement semantics.** The additive allocation model now identifies exact paid and remaining amounts per generated monthly charge. Payments apply oldest first through the payment month; PARTIAL is derived when the allocated sum is between zero and the charge amount. Historical PAID rows without allocations remain compatible, and UNVERIFIED rows remain reviewable until allocated or manually reconciled.
 
 15. **Git diff statistics.** The executed `git diff --stat` output for tracked files was:
 

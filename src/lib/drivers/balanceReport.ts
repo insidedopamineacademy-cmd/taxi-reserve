@@ -11,12 +11,14 @@ export type DriverBalanceLine = {
   licenseNumber: string | null | undefined;
   summary: { balance: Prisma.Decimal };
   currentMonthSubscription: Prisma.Decimal | null;
+  currentMonthSubscriptionPaid?: Prisma.Decimal | null;
+  currentMonthSubscriptionRemaining?: Prisma.Decimal | null;
   subscriptionStatus: SubscriptionDisplayStatus;
 };
 
 export type DriverBalanceKind = "credits" | "due";
 
-/** Presentation of canonical balances only; subscription never adjusts them. */
+/** Presentation of canonical balances only; allocation never adjusts them again. */
 export function prepareDriverBalanceReport(
   lines: readonly DriverBalanceLine[],
   kind: DriverBalanceKind,
@@ -30,15 +32,22 @@ export function prepareDriverBalanceReport(
 
   return {
     total: (kind === "credits" ? position.driverCredits : position.totalCommissionDue).toFixed(2),
-    drivers: selected.map((line) => ({
-      id: line.id,
-      name: line.name,
-      licenseNumber: line.licenseNumber?.trim() || "-",
-      // Credit is displayed as the positive amount in the driver's favour.
-      balance: line.summary.balance.abs().toFixed(2),
-      subscription: (line.currentMonthSubscription ?? new Prisma.Decimal(0)).toFixed(2),
-      subscriptionStatus: line.subscriptionStatus,
-    })),
+    drivers: selected.map((line) => {
+      const subscription = line.currentMonthSubscription ?? new Prisma.Decimal(0);
+      const paid = line.currentMonthSubscriptionPaid ?? (line.subscriptionStatus === "PAID" ? subscription : new Prisma.Decimal(0));
+      const remaining = line.currentMonthSubscriptionRemaining ?? subscription.minus(paid);
+      return {
+        id: line.id,
+        name: line.name,
+        licenseNumber: line.licenseNumber?.trim() || "-",
+        // Credit is displayed as the positive amount in the driver's favour.
+        balance: line.summary.balance.abs().toFixed(2),
+        subscription: subscription.toFixed(2),
+        subscriptionPaid: paid.toFixed(2),
+        subscriptionRemaining: remaining.toFixed(2),
+        subscriptionStatus: line.subscriptionStatus,
+      };
+    }),
   };
 }
 

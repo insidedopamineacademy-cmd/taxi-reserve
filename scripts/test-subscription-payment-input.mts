@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseSubscriptionPaymentInput, updateSubscriptionPayment } from "../src/lib/drivers/subscriptionPaymentCore.ts";
-import { currentSubscriptionStatus } from "../src/lib/drivers/subscriptionStatus.ts";
+import { currentSubscriptionStatus, subscriptionSettlement } from "../src/lib/drivers/subscriptionStatus.ts";
 import type { PrismaClient } from "@prisma/client";
 
 const now = new Date("2026-09-05T12:00:00Z");
@@ -34,4 +34,16 @@ test("current-month status comes from its record, never balances or current vehi
   assert.equal(currentSubscriptionStatus({ ...driver, subscriptionExempt: true }, null), "EXEMPT");
   assert.equal(currentSubscriptionStatus({ ...driver, status: "INACTIVE" }, null), "INACTIVE");
   assert.equal(currentSubscriptionStatus({ ...driver, vehicleType: null }, null), "NOT_CONFIGURED");
+});
+
+test("allocated money derives exact partial and paid progress without changing historical baseline status", () => {
+  assert.deepEqual(subscriptionSettlement("UNPAID", "20.00", "10.00"), {
+    status: "PARTIAL", paid: "10.00", remaining: "10.00", automaticallyAllocated: "10.00",
+  });
+  assert.deepEqual(subscriptionSettlement("UNVERIFIED", "20.00", "20.00"), {
+    status: "PAID", paid: "20.00", remaining: "0.00", automaticallyAllocated: "20.00",
+  });
+  assert.deepEqual(subscriptionSettlement("PAID", "20.00", "0.00"), {
+    status: "PAID", paid: "20.00", remaining: "0.00", automaticallyAllocated: "0.00",
+  });
 });

@@ -7,7 +7,7 @@ import {
   getDriverFinancialSummaries,
 } from "@/lib/drivers/financials";
 import { sortDriversByName } from "@/lib/drivers/driverOrder";
-import { currentSubscriptionStatus } from "@/lib/drivers/subscriptionStatus";
+import { currentSubscriptionStatus, subscriptionSettlement } from "@/lib/drivers/subscriptionStatus";
 import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 
 export function getMadridPaymentPeriods(now = new Date()) {
@@ -29,7 +29,12 @@ export async function getDriverBalanceLines(now = new Date()) {
       subscriptionExempt: true,
       subscriptionCharges: {
         where: { chargeMonth: monthStart },
-        select: { amount: true, paymentStatus: true, paidAt: true },
+        select: {
+          amount: true,
+          paymentStatus: true,
+          paidAt: true,
+          paymentAllocations: { select: { amount: true } },
+        },
       },
     },
   });
@@ -37,12 +42,24 @@ export async function getDriverBalanceLines(now = new Date()) {
     drivers.map((driver) => driver.id),
   );
 
-  return sortDriversByName(drivers).map(({ subscriptionCharges, ...driver }) => ({
-    ...driver,
-    summary: summaries.get(driver.id)!,
-    currentMonthSubscription: subscriptionCharges[0]?.amount ?? null,
-    subscriptionStatus: currentSubscriptionStatus(driver, subscriptionCharges[0]),
-  }));
+  return sortDriversByName(drivers).map(({ subscriptionCharges, ...driver }) => {
+    const charge = subscriptionCharges[0];
+    const allocated = charge?.paymentAllocations.reduce(
+      (total, allocation) => total.plus(allocation.amount),
+      new Prisma.Decimal(0),
+    ) ?? new Prisma.Decimal(0);
+    const settlement = charge
+      ? subscriptionSettlement(charge.paymentStatus, charge.amount.toFixed(2), allocated.toFixed(2))
+      : null;
+    return {
+      ...driver,
+      summary: summaries.get(driver.id)!,
+      currentMonthSubscription: charge?.amount ?? null,
+      currentMonthSubscriptionPaid: settlement ? new Prisma.Decimal(settlement.paid) : null,
+      currentMonthSubscriptionRemaining: settlement ? new Prisma.Decimal(settlement.remaining) : null,
+      subscriptionStatus: currentSubscriptionStatus(driver, charge),
+    };
+  });
 }
 
 export async function getDriverFinanceOverview(now = new Date()) {

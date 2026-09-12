@@ -5,7 +5,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PaymentForm from "@/components/drivers/PaymentForm";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
+import { getEligibleSubscriptionDebts } from "@/lib/drivers/paymentAllocationCore";
 import { currentFinancialDateInput } from "@/lib/drivers/financialValidation";
+import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
 import { prisma } from "@/lib/prisma";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -39,19 +41,28 @@ export default async function NewPaymentPage({ params }: PageProps) {
     );
   }
 
+  const today = currentFinancialDateInput();
+  const subscriptionDebts = (await getEligibleSubscriptionDebts(prisma, driver.id, new Date(`${today}T00:00:00.000Z`))).map((debt) => ({
+    id: debt.id,
+    month: debt.chargeMonth.toISOString().slice(0, 7),
+    monthLabel: formatSubscriptionMonthDisplay(debt.chargeMonth),
+    remaining: debt.amount.minus(debt.allocatedAmount).toFixed(2),
+  }));
+
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-6 sm:px-6">
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-white">Record payment</h1>
-        <p className="mt-1 text-sm text-neutral-400">Add a payment to this driver&apos;s account.</p>
+        <p className="mt-1 text-sm text-neutral-400">Enter one payment. It will settle the oldest outstanding subscription charges before commissions.</p>
       </div>
       <section className="rounded-xl border border-white/10 bg-[#0e1426] p-4 sm:p-5">
         <PaymentForm
           mode="create"
           driver={driver}
+          subscriptionDebts={subscriptionDebts}
           initial={{
             amount: "",
-            paymentDate: currentFinancialDateInput(),
+            paymentDate: today,
             method: "CASH",
             notes: "",
           }}

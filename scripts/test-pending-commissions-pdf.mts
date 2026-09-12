@@ -7,6 +7,7 @@ import {
   PENDING_COMMISSIONS_COLUMNS,
   buildDueCommissionsPdf,
   formatPendingEuro,
+  formatSubscriptionProgress,
   prepareDueCommissionsReport,
   type DueCommissionBalanceLine,
 } from "../src/lib/drivers/duePdf.ts";
@@ -47,12 +48,19 @@ async function pageTexts(bytes: Uint8Array) {
   });
 }
 
-test("rendered PDF text keeps the subscription separate, repeats headers, and totals only on the final page", async () => {
-  const lines = Array.from({ length: 36 }, (_, index) => ({
-    ...balanceLine(String(index), `Driver ${index}`, index === 1 ? "VTC-LONG-LICENCE-IDENTIFIER-048" : `VTC-${index}`, index === 0 ? "99999999.99" : "245.00"),
-    currentMonthSubscription: index === 0 ? new Prisma.Decimal("20.00") : null,
-    subscriptionStatus: index % 3 === 0 ? "PAID" as const : index % 3 === 1 ? "UNPAID" as const : "UNVERIFIED" as const,
-  }));
+test("rendered PDF text keeps subscription allocation separate, repeats headers, and totals only on the final page", async () => {
+  const lines = Array.from({ length: 36 }, (_, index) => {
+    const subscriptionStatus = index % 4 === 0 ? "PAID" as const
+      : index % 4 === 1 ? "UNPAID" as const
+        : index % 4 === 2 ? "PARTIAL" as const : "UNVERIFIED" as const;
+    return {
+      ...balanceLine(String(index), `Driver ${index}`, index === 1 ? "VTC-LONG-LICENCE-IDENTIFIER-048" : `VTC-${index}`, index === 0 ? "99999999.99" : "245.00"),
+      currentMonthSubscription: new Prisma.Decimal("20.00"),
+      currentMonthSubscriptionPaid: subscriptionStatus === "PAID" ? new Prisma.Decimal("20.00") : subscriptionStatus === "PARTIAL" ? new Prisma.Decimal("10.00") : new Prisma.Decimal(0),
+      currentMonthSubscriptionRemaining: subscriptionStatus === "PAID" ? new Prisma.Decimal(0) : subscriptionStatus === "PARTIAL" ? new Prisma.Decimal("10.00") : new Prisma.Decimal("20.00"),
+      subscriptionStatus,
+    };
+  });
   const report = prepareDueCommissionsReport(lines);
   const pages = await pageTexts(await buildDueCommissionsPdf({
     ...report, generatedDate: "05 Sep 2026", subscriptionMonth: "septiembre de 2026",
@@ -63,11 +71,23 @@ test("rendered PDF text keeps the subscription separate, repeats headers, and to
     assert.equal(text.includes("Total pendiente"), index === pages.length - 1);
   }
   assert.ok(pages[0].includes("€ 20.00"));
-  for (const status of ["PAGADO", "PENDIENTE", "SIN VERIFICAR"]) assert.ok(pages[0].includes(status));
-  assert.ok(pages[0].includes("€ 0.00"));
+  for (const status of ["PAGADO", "PARCIAL", "PENDIENTE", "SIN VERIFICAR"]) assert.ok(pages[0].includes(status));
+  assert.ok(pages[0].includes("€10.00/€20.00"));
   assert.ok(pages[0].includes("€ 99,999,999.99"), "the full large balance is one unwrapped text operation");
   assert.ok(pages.flat().includes(formatPendingEuro(report.totalDue)));
   assert.ok(pages[0].some((text) => text.includes("septiembre de 2026")));
+});
+
+test("partial subscription progress is concise and never alters the pending balance", () => {
+  const report = prepareDueCommissionsReport([{
+    ...balanceLine("partial", "Partial", "P-1", "164.00"),
+    currentMonthSubscription: new Prisma.Decimal("20.00"),
+    currentMonthSubscriptionPaid: new Prisma.Decimal("10.00"),
+    currentMonthSubscriptionRemaining: new Prisma.Decimal("10.00"),
+    subscriptionStatus: "PARTIAL" as const,
+  }]);
+  assert.equal(report.totalDue, "164.00");
+  assert.equal(formatSubscriptionProgress(report.drivers[0]), "€10.00/€20.00");
 });
 
 test("only positive authoritative balances appear and total with Decimal arithmetic", () => {

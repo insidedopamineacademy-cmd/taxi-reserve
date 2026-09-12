@@ -49,60 +49,88 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-md mx-auto">
-        <h1 className="text-xl font-bold mb-4">Admin Panel</h1>
-        <p>Loading...</p>
-      </div>
+      <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+        <h1 className="text-2xl font-semibold text-white">Administration</h1>
+        <p role="status" className="mt-3 text-sm text-muted">Loading…</p>
+      </main>
     );
   }
 
   if (!data) {
     return (
-      <div className="p-6 max-w-md mx-auto">
-        <h1 className="text-xl font-bold mb-4">Admin Panel</h1>
-        {error && <p className="text-red-500 mt-2">{error}</p>}
-      </div>
+      <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+        <h1 className="text-2xl font-semibold text-white">Administration</h1>
+        {error && <p role="alert" className="mt-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</p>}
+      </main>
     );
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">Admin Panel</h1>
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">Admin</p>
+        <h1 className="mt-1 text-2xl font-semibold text-white">Administration</h1>
+        <p className="mt-2 text-sm text-muted">Manage users, devices and account security.</p>
+      </header>
 
-      {error && <p className="text-red-500 mb-2">{error}</p>}
+      <nav aria-label="Administration actions" className="mt-6 grid gap-3 sm:grid-cols-2">
+        <a href="#users" className="group rounded-xl border border-app-border bg-surface p-4 hover:border-brand/40 hover:bg-brand/[0.04]">
+          <span className="font-semibold text-white group-hover:text-brand">Users</span>
+          <span className="mt-1 block text-sm text-muted">View existing user accounts</span>
+        </a>
+        <Link href="/admin/sessions" className="group rounded-xl border border-app-border bg-surface p-4 hover:border-brand/40 hover:bg-brand/[0.04]">
+          <span className="font-semibold text-white group-hover:text-brand">Devices &amp; Sessions</span>
+          <span className="mt-1 block text-sm text-muted">View active logins and log out devices</span>
+        </Link>
+      </nav>
 
-      <p className="mb-4 font-medium">Total users: {data.count}</p>
-      <Link href="/admin/sessions" className="mb-5 inline-flex min-h-11 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg">Manage devices &amp; sessions</Link>
+      {error && <p role="alert" className="mt-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</p>}
 
-      <div className="overflow-x-auto">
-        <table className="border w-full">
+      <section id="users" aria-labelledby="users-heading" className="mt-8 scroll-mt-20">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="users-heading" className="text-lg font-semibold text-white">Users</h2>
+          <p className="text-sm text-muted">{data.count} total</p>
+        </div>
+        <ul className="grid gap-3 md:hidden">
+          {data.users.map((user) => (
+            <li key={user.id} className="min-w-0 rounded-xl border border-app-border bg-surface p-4">
+              <p className="break-words font-medium text-white">{user.name || "Unnamed user"}</p>
+              <p className="mt-1 break-all text-sm text-muted">{user.email}</p>
+              <p className="mt-3 text-xs text-subtle">Created {formatCreatedAt(user.createdAt)}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-xl border border-app-border bg-surface md:block">
+          <table className="w-full text-left text-sm">
           <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2 border text-left">Email</th>
-              <th className="p-2 border text-left">Name</th>
-              <th className="p-2 border text-left">Created At</th>
+            <tr className="border-b border-app-border bg-surface-2 text-xs uppercase text-muted">
+              <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Created</th>
             </tr>
           </thead>
           <tbody>
             {data.users.map((u) => (
-              <tr key={u.id}>
-                <td className="p-2 border">{u.email}</td>
-                <td className="p-2 border">{u.name || "-"}</td>
-                <td className="p-2 border">
+              <tr key={u.id} className="border-b border-app-border last:border-0">
+                <td className="break-all px-4 py-3 text-white">{u.email}</td>
+                <td className="break-words px-4 py-3 text-muted">{u.name || "-"}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-muted">
                   {formatCreatedAt(u.createdAt)}
                 </td>
               </tr>
             ))}
             {data.users.length === 0 && (
               <tr>
-                <td colSpan={3} className="p-3 text-center text-gray-500">
+                <td colSpan={3} className="p-6 text-center text-muted">
                   No users found
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-    </div>
+        </div>
+        {data.users.length === 0 ? <p className="rounded-xl border border-app-border bg-surface p-6 text-center text-sm text-muted md:hidden">No users found</p> : null}
+      </section>
+    </main>
   );
 }

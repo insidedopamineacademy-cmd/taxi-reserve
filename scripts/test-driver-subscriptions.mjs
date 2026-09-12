@@ -43,6 +43,7 @@ async function createDriver(name, licenseNumber, options = {}) {
 
 async function main() {
   await prisma.activityLog.deleteMany();
+  await prisma.driverSubscriptionPaymentAllocation.deleteMany();
   await prisma.driverSubscriptionCharge.deleteMany();
   await prisma.commissionEntry.deleteMany();
   await prisma.driverPayment.deleteMany();
@@ -152,7 +153,7 @@ async function main() {
     activeVanTotals[1]._sum.amount,
     activeVanTotals[2]._sum.amount,
   );
-  assert.equal(summary.balance.toFixed(2), "50.00");
+  assert.equal(summary.balance.toFixed(2), "90.00");
 
   await prisma.driver.update({
     where: { id: activeVan.id },

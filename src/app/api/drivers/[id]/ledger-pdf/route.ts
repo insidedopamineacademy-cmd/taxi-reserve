@@ -7,6 +7,7 @@ import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { getDriverFinancialSummary } from "@/lib/drivers/financials";
 import { buildDriverLedgerPdf } from "@/lib/drivers/pdf";
 import { formatSubscriptionMonthDisplay } from "@/lib/drivers/subscriptions";
+import { subscriptionSettlement, subscriptionStatusLabel } from "@/lib/drivers/subscriptionStatus";
 import { prisma } from "@/lib/prisma";
 import { formatMadridDateDisplay } from "@/lib/time/madrid";
 
@@ -66,6 +67,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
           paymentDate: true,
           amount: true,
           method: true,
+          subscriptionAllocations: {
+            select: {
+              amount: true,
+              subscriptionCharge: { select: { chargeMonth: true } },
+            },
+          },
         },
       },
       subscriptionCharges: {
@@ -73,6 +80,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         select: {
           chargeMonth: true,
           amount: true,
+          paymentStatus: true,
+          paymentAllocations: { select: { amount: true } },
         },
       },
     },
@@ -100,15 +109,19 @@ export async function GET(_request: Request, { params }: RouteContext) {
         amount: commission.commissionAmount.toFixed(2),
       };
     }),
-    payments: driver.payments.map((payment) => ({
-      date: formatFinancialDateDisplay(payment.paymentDate),
-      method: paymentMethodLabel(payment.method),
-      amount: payment.amount.toFixed(2),
-    })),
-    subscriptions: driver.subscriptionCharges.map((charge) => ({
-      month: formatSubscriptionMonthDisplay(charge.chargeMonth),
-      amount: charge.amount.toFixed(2),
-    })),
+    payments: driver.payments.map((payment) => {
+      const allocated = payment.subscriptionAllocations.reduce((total, row) => total.plus(row.amount), payment.amount.minus(payment.amount));
+      return {
+        date: formatFinancialDateDisplay(payment.paymentDate), method: paymentMethodLabel(payment.method), amount: payment.amount.toFixed(2),
+        subscriptionAllocations: payment.subscriptionAllocations.map((row) => ({ month: formatSubscriptionMonthDisplay(row.subscriptionCharge.chargeMonth), amount: row.amount.toFixed(2) })),
+        commissionAmount: payment.amount.minus(allocated).toFixed(2),
+      };
+    }),
+    subscriptions: driver.subscriptionCharges.map((charge) => {
+      const allocated = charge.paymentAllocations.reduce((total, row) => total.plus(row.amount), charge.amount.minus(charge.amount));
+      const settlement = subscriptionSettlement(charge.paymentStatus, charge.amount.toFixed(2), allocated.toFixed(2));
+      return { month: formatSubscriptionMonthDisplay(charge.chargeMonth), amount: charge.amount.toFixed(2), paid: settlement.paid, remaining: settlement.remaining, status: subscriptionStatusLabel(settlement.status) };
+    }),
   });
 
   return new Response(Buffer.from(pdf), {

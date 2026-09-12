@@ -10,7 +10,12 @@ export type SubscriptionHistoryItem = {
   month: string;
   monthLabel: string;
   amount: string;
-  status: SubscriptionPaymentStatus;
+  paidAmount: string;
+  remainingAmount: string;
+  automaticallyAllocated: string;
+  allocationCount: number;
+  status: SubscriptionPaymentStatus | "PARTIAL";
+  baseStatus: SubscriptionPaymentStatus;
   paidDate: string | null;
   paidDateLabel: string | null;
   paidBy: string | null;
@@ -64,10 +69,15 @@ function SubscriptionMonthEditor({ driverId, driverName, month, today }: {
         </div>
         <p className="tnum whitespace-nowrap text-lg font-semibold text-white">{month.amount}</p>
       </div>
-      {month.paidDateLabel && <p className="mt-2 break-words text-sm text-muted">Paid {month.paidDateLabel}{month.paidBy ? ` · Recorded by ${month.paidBy}` : ""}</p>}
-      {month.status === "UNVERIFIED" && <p className="mt-2 text-sm text-muted">This month predates payment tracking. Review it before marking paid or unpaid.</p>}
+      <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-app-border bg-surface-2 p-3 text-sm">
+        <div><dt className="text-subtle">Paid</dt><dd className="tnum mt-1 font-medium text-white">{month.paidAmount}</dd></div>
+        <div><dt className="text-subtle">Remaining</dt><dd className="tnum mt-1 font-medium text-white">{month.remainingAmount}</dd></div>
+      </dl>
+      {month.allocationCount > 0 && <p className="mt-2 text-sm text-muted">Allocated automatically from {month.allocationCount} recorded {month.allocationCount === 1 ? "payment" : "payments"}.</p>}
+      {month.paidDateLabel && <p className="mt-2 break-words text-sm text-muted">Historically marked paid {month.paidDateLabel}{month.paidBy ? ` · Recorded by ${month.paidBy}` : ""}</p>}
+      {month.status === "UNVERIFIED" && <p className="mt-2 text-sm text-muted">This month predates payment tracking and has no allocated payment yet.</p>}
       {month.note && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted">{month.note}</p>}
-      {editing ? (
+      {month.allocationCount > 0 ? null : editing ? (
         <form className="mt-4 space-y-3" onSubmit={(event) => { event.preventDefault(); void save("PAID"); }}>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted">Paid date</span>
@@ -78,15 +88,19 @@ function SubscriptionMonthEditor({ driverId, driverName, month, today }: {
             <textarea value={note} maxLength={500} rows={2} onChange={(event) => setNote(event.target.value)} disabled={busy} className="w-full rounded-lg border border-app-border bg-surface-2 p-3 text-base text-white" />
           </label>
           <div className="flex flex-wrap gap-2">
-            <button type="submit" disabled={busy} className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg hover:bg-brand-hover disabled:opacity-60">{busy ? "Saving…" : month.status === "PAID" ? "Save paid details" : "Mark as paid"}</button>
-            <button type="button" disabled={busy} onClick={() => void save("UNPAID")} className="min-h-11 rounded-lg border border-app-border px-4 text-sm font-medium text-warning hover:bg-warning/10 disabled:opacity-60">{month.status === "PAID" ? "Undo payment" : "Confirm unpaid"}</button>
+            <button type="submit" disabled={busy} className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-brand-fg hover:bg-brand-hover disabled:opacity-60">{busy ? "Saving…" : month.baseStatus === "PAID" ? "Save paid details" : "Mark historical month paid"}</button>
+            <button type="button" disabled={busy} onClick={() => void save("UNPAID")} className="min-h-11 rounded-lg border border-app-border px-4 text-sm font-medium text-warning hover:bg-warning/10 disabled:opacity-60">{month.baseStatus === "PAID" ? "Undo historical status" : "Confirm historically unpaid"}</button>
             <button type="button" disabled={busy} onClick={() => { setEditing(false); setError(null); }} className="min-h-11 rounded-lg px-3 text-sm text-muted hover:text-white">Cancel</button>
           </div>
         </form>
       ) : (
-        <button type="button" onClick={() => { setPaidDate(month.paidDate ?? today); setNote(month.note ?? ""); setEditing(true); setMessage(null); }} className="mt-3 min-h-11 rounded-lg border border-app-border px-4 text-sm font-medium text-brand hover:border-brand/40 hover:bg-brand/[0.05]">
-          {month.status === "PAID" ? "Edit / undo payment" : month.status === "UNVERIFIED" ? "Review payment status" : "Record subscription payment"}
-        </button>
+        <details className="mt-3 rounded-lg border border-app-border px-3 py-2">
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-muted">Historical reconciliation</summary>
+          <p className="pb-2 text-xs leading-relaxed text-subtle">Exceptional admin correction for months settled outside the recorded payment ledger.</p>
+          <button type="button" onClick={() => { setPaidDate(month.paidDate ?? today); setNote(month.note ?? ""); setEditing(true); setMessage(null); }} className="mb-2 min-h-11 rounded-lg border border-app-border px-4 text-sm font-medium text-brand hover:border-brand/40 hover:bg-brand/[0.05]">
+            Review historical status
+          </button>
+        </details>
       )}
       {message && <p role="status" className="mt-3 text-sm text-success">{message}</p>}
       {error && <div role="alert" className="mt-3 text-sm text-danger"><p>{error}</p><button type="button" onClick={() => router.refresh()} className="mt-1 min-h-11 underline">Reload month</button></div>}
@@ -114,7 +128,7 @@ export default function SubscriptionHistory({ driverId, driverName, months, curr
   return (
     <section id="monthly-subscription" aria-labelledby="monthly-subscription-heading" className="mt-6 rounded-xl border border-app-border bg-surface p-4 sm:p-5">
       <h2 id="monthly-subscription-heading" className="text-lg font-semibold text-white">Monthly subscription</h2>
-      <p className="mt-1 text-sm text-muted">Track each month separately from commission settlements.</p>
+      <p className="mt-1 text-sm text-muted">Recorded payments automatically settle the oldest outstanding subscription first.</p>
       <div className="my-4 flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm text-muted">{currentMonthLabel}{current ? ` · ${current.amount}` : ""}</p>
         <SubscriptionStatusBadge status={currentStatus} />

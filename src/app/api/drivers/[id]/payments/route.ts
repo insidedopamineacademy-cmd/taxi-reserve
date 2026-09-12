@@ -1,8 +1,7 @@
-import { DriverStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { logActivity } from "@/lib/activityLog";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
+import { DriverPaymentError, recordDriverPayment } from "@/lib/drivers/paymentAllocationCore";
 import {
   parseFinancialDate,
   parseFinancialNotes,
@@ -23,20 +22,6 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const { id: driverId } = await params;
-  const driver = await prisma.driver.findUnique({
-    where: { id: driverId },
-    select: { id: true, status: true },
-  });
-  if (!driver) {
-    return NextResponse.json({ error: "Driver not found." }, { status: 404 });
-  }
-  if (driver.status !== DriverStatus.ACTIVE) {
-    return NextResponse.json(
-      { error: "Activate this driver before recording a new payment." },
-      { status: 409 },
-    );
-  }
-
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
@@ -54,31 +39,33 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!notes.ok) return NextResponse.json({ error: notes.error }, { status: 400 });
 
   try {
-    const payment = await prisma.driverPayment.create({
-      data: {
-        driverId,
-        paymentDate: paymentDate.value,
-        amount: amount.value,
-        method: method.value,
-        notes: notes.value,
-      },
-      select: { id: true, driverId: true, method: true },
-    });
-
-    await logActivity({
-      action: "driver_payment_created",
-      entityType: "driver_payment",
-      entityId: payment.id,
-      userEmail: access.email,
-      metadata: { driverId: payment.driverId, method: payment.method },
+    const result = await recordDriverPayment(prisma, access.email!, {
+      driverId,
+      paymentDate: paymentDate.value,
+      amount: amount.value,
+      method: method.value,
+      notes: notes.value,
     });
 
     revalidatePath("/drivers");
     revalidatePath(`/drivers/${driverId}`);
     revalidatePath("/drivers/overview");
     revalidatePath("/payments");
-    return NextResponse.json({ payment }, { status: 201 });
+    return NextResponse.json({
+      payment: result.payment,
+      allocation: {
+        subscriptions: result.allocation.subscriptions.map((entry) => ({
+          subscriptionChargeId: entry.subscriptionChargeId,
+          chargeMonth: entry.chargeMonth.toISOString().slice(0, 7),
+          amount: entry.amount.toFixed(2),
+        })),
+        commissionAmount: result.allocation.commissionAmount.toFixed(2),
+      },
+    }, { status: 201 });
   } catch (error) {
+    if (error instanceof DriverPaymentError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Driver payment creation failed:", error);
     return NextResponse.json({ error: "Could not record the payment." }, { status: 500 });
   }

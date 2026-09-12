@@ -3,10 +3,11 @@ export const runtime = "nodejs";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
 import SubscriptionHistory from "@/components/drivers/SubscriptionHistory";
 import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
-import { currentSubscriptionStatus } from "@/lib/drivers/subscriptionStatus";
+import { currentSubscriptionStatus, subscriptionSettlement } from "@/lib/drivers/subscriptionStatus";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import FinancialEntryDeleteButton from "@/components/drivers/FinancialEntryDeleteButton";
 import { PdfShareButton } from "@/components/PdfShareButton";
@@ -78,6 +79,13 @@ export default async function DriverDetailPage({ params }: PageProps) {
           amount: true,
           method: true,
           notes: true,
+          subscriptionAllocations: {
+            orderBy: { subscriptionCharge: { chargeMonth: "asc" } },
+            select: {
+              amount: true,
+              subscriptionCharge: { select: { chargeMonth: true } },
+            },
+          },
         },
       },
       subscriptionCharges: {
@@ -92,6 +100,7 @@ export default async function DriverDetailPage({ params }: PageProps) {
           paidByUser: { select: { name: true, email: true } },
           paymentNote: true,
           paymentRevision: true,
+          paymentAllocations: { select: { amount: true } },
         },
       },
     },
@@ -103,14 +112,30 @@ export default async function DriverDetailPage({ params }: PageProps) {
   const { monthStart, today } = getMadridFinancialPeriods();
   const currentMonth = monthStart.toISOString().slice(0, 7);
   const currentCharge = driver.subscriptionCharges.find((charge) => charge.chargeMonth.getTime() === monthStart.getTime());
-  const subscriptionMonths = driver.subscriptionCharges.map((charge) => ({
-    id: charge.id, month: charge.chargeMonth.toISOString().slice(0, 7),
-    monthLabel: formatSubscriptionMonthDisplay(charge.chargeMonth), amount: formatEuro(charge.amount),
-    status: charge.paymentStatus, paidDate: charge.paidAt?.toISOString().slice(0, 10) ?? null,
-    paidDateLabel: charge.paidAt ? formatFinancialDateDisplay(charge.paidAt) : null,
-    paidBy: charge.paidByUser?.name || charge.paidByUser?.email || null,
-    note: charge.paymentNote, revision: charge.paymentRevision,
-  }));
+  const subscriptionMonths = driver.subscriptionCharges.map((charge) => {
+    const automaticallyAllocated = charge.paymentAllocations.reduce(
+      (total, allocation) => total.plus(allocation.amount),
+      new Prisma.Decimal(0),
+    );
+    const settlement = subscriptionSettlement(
+      charge.paymentStatus,
+      charge.amount.toFixed(2),
+      automaticallyAllocated.toFixed(2),
+    );
+    return {
+      id: charge.id, month: charge.chargeMonth.toISOString().slice(0, 7),
+      monthLabel: formatSubscriptionMonthDisplay(charge.chargeMonth), amount: formatEuro(charge.amount),
+      paidAmount: formatEuro(new Prisma.Decimal(settlement.paid)),
+      remainingAmount: formatEuro(new Prisma.Decimal(settlement.remaining)),
+      automaticallyAllocated: formatEuro(new Prisma.Decimal(settlement.automaticallyAllocated)),
+      allocationCount: charge.paymentAllocations.length,
+      status: settlement.status, baseStatus: charge.paymentStatus,
+      paidDate: charge.paidAt?.toISOString().slice(0, 10) ?? null,
+      paidDateLabel: charge.paidAt ? formatFinancialDateDisplay(charge.paidAt) : null,
+      paidBy: charge.paidByUser?.name || charge.paidByUser?.email || null,
+      note: charge.paymentNote, revision: charge.paymentRevision,
+    };
+  });
   const balPositive = summary.balance.greaterThan(0);
   const balNegative = summary.balance.lessThan(0);
   const balTone = balPositive ? "text-warning" : balNegative ? "text-success" : "text-white";
@@ -206,16 +231,16 @@ export default async function DriverDetailPage({ params }: PageProps) {
                 Record financial activity directly against this driver&apos;s account.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full gap-2 min-[420px]:grid-cols-2 sm:w-auto">
               <Link
                 href={`/drivers/${driver.id}/commissions/new`}
-                className="inline-flex h-10 items-center rounded-md bg-brand px-3 text-sm font-semibold text-brand-fg hover:bg-brand-hover"
+                className="inline-flex h-11 items-center justify-center rounded-md border border-white/10 bg-white/5 px-4 text-sm font-medium text-neutral-200 hover:bg-white/10"
               >
                 Add commission
               </Link>
               <Link
                 href={`/drivers/${driver.id}/payments/new`}
-                className="inline-flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-neutral-200 hover:bg-white/10"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-brand px-4 text-sm font-semibold text-brand-fg hover:bg-brand-hover"
               >
                 Record payment
               </Link>
@@ -355,6 +380,26 @@ export default async function DriverDetailPage({ params }: PageProps) {
                       {formatEuro(payment.amount)}
                     </p>
                   </div>
+                  {(() => {
+                    const subscriptionTotal = payment.subscriptionAllocations.reduce(
+                      (total, allocation) => total.plus(allocation.amount),
+                      new Prisma.Decimal(0),
+                    );
+                    return (
+                      <dl className="mt-3 space-y-1 border-t border-app-border pt-3 text-xs">
+                        {payment.subscriptionAllocations.map((allocation) => (
+                          <div key={allocation.subscriptionCharge.chargeMonth.toISOString()} className="flex flex-wrap justify-between gap-2">
+                            <dt className="text-muted">{formatSubscriptionMonthDisplay(allocation.subscriptionCharge.chargeMonth)} subscription</dt>
+                            <dd className="tnum text-neutral-200">{formatEuro(allocation.amount)}</dd>
+                          </div>
+                        ))}
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <dt className="text-muted">Commission balance</dt>
+                          <dd className="tnum text-neutral-200">{formatEuro(payment.amount.minus(subscriptionTotal))}</dd>
+                        </div>
+                      </dl>
+                    );
+                  })()}
                   {payment.notes ? (
                     <p className="mt-3 border-t border-app-border pt-3 text-sm text-muted">
                       {payment.notes}

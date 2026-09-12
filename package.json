@@ -6,8 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "npm run test:session-security && npm run test:date-display && npm run test:assistant-mobile && npm run test:assistant-foundation && npm run test:assistant-tool-loop && npm run test:assistant-streaming && npm run test:assistant-driver-finance && npm run test:assistant-driver-tool-loop && npm run test:assistant-production && npm run test:assistant-actions && npm run test:assistant-reservation-updates && npm run test:assistant-driver-actions && npm run test:assistant-commission-actions && npm run test:assistant-reservation-creation && npm run test:assistant-driver-import && npm run test:driver-one-time-import && npm run test:pending-commissions-pdf && npm run test:driver-balance-reports && npm run test:driver-order && npm run test:subscription-payment-input && npm run test:pdf-share",
+    "test": "npm run test:session-security && npm run test:date-display && npm run test:assistant-mobile && npm run test:assistant-foundation && npm run test:assistant-tool-loop && npm run test:assistant-streaming && npm run test:assistant-driver-finance && npm run test:assistant-driver-tool-loop && npm run test:assistant-production && npm run test:assistant-actions && npm run test:assistant-reservation-updates && npm run test:assistant-driver-actions && npm run test:assistant-commission-actions && npm run test:assistant-reservation-creation && npm run test:assistant-driver-import && npm run test:driver-one-time-import && npm run test:pending-commissions-pdf && npm run test:driver-balance-reports && npm run test:driver-order && npm run test:subscription-payment-input && npm run test:admin-payment-ui && npm run test:pdf-share",
     "test:session-browser": "node scripts/test-session-browser.mjs",
+    "test:admin-payment-browser": "node scripts/test-admin-payment-browser.mjs",
     "test:session-security": "node --experimental-transform-types --test scripts/test-session-security.mts",
     "test:device-sessions": "node --conditions=react-server --experimental-transform-types scripts/test-device-sessions.mjs",
     "dev": "next dev",
@@ -39,6 +40,7 @@
     "test:driver-balance-reports": "node --conditions=react-server --experimental-transform-types --test scripts/test-driver-balance-reports.mts",
     "test:driver-order": "node --conditions=react-server --experimental-transform-types --test scripts/test-driver-order.mts",
     "test:subscription-payment-input": "node --experimental-transform-types --test scripts/test-subscription-payment-input.mts",
+    "test:admin-payment-ui": "node --experimental-transform-types --test scripts/test-admin-payment-ui.mts",
     "test:subscription-payments": "node --conditions=react-server --experimental-transform-types scripts/test-subscription-payments.mjs",
     "test:pdf-share": "node --experimental-transform-types --test scripts/test-pdf-share.mts",
     "import:drivers": "dotenv -e .env.local -- node --experimental-transform-types scripts/import-drivers-one-time.mts",
