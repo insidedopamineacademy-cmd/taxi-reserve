@@ -22,6 +22,22 @@ index, charge lookup index, positive-amount check and both foreign keys. Smoke-t
 one synthetic/non-production partial payment and deletion reversal before enabling
 worker traffic. Do not use `prisma migrate dev`, reset or `db push` on production.
 
+Local code also expects additive user-lifecycle migration
+`20260913120000_add_admin_user_lifecycle`. Before this build serves any request,
+take a reviewed backup, verify the target and migration history, and apply it with
+`npm run migrate:deploy`. Confirm the `UserStatus` enum, nullable PIN hash/lock
+fields, ACTIVE defaults, and nullable `DeviceSession.settingsUnlockedUntil` exist.
+Use the read-only query in `ADMIN_USER_LIFECYCLE_REPORT.md` to verify role/status
+counts and unresolved PIN setup without selecting hashes. Then have each existing
+ADMIN configure its own PIN in Settings; do not write PIN hashes or unlock values
+directly in SQL. Public registration is absent from this build.
+
+Before enabling worker traffic, use synthetic accounts in a non-production
+environment to verify: locked ADMIN routes redirect to Settings, USER receives 403,
+new accounts are ACTIVE USERs, password reset preserves the target ID and history,
+deactivation blocks login and revokes sessions, and reactivation restores login for
+the same ID. Never run lifecycle tests against production.
+
 Automated security, authorization, schema, rate-limit, streaming, dependency, type, lint, and build checks must pass before enabling the assistant. The physical-device matrix in `ASSISTANT_MOBILE_QA.md` remains a manual release gate. Until that matrix is completed, the correct verdict is **PRODUCTION READY WITH MANUAL MOBILE QA**.
 
 ## Production environment contract

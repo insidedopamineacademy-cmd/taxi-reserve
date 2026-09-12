@@ -4,10 +4,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SecurityError } from "./policy";
 
-export async function requireSecuritySession(options: { admin?: boolean } = {}) {
+export async function requireSecuritySession(options: { admin?: boolean; settingsUnlocked?: boolean } = {}) {
   const session = await getServerSession(authOptions);
   if (!session?.id || !session.user?.id) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
   if (options.admin && session.user.role !== "ADMIN") throw new SecurityError(403, "FORBIDDEN", "Administrator access required.");
+  if (options.settingsUnlocked) {
+    const unlockedUntil = session.settingsUnlockedUntil ? new Date(session.settingsUnlockedUntil) : null;
+    if (!unlockedUntil || !Number.isFinite(unlockedUntil.getTime()) || unlockedUntil <= new Date()) {
+      throw new SecurityError(423, "SETTINGS_LOCKED", "Unlock protected settings to continue.");
+    }
+  }
   return { session, identity: { sid: session.id, sub: session.user.id } };
 }
 

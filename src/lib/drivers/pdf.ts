@@ -537,10 +537,10 @@ export async function buildDriverLedgerPdf(input: DriverLedgerPdfInput) {
   drawMetadata(writer, "Generated", input.generatedDate);
   writer.y -= 8;
   drawMetrics(writer, [
-    { label: "Total commissions", value: formatPdfMoney(input.totalCommissions) },
+    { label: "Total charges", value: formatPdfMoney(input.totalCommissions) },
     { label: "Total payments", value: formatPdfMoney(input.totalPayments) },
     {
-      label: "Subscription charges",
+      label: "Subscription component",
       value: formatPdfMoney(input.totalSubscriptionCharges),
     },
     { label: "Current balance", value: formatPdfMoney(input.balance) },
@@ -613,10 +613,10 @@ export async function buildFullDriverLedgerPdf(input: FullDriverLedgerPdfInput) 
     drawMetadata(writer, "Status", driver.status);
     writer.y -= 6;
     drawMetrics(writer, [
-      { label: "Total commissions", value: formatPdfMoney(driver.totalCommissions) },
+      { label: "Total charges", value: formatPdfMoney(driver.totalCommissions) },
       { label: "Total payments", value: formatPdfMoney(driver.totalPayments) },
       {
-        label: "Subscription charges",
+        label: "Subscription component",
         value: formatPdfMoney(driver.totalSubscriptionCharges),
       },
       { label: "Current balance", value: formatPdfMoney(driver.balance) },

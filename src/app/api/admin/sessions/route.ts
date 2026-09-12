@@ -6,14 +6,14 @@ import { ENDED_SESSION_RETENTION_MS } from "@/lib/security/policy";
 
 export async function GET(request: Request) {
   try {
-    const { session } = await requireSecuritySession({ admin: true });
+    const { session } = await requireSecuritySession({ admin: true, settingsUnlocked: true });
     const search = new URL(request.url).searchParams;
     const query = (search.get("query") ?? "").trim().slice(0, 100);
     const now = new Date();
     const users = await prisma.user.findMany({
       where: query ? { OR: [{ email: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }] } : {},
       orderBy: [{ email: "asc" }, { id: "asc" }], take: 50,
-      select: { id: true, email: true, name: true, _count: { select: { deviceSessions: { where: { revokedAt: null, expiresAt: { gt: now } } } } } },
+      select: { id: true, email: true, name: true, status: true, _count: { select: { deviceSessions: { where: { revokedAt: null, expiresAt: { gt: now } } } } } },
     });
     const userId = search.get("userId") || users.find(user => user.id === session.user?.id)?.id || users[0]?.id;
     const user = userId ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } }) : null;
@@ -29,6 +29,6 @@ export async function GET(request: Request) {
     ]) : [[], []];
     // Never expose expired network data while waiting for daily cleanup.
     const history = ended.map(row => ({ ...row, ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null }));
-    return securityJson({ users: users.map(user => ({ id: user.id, name: user.name, email: user.email, activeCount: user._count.deviceSessions })), user, sessions: [...active, ...history], currentSessionId: session.id, now: now.toISOString() });
+    return securityJson({ users: users.map(user => ({ id: user.id, name: user.name, email: user.email, status: user.status, activeCount: user._count.deviceSessions })), user, sessions: [...active, ...history], currentSessionId: session.id, now: now.toISOString() });
   } catch (error) { return securityFailure(error); }
 }

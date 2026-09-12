@@ -12,11 +12,14 @@ function decimalOrZero(value: Prisma.Decimal | null | undefined) {
 }
 
 export function calculateDriverFinancialSummary(
-  commissions: Prisma.Decimal | null | undefined,
+  combinedCharges: Prisma.Decimal | null | undefined,
   payments: Prisma.Decimal | null | undefined,
   subscriptionCharges: Prisma.Decimal | null | undefined,
 ): DriverFinancialSummary {
-  const totalCommissions = decimalOrZero(commissions);
+  // CommissionEntry is the legacy aggregate for the driver's complete charge
+  // liability. In production that amount already includes the subscription
+  // component; DriverSubscriptionCharge supplies its month/status breakdown.
+  const totalCommissions = decimalOrZero(combinedCharges);
   const totalPayments = decimalOrZero(payments);
   const totalSubscriptionCharges = decimalOrZero(subscriptionCharges);
 
@@ -24,9 +27,8 @@ export function calculateDriverFinancialSummary(
     totalCommissions,
     totalPayments,
     totalSubscriptionCharges,
-    // Both commissions and subscription charges are amounts owed to the
-    // company. A DriverPayment reduces their combined outstanding balance.
-    balance: totalCommissions.plus(totalSubscriptionCharges).minus(totalPayments),
+    // Allocation rows classify a payment but never alter the money total.
+    balance: totalCommissions.minus(totalPayments),
   };
 }
 

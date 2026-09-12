@@ -7,18 +7,20 @@ export type SessionIdentity = { sid?: unknown; sub?: unknown };
 type Reader = Pick<PrismaClient, "deviceSession">;
 // Nullable GPS columns remain only for migration compatibility. New sessions never
 // populate them; clearing them retires any data written by an older deployment.
-const clearedPrivateData = {
+export const endedSessionPrivateData = {
   latitude: null, longitude: null, accuracy: null, locationCapturedAt: null, locationVerifiedAt: null,
   ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null, userAgent: null,
+  settingsUnlockedUntil: null,
 };
 
 export async function validateDeviceSession(db: Reader, identity: SessionIdentity, now = new Date(), touch = true) {
   if (typeof identity.sid !== "string" || !/^[0-9a-f-]{36}$/i.test(identity.sid) || typeof identity.sub !== "string") return null;
   const record = await db.deviceSession.findUnique({ where: { id: identity.sid }, select: {
     id: true, userId: true, lastSeenAt: true, expiresAt: true, revokedAt: true,
-    user: { select: { id: true, email: true, name: true, role: true } },
+    settingsUnlockedUntil: true,
+    user: { select: { id: true, email: true, name: true, role: true, status: true } },
   } });
-  if (!record || record.userId !== identity.sub || record.revokedAt || record.expiresAt <= now) return null;
+  if (!record || record.userId !== identity.sub || record.revokedAt || record.expiresAt <= now || record.user.status !== "ACTIVE") return null;
   if (touch && record.lastSeenAt.getTime() <= now.getTime() - LAST_SEEN_INTERVAL_MS) {
     // The predicate prevents simultaneous requests from causing duplicate writes.
     await db.deviceSession.updateMany({
@@ -36,7 +38,7 @@ export async function createDeviceSession(db: PrismaClient, userId: string, veri
     // verification cannot create a new session using the old password.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     const user = await tx.user.findUnique({ where: { id: userId } });
-    if (!user || user.password !== verifiedPasswordHash) throw new SecurityError(401, "LOGIN_CHANGED", "Please sign in again.");
+    if (!user || user.password !== verifiedPasswordHash || user.status !== "ACTIVE") throw new SecurityError(401, "LOGIN_CHANGED", "Please sign in again.");
     const session = await tx.deviceSession.create({ data: {
       id: randomUUID(), userId, createdAt: now, lastSeenAt: now,
       expiresAt: new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000),
@@ -79,7 +81,7 @@ export async function revokeDeviceSession(db: PrismaClient, identity: SessionIde
     if (!target) throw new SecurityError(404, "NOT_FOUND", "Session not found.");
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${target.userId} FOR UPDATE`;
     const result = await tx.deviceSession.updateMany({ where: { id: targetId, revokedAt: null, expiresAt: { gt: now } }, data: {
-      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "ADMIN_REVOKED", ...clearedPrivateData,
+      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "ADMIN_REVOKED", ...endedSessionPrivateData,
     } });
     if (result.count) await tx.activityLog.create({ data: {
       action: "device_session_revoked", entityType: "device_session", entityId: targetId, userEmail: actor.user.email,
@@ -100,7 +102,7 @@ export async function revokeOtherSessions(db: PrismaClient, identity: SessionIde
       throw new SecurityError(409, "SESSIONS_CHANGED", "The device list changed. Refresh it and confirm the new count.");
     }
     const result = await tx.deviceSession.updateMany({ where: { id: { in: ids }, revokedAt: null }, data: {
-      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "ADMIN_REVOKED_ALL", ...clearedPrivateData,
+      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "ADMIN_REVOKED_ALL", ...endedSessionPrivateData,
     } });
     await tx.activityLog.create({ data: {
       action: "other_device_sessions_revoked", entityType: "user", entityId: userId, userEmail: actor.user.email,
@@ -115,7 +117,7 @@ export async function logoutDeviceSession(db: PrismaClient, identity: SessionIde
     const record = await validateDeviceSession(tx, identity, now, false);
     if (!record) return;
     const result = await tx.deviceSession.updateMany({ where: { id: record.id, revokedAt: null }, data: {
-      revokedAt: now, revokedByUserId: record.userId, revokeReason: "SIGNED_OUT", ...clearedPrivateData,
+      revokedAt: now, revokedByUserId: record.userId, revokeReason: "SIGNED_OUT", ...endedSessionPrivateData,
     } });
     if (result.count) await tx.activityLog.create({ data: {
       action: "user_logout", entityType: "device_session", entityId: record.id, userEmail: record.user.email,
@@ -127,11 +129,12 @@ export async function changePasswordAndRevokeOthers(db: PrismaClient, identity: 
   return db.$transaction(async tx => {
     const actor = await validateDeviceSession(tx, identity, now, false);
     if (!actor) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-    const changed = await tx.user.updateMany({ where: { id: actor.userId, password: previousHash }, data: { password: newHash } });
+    const changed = await tx.user.updateMany({ where: { id: actor.userId, password: previousHash, status: "ACTIVE" }, data: { password: newHash } });
     if (!changed.count) throw new SecurityError(409, "PASSWORD_CHANGED", "The password changed. Try again.");
     const revoked = await tx.deviceSession.updateMany({ where: { userId: actor.userId, id: { not: actor.id }, revokedAt: null, expiresAt: { gt: now } }, data: {
-      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "PASSWORD_CHANGED", ...clearedPrivateData,
+      revokedAt: now, revokedByUserId: actor.userId, revokeReason: "PASSWORD_CHANGED", ...endedSessionPrivateData,
     } });
+    await tx.deviceSession.update({ where: { id: actor.id }, data: { settingsUnlockedUntil: null } });
     await tx.activityLog.create({ data: {
       action: "user_password_changed", entityType: "user", entityId: actor.userId, userEmail: actor.user.email,
       metadata: { otherSessionsRevoked: revoked.count, actorSessionId: actor.id },
@@ -144,8 +147,8 @@ export async function cleanupDeviceSessions(db: PrismaClient, now = new Date()) 
   return db.$transaction(async tx => {
     const scrubbed = await tx.deviceSession.updateMany({ where: {
       OR: [{ expiresAt: { lte: now } }, { revokedAt: { not: null } }],
-      AND: [{ OR: [{ latitude: { not: null } }, { ipAddress: { not: null } }, { userAgent: { not: null } }, { networkCity: { not: null } }, { networkRegion: { not: null } }, { networkCountry: { not: null } }] }],
-    }, data: clearedPrivateData });
+      AND: [{ OR: [{ latitude: { not: null } }, { ipAddress: { not: null } }, { userAgent: { not: null } }, { networkCity: { not: null } }, { networkRegion: { not: null } }, { networkCountry: { not: null } }, { settingsUnlockedUntil: { not: null } }] }],
+    }, data: endedSessionPrivateData });
     const cutoff = new Date(now.getTime() - ENDED_SESSION_RETENTION_MS);
     const deleted = await tx.deviceSession.deleteMany({ where: { OR: [{ expiresAt: { lte: cutoff } }, { revokedAt: { lte: cutoff } }] } });
     return { scrubbed: scrubbed.count, deleted: deleted.count };

@@ -57,7 +57,7 @@ export const getDriverLedgerSummaryTool = {
   type: "function",
   name: "get_driver_ledger_summary",
   description:
-    "ADMIN only. Get canonical commission, payment, subscription-charge, and balance totals for one driver in EUR.",
+    "ADMIN only. Get the canonical combined-charge total (legacy totalCommissions field), payment total, subscription component, and balance for one driver in EUR. The subscription component is already included and must not be added again.",
   strict: true,
   parameters: {
     type: "object",

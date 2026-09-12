@@ -11,6 +11,7 @@ export async function decodeRegisteredToken(params: JWTDecodeParams) {
   return {
     ...token, sub: record.userId, sid: record.id, email: record.user.email,
     name: record.user.name, role: record.user.role,
+    settingsUnlockedUntil: record.settingsUnlockedUntil?.toISOString(),
     sessionExpiresAt: record.expiresAt.toISOString(),
   };
 }

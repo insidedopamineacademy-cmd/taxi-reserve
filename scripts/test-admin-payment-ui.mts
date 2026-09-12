@@ -11,9 +11,10 @@ test("Settings and Admin expose role-gated in-app navigation to devices and sess
   assert.match(settings, /session\?\.user\?\.role === "ADMIN"/);
   assert.match(settings, /href="\/admin"/);
   assert.match(settings, /Open Admin/);
-  assert.match(admin, /href="#users"/);
+  assert.match(admin, /href="\/admin\/users"/);
   assert.match(admin, /href="\/admin\/sessions"/);
   assert.match(admin, /Devices &amp; Sessions/);
+  assert.match(admin, /requireAdminSettingsPage/);
   assert.match(middleware, /"\/admin"/);
 });
 
@@ -39,13 +40,14 @@ test("payment routes use the atomic allocation core and protect amount/date edit
   assert.match(form, /disabled=\{mode === "edit"\}/);
 });
 
-test("the migration is additive and the balance includes each subscription charge exactly once", () => {
+test("the migration is additive and the balance never adds the subscription breakdown", () => {
   const migration = source("prisma/migrations/20260912120000_add_driver_subscription_payment_allocations/migration.sql");
   const financialMath = source("src/lib/drivers/financialMath.ts");
   assert.match(migration, /CREATE TABLE "DriverSubscriptionPaymentAllocation"/);
   assert.match(migration, /ON DELETE CASCADE/);
   assert.doesNotMatch(migration, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE TABLE|DELETE FROM|UPDATE ")/);
-  assert.match(financialMath, /totalCommissions\.plus\(totalSubscriptionCharges\)\.minus\(totalPayments\)/);
+  assert.match(financialMath, /balance: totalCommissions\.minus\(totalPayments\)/);
+  assert.doesNotMatch(financialMath, /balance:\s*totalCommissions\.(?:plus|minus)\(totalSubscriptionCharges\)/);
 });
 
 test("ledger and pending UI expose paid, remaining, partial, and allocation detail", () => {

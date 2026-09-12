@@ -4,14 +4,48 @@ Notable project changes are recorded here in reverse chronological order.
 
 ## Unreleased
 
+### Driver balance double-count correction
+
+- Proved with a read-only aggregate that the reported €264.00 is the raw
+  `CommissionEntry` total, alongside zero payments and a separate €20.00
+  subscription breakdown row. The schema does not type any commission row as a
+  subscription.
+- Corrected the canonical Decimal balance to `combined charge total - payments`.
+  `DriverSubscriptionCharge` and payment-allocation rows remain breakdown and
+  classification evidence and no longer change the total a second time.
+- Renamed worker-facing summary labels from Total commissions to Total charges and
+  from Subscription charges to Subscription component where both appear together.
+- Added exact €264/€20, €100 payment, partial payment, second payment, reversal,
+  no-subscription, multiple-month, credit, Pending PDF and full-ledger
+  reconciliation regressions. No financial row or migration was changed.
+
+### Administrator-managed user lifecycle
+
+- Removed public registration and its navigation entry points. New accounts are
+  created only by an authorized ADMIN and always start as ACTIVE USER accounts.
+- Added a session-scoped secondary Settings PIN gate for sensitive administration:
+  bcrypt hashing, current-password bootstrap, an absolute ten-minute unlock, an
+  explicit lock action, and a five-attempt/five-minute lockout.
+- Added responsive user administration for creating workers, changing worker
+  passwords in place, viewing sessions, and deactivating/reactivating the same User
+  row. Password reset and deactivation revoke every active target session.
+- Protected the current admin from deactivation, retained last-active-admin
+  protection, disallowed admin password reset through worker controls, and added no
+  role editor or user deletion path.
+- Added lifecycle ActivityLog events without passwords, PINs, hashes, cookies, or
+  tokens. User IDs and every existing relational/history row remain unchanged.
+- Added additive migration `20260913120000_add_admin_user_lifecycle`, focused static
+  and disposable-PostgreSQL preservation tests, and responsive Chromium coverage
+  at 360, 390, 430, and 1280 pixels.
+
 ### Automatic driver-payment allocation and admin navigation
 
 - Added an ADMIN-only Settings entry point to `/admin` and responsive Administration
   action cards for Users and Devices & Sessions. Existing middleware remains the
   server-side authorization boundary.
-- Changed the canonical driver liability formula to `commissions + subscription
-  charges - payments`. Positive remains due to the business, zero settled, and
-  negative driver credit.
+- The initial allocation implementation changed the formula to add subscription
+  charges. The correction above restores the production data contract without
+  changing allocation rows or stored amounts.
 - Added atomic oldest-first allocation of each new `DriverPayment` to eligible
   stored monthly subscription charges, with any remainder applied to commissions.
   Partial, exact, excess, no-charge and multi-month payments use Prisma Decimal.
@@ -114,8 +148,8 @@ Notable project changes are recorded here in reverse chronological order.
 ### Changed
 
 - Initially extended the driver balance with subscription charges. The current
-  canonical formula is documented under Unreleased as `commissions + subscription
-  charges - payments`.
+  combined-total semantics and double-count correction are documented under
+  Unreleased.
 - Added subscription configuration, totals, and history to driver directory/detail/edit screens and monthly subscription totals to the finance overview.
 - Extended individual, due, and full driver PDFs with subscription totals/history and final subscription-adjusted balances.
 

@@ -57,8 +57,8 @@ const financialSummary: AssistantDriverFinancialSummaryCardData = {
   totalCommissions: "100.00",
   totalPayments: "80.00",
   totalSubscriptionCharges: "20.00",
-  balance: "0.00",
-  balancePosition: "SETTLED",
+  balance: "20.00",
+  balancePosition: "DUE",
   calculatedAt: "2026-08-11T10:00:00.000Z",
 };
 

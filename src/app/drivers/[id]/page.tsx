@@ -260,7 +260,7 @@ export default async function DriverDetailPage({ params }: PageProps) {
         </h2>
         <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <article className="rounded-xl border border-app-border bg-surface p-4">
-            <p className="text-sm text-muted">Total commissions</p>
+            <p className="text-sm text-muted">Total charges</p>
             <p className="mt-2 text-2xl font-semibold text-white tnum">
               {formatEuro(summary.totalCommissions)}
             </p>
@@ -272,7 +272,7 @@ export default async function DriverDetailPage({ params }: PageProps) {
             </p>
           </article>
           <article className="rounded-xl border border-app-border bg-surface p-4">
-            <p className="text-sm text-muted">Subscription charges</p>
+            <p className="text-sm text-muted">Subscription component</p>
             <p className="mt-2 text-2xl font-semibold text-white tnum">
               {formatEuro(summary.totalSubscriptionCharges)}
             </p>

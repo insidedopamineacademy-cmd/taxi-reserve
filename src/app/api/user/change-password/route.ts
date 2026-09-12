@@ -13,6 +13,12 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email || !session?.id || !session.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user.role === "ADMIN") {
+    const unlockedUntil = session.settingsUnlockedUntil ? new Date(session.settingsUnlockedUntil) : null;
+    if (!unlockedUntil || !Number.isFinite(unlockedUntil.getTime()) || unlockedUntil <= new Date()) {
+      return NextResponse.json({ error: "Unlock protected settings to continue.", code: "SETTINGS_LOCKED" }, { status: 423 });
+    }
+  }
 
   const { currentPassword, newPassword } = await req.json().catch(() => ({}));
   if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) return NextResponse.json({ error: "Missing fields" }, { status: 400 });

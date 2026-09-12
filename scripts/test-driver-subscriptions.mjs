@@ -153,7 +153,7 @@ async function main() {
     activeVanTotals[1]._sum.amount,
     activeVanTotals[2]._sum.amount,
   );
-  assert.equal(summary.balance.toFixed(2), "90.00");
+  assert.equal(summary.balance.toFixed(2), "70.00", "stored subscription rows are a breakdown of the combined charge total");
 
   await prisma.driver.update({
     where: { id: activeVan.id },

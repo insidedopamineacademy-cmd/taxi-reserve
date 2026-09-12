@@ -12,6 +12,11 @@ enum Role {
   ADMIN
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum ResStatus {
   PENDING
   ASSIGNED
@@ -75,12 +80,16 @@ enum AiActionStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String?
-  name      String?
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
+  id                       String     @id @default(cuid())
+  email                    String     @unique
+  password                 String?
+  name                     String?
+  role                     Role       @default(USER)
+  status                   UserStatus @default(ACTIVE)
+  settingsPinHash          String?
+  settingsPinFailedAttempts Int       @default(0)
+  settingsPinLockedUntil   DateTime?
+  createdAt                DateTime   @default(now())
 
   // Relations
   reservations          Reservation[]
@@ -114,6 +123,7 @@ model DeviceSession {
   accuracy           Float?
   locationCapturedAt DateTime?
   locationVerifiedAt DateTime?
+  settingsUnlockedUntil DateTime?
 
   user      User  @relation("DeviceSessionOwner", fields: [userId], references: [id], onDelete: Restrict)
   revokedBy User? @relation("DeviceSessionRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)

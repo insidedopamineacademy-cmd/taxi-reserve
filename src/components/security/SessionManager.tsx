@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
 
-type Account = { id: string; email: string; name: string | null; activeCount: number };
+type Account = { id: string; email: string; name: string | null; status: "ACTIVE" | "INACTIVE"; activeCount: number };
 type Device = {
   id: string; userId: string; device: string; browser: string; os: string;
   createdAt: string; lastSeenAt: string; expiresAt: string; revokedAt: string | null;
@@ -44,9 +44,9 @@ function RevokeConfirmation({ confirmation, busy, error, cancel, confirm }: { co
   </dialog>;
 }
 
-export default function SessionManager() {
+export default function SessionManager({ initialUserId = "" }: { initialUserId?: string }) {
   const [query, setQuery] = useState("");
-  const [userId, setUserId] = useState("");
+  const [userId, setUserId] = useState(initialUserId);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,6 +111,7 @@ export default function SessionManager() {
             <span className="block break-words text-sm font-medium text-white">{user.name || user.email}</span>
             {user.name && <span className="mt-1 block break-all text-xs text-muted">{user.email}</span>}
             <span className="mt-1 block text-xs text-muted">{user.activeCount} active {user.activeCount === 1 ? "device" : "devices"}</span>
+            <span className="mt-1 block text-xs text-subtle">{user.status === "ACTIVE" ? "Active account" : "Inactive account"}</span>
           </button></li>)}
         </ul>
         {!loading && !data?.users.length && <p className="p-2 text-sm text-muted">No matching accounts.</p>}

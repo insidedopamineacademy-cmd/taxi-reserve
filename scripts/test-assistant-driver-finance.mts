@@ -168,7 +168,7 @@ test("ledger summary preserves Decimal precision, exact zeros, and historical ch
   const repo = repository({
     getDriver: async () => exemptDriver,
     getFinancialSummary: async () => calculateDriverFinancialSummary(
-      decimal("10.10"),
+      decimal("20.15"),
       decimal("20.15"),
       decimal("10.05"),
     ),
@@ -186,7 +186,7 @@ test("ledger summary preserves Decimal precision, exact zeros, and historical ch
     balance: summary.balance,
     position: summary.balancePosition,
   }, {
-    commissions: "10.10",
+    commissions: "20.15",
     payments: "20.15",
     subscriptions: "10.05",
     balance: "0.00",
@@ -254,7 +254,7 @@ test("typed transaction pages use inclusive civil dates, deterministic totals, a
     commissions: "100.10",
     payments: "25.05",
     subscriptionCharges: "7.00",
-    netChange: "82.05",
+    netChange: "75.05",
   });
   assert.equal(result?.nextCursor, "txn_d");
   assert.equal(result?.rows[0].type === "COMMISSION" ? result.rows[0].reservation?.href : null, "/reservations/r-1/edit");
@@ -282,7 +282,7 @@ test("commission, payment, subscription, and empty period queries keep type-spec
   const expectedNet = {
     COMMISSION: "12.34",
     PAYMENT: "-5.67",
-    SUBSCRIPTION: "7.00",
+    SUBSCRIPTION: "0.00",
     ALL: "0.00",
   } as const;
   for (const transactionType of ["COMMISSION", "PAYMENT", "SUBSCRIPTION", "ALL"] as const) {

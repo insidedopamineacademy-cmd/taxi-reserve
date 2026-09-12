@@ -8,7 +8,8 @@ A capability-parity review of the driver/commission surface against the legacy `
 
 ## Current capabilities
 
-- Credentials authentication with `USER` and `ADMIN` roles stored in PostgreSQL and propagated through NextAuth JWT sessions.
+- Credentials authentication with `USER` and `ADMIN` roles, ACTIVE/INACTIVE account status, and revocable database-backed sessions.
+- ADMIN-managed worker accounts with no public sign-up, in-place password reset, session revocation, and reversible deactivation that preserves historical ownership and audit records.
 - User-owned reservation create, list, search, date filtering, sorting, editing, status updates, soft deletion, restoration, and permanent deletion of the signed-in user's deleted set.
 - Call, WhatsApp, copy-number, and structured reservation-sharing actions.
 - Allowlisted IMAP inbox synchronization, folder/search/unread views, sanitized messages, and SMTP replies.
@@ -35,9 +36,10 @@ A capability-parity review of the driver/commission surface against the legacy `
 | `/reservations/deleted` | Restore owned reservations or permanently delete the complete owned deleted set | Authenticated |
 | `/emails` | Shared inbox | Authenticated and email allowlisted |
 | `/activity-log` | Activity history | Authenticated; own activity for USER, all activity for ADMIN |
-| `/settings` | Account settings and ADMIN entry point | Authenticated; admin card shown only to ADMIN |
-| `/admin` | Administration hub and user directory | ADMIN |
-| `/admin/sessions` | Device and session management | ADMIN |
+| `/settings` | Account settings and secondary ADMIN security gate | Authenticated; ADMIN controls require the current session to be unlocked |
+| `/admin` | Administration hub | ADMIN plus current-session security unlock |
+| `/admin/users` | Create, reset, deactivate/reactivate, and inspect worker accounts | ADMIN plus current-session security unlock |
+| `/admin/sessions` | Device and session management | ADMIN plus current-session security unlock |
 | `/drivers` | Driver directory, configuration, balances, and driver detail links | ADMIN |
 | `/drivers/overview` | Due, credit, payment, subscription, and recent-finance overview | ADMIN |
 | `/commissions` | Reservation-linked and manual commissions | ADMIN |
@@ -100,13 +102,48 @@ browser QA uses `npm run test:session-browser` with `SESSION_TEST_DATABASE_URL`,
 Chrome, or use installed Playwright Chromium. The script creates only synthetic QA accounts
 in the disposable database and writes screenshots under the system temporary folder.
 
+## Administrator-managed users
+
+Public registration is disabled. An unlocked ADMIN creates worker accounts from
+`/admin/users`; every new account is `USER` and `ACTIVE`. Password reset updates the
+same User row and revokes every active session for that worker. Deactivation also
+keeps the User row and all linked reservations, reminders, finance attribution,
+assistant records, device history, and ActivityLog rows; reactivation restores
+credential login for that same ID. There is no user-delete API or role editor.
+
+Sensitive `/admin` pages and APIs require both the current database `ADMIN` role
+and a secondary 6-8 digit Settings PIN unlock for the current DeviceSession. The PIN
+hash uses bcrypt, is never returned or logged, and unlocks that session for an
+absolute 10 minutes. Five incorrect attempts lock PIN verification for five
+minutes. A new login, logout, session revocation, explicit Settings lock, or the
+admin's own password change has no inherited unlock. Initial PIN setup requires the
+admin's current account password.
+
+See [ADMIN_USER_LIFECYCLE_REPORT.md](ADMIN_USER_LIFECYCLE_REPORT.md) for the User
+dependency map, preservation guarantees, test evidence, read-only verification
+query, and production rollout order. Local and deployed code must not serve this
+feature until additive migration `20260913120000_add_admin_user_lifecycle` has been
+reviewed and applied. Focused commands are `npm run test:admin-user-security`,
+`ADMIN_USER_TEST_DATABASE_URL=<disposable-local-test-database> npm run
+test:admin-user-lifecycle`, and `npm run test:admin-user-browser` against a local
+server using that disposable database.
+
 ## Driver finance rules
 
-Commissions and monthly subscriptions are amounts due to the business from a driver. A recorded payment reduces that combined liability. Subscription charges remain separate from `CommissionEntry`.
+The legacy `CommissionEntry` aggregate is the driver's combined charge total. In
+current operational data it already includes the subscription component.
+`DriverSubscriptionCharge` remains a separate monthly breakdown and settlement
+record; it is not added to the combined total again. A recorded payment reduces the
+combined total.
 
 ```text
-balance = totalCommissions + totalSubscriptionCharges - totalPayments
+balance = combinedChargeTotal - totalPayments
 ```
+
+The internal `totalCommissions` field retains its legacy name for compatibility,
+but worker-facing summaries label it **Total charges**. For example, combined
+charges €264.00 with a €20.00 subscription component means ordinary commissions
+€244.00 and an outstanding balance of €264.00 before payment.
 
 All driver finance amounts use Prisma `Decimal`; reservation `priceEuro` remains the existing floating-point field.
 
@@ -190,7 +227,7 @@ Strict closed `search_reservations` and `get_reservation` schemas are passed fro
 
 All three driver/finance tools authorize the canonical database-backed user role before any driver lookup. Only ADMIN may use them; USER failures return a permission-safe token that does not reveal whether a driver exists. Driver search defaults to 10 results, caps at 20, scans at most 200 candidates per request for application-owned DUE/CREDIT/SETTLED filtering, and resumes with a bounded cursor. Transaction pages default to 10, cap at 25, accept validated civil-date ranges, and never include notes or raw Prisma objects.
 
-Finance DTOs reuse the canonical Prisma Decimal summaries and formula `commissions + subscription charges - payments`. Every amount crossing the AI or browser boundary is an exact decimal string with `EUR`; application code classifies positive balances as DUE, zero as SETTLED, and negative as CREDIT. Payment-allocation rows are reconciliation metadata and are never counted again. Period totals are aggregated by the application rather than inferred from the visible transaction rows. Existing `/drivers/[id]` and authorized `/reservations/[id]/edit` links are reused.
+Finance DTOs reuse the canonical Prisma Decimal summaries and formula `combined charge total - payments`. The separately reported subscription amount is a breakdown of that combined total and is never added again. Every amount crossing the AI or browser boundary is an exact decimal string with `EUR`; application code classifies positive balances as DUE, zero as SETTLED, and negative as CREDIT. Payment-allocation rows are reconciliation metadata and are never counted again. Period totals are aggregated by the application rather than inferred from the visible transaction rows. Existing `/drivers/[id]` and authorized `/reservations/[id]/edit` links are reused.
 
 The browser receives only small typed application-owned events, including `assistant.reservation_result`, `assistant.driver_result`, `assistant.driver_financial_summary`, and `assistant.driver_transactions`; raw provider events never reach it. Text is animation-frame coalesced; cards come from structured facts rather than Markdown parsing. Stop aborts the live request and preserves partial output. Retry reuses the failed turn without duplicating its user bubble or cards. Conversation context is ephemeral, text-only, and capped at six entries/4,000 characters; it is not stored in browser storage, OpenAI conversations, or Taxi Reserve tables.
 

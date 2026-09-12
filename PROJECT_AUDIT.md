@@ -32,7 +32,7 @@ The driver/finance module was integrated into Taxi Reserve without replacing or 
 ```text
 src/
   app/
-    (auth)/                 Login and registration
+    (auth)/                 Credentials login
     api/                    Auth, reservation, admin, email, driver, finance, PDF, and cron handlers
     activity-log/           Protected activity history
     commissions/            ADMIN commission operations
@@ -40,7 +40,8 @@ src/
     emails/                 Allowlisted inbox and thread pages
     payments/               ADMIN payment operations
     reservations/           Active, new, edit, deleted, restore, and delete flows
-    settings/               Password-change UI
+    settings/               Password change and ADMIN PIN gate
+    admin/users/            ADMIN-managed worker lifecycle
   components/
     drivers/                Driver, commission, payment, balance, and status UI
     emails/                 Inbox state, sync, message, read, and reply UI
@@ -69,9 +70,9 @@ src/middleware.ts           Page-level NextAuth protection
 
 ### Authentication and roles
 
-- `User.role` is the Prisma `Role` enum: `USER` or `ADMIN`; registrations default to `USER`.
+- `User.role` is the Prisma `Role` enum: `USER` or `ADMIN`; `User.status` is `ACTIVE` or `INACTIVE`. Public registration is disabled, and ADMIN-created accounts always start as ACTIVE USER accounts.
 - NextAuth normalizes login email, verifies the password hash, creates a `DeviceSession` and puts its opaque ID in the existing encrypted JWT cookie.
-- Every token decode checks the registry for ownership, revocation and absolute 30-day expiry and reloads the canonical database role. Role changes apply immediately; password changes revoke other sessions.
+- Every token decode checks the registry for ownership, revocation and absolute 30-day expiry and reloads the canonical database role and status. Inactive users fail authorization immediately; password changes revoke other sessions.
 - Node.js middleware protects application pages (including `/`) and APIs using the
   registered session, current database role and independent cron authorization.
 - Browser permission and GPS state are not authorization inputs. The removed
@@ -80,8 +81,23 @@ src/middleware.ts           Page-level NextAuth protection
 - A session-only root boundary performs a once-per-minute foreground check, checks
   persisted-page/app resume, and handles 401 responses from protected APIs. These
   checks update `lastSeenAt` through the existing five-minute write throttle.
-- `/admin`, `/drivers`, `/commissions`, `/payments` and their ADMIN API paths require the canonical `ADMIN` role in middleware.
+- `/admin` and `/api/admin` require the canonical `ADMIN` role plus an unexpired secondary Settings unlock on the current DeviceSession. The security-gate endpoint remains reachable to an authenticated ADMIN so the session can be unlocked. `/drivers`, `/commissions`, and `/payments` retain canonical role authorization.
 - Driver/finance pages and APIs repeat authorization through server session checks. Middleware is not the sole security boundary.
+
+Sensitive user and session administration is protected again in server pages, route
+handlers, and core mutation functions. The secondary PIN is a per-admin bcrypt hash;
+setup requires the current account password. A successful PIN check unlocks only the
+current DeviceSession for ten minutes. Five failed checks create a five-minute
+lockout. PINs, password values, hashes, cookies, and session tokens never enter
+ActivityLog metadata. A fresh login never inherits another session's unlock.
+
+User lifecycle changes never delete or replace a User. Worker password reset updates
+the existing password hash and revokes all active target sessions. Deactivation sets
+the same row to INACTIVE and revokes its sessions; reactivation changes the same row
+back to ACTIVE. The current admin cannot deactivate itself, the last active admin is
+protected, new users cannot be created as ADMIN, and the worker password route
+refuses ADMIN targets. See `ADMIN_USER_LIFECYCLE_REPORT.md` for the full dependency
+map and preservation proof.
 
 `/admin/sessions` lists all active and up to 50 recently ended sessions for a
 selected account. Individual and counted bulk revocation are transactional with
@@ -129,16 +145,18 @@ included in this change.
 | Route | Purpose | Access |
 | --- | --- | --- |
 | `/` | Reservation dashboard, allowlisted unread Inbox card, ADMIN Drivers and Full Ledger PDF actions | Authenticated; content adapts to permissions |
-| `/login`, `/register` | Credentials sign-in and account registration | Public |
+| `/login` | Credentials sign-in | Public |
 | `/reservations` | Owned active reservations, free-text search, optional URL date range, sort, status, phone, sharing, edit, assignment shortcut, and soft delete | Authenticated |
 | `/reservations/new` | Create an owned reservation | Authenticated |
 | `/reservations/[id]/edit` | Edit an owned active reservation; ADMIN-only driver/commission section | Authenticated and ownership-checked |
 | `/reservations/deleted` | Restore owned deleted records or permanently delete the complete owned deleted set | Authenticated |
 | `/emails` | Foldered/searchable shared inbox and manual sync | Authenticated and allowlisted |
 | `/emails/[threadId]` | Thread history, mark-read behavior, and reply composer | Authenticated and allowlisted |
-| `/settings` | Change the signed-in user's password | Authenticated |
+| `/settings` | Change the signed-in user's password; configure/unlock/lock the ADMIN security gate | Authenticated; ADMIN controls are session-gated |
 | `/activity-log` | Searchable/filterable activity history | Authenticated; own rows for USER, all rows for ADMIN |
-| `/admin` | User count/list | ADMIN |
+| `/admin` | Administration hub | ADMIN plus current-session unlock |
+| `/admin/users` | Create and manage worker lifecycle | ADMIN plus current-session unlock |
+| `/admin/sessions` | Inspect and revoke device sessions | ADMIN plus current-session unlock |
 | `/drivers` | Driver directory, configuration state, aggregate finance, balances | ADMIN |
 | `/drivers/new` | Create a driver | ADMIN |
 | `/drivers/[id]` | Driver details, finance summary, histories, actions, individual PDF | ADMIN |
@@ -154,9 +172,12 @@ The desktop and mobile navbar expose Overview, Drivers, Commissions, and Payment
 | Method and route | Responsibility |
 | --- | --- |
 | `GET/POST /api/auth/[...nextauth]` | NextAuth credentials and session endpoints |
-| `POST /api/register` | Validate and register a default-USER account |
-| `POST /api/user/change-password` | Verify current password and store a new hash |
-| `GET /api/admin` | Return user count/list after an ADMIN session check |
+| `POST /api/user/change-password` | Verify current password and store a new hash; ADMIN also requires the current-session unlock |
+| `GET/POST /api/admin/security-gate` | Inspect, configure, unlock, or explicitly lock the current ADMIN session gate |
+| `GET/POST /api/admin/users` | List managed users or create an ACTIVE USER account after both authorization checks |
+| `POST /api/admin/users/[id]/password` | Change a worker password in place and revoke its active sessions |
+| `POST /api/admin/users/[id]/status` | Deactivate or reactivate the same worker row with preservation safeguards |
+| `GET /api/admin` | Return the administration summary after both authorization checks |
 | `DELETE /api/admin` | Deliberately disabled with HTTP 405 |
 | `POST /api/reservations` | Create an owned reservation |
 | `PATCH /api/reservations/[id]` | Update an owned active reservation; transactionally handle ADMIN assignment/linked commission when supplied |
@@ -261,10 +282,15 @@ The commission list, driver ledger, finance overview, individual PDF, and full P
 - All ledger arithmetic uses Prisma `Decimal`; no floating-point arithmetic is used for driver money.
 - Reservation `priceEuro` intentionally remains the pre-existing `Float` field and is not part of driver ledger arithmetic.
 
+The legacy `CommissionEntry` aggregate is the combined driver charge total in
+current operational data. `DriverSubscriptionCharge` supplies the monthly
+component/status breakdown and is not added to that total again. The internal
+`totalCommissions` property keeps its legacy name for API compatibility.
+
 The centralized balance formula is:
 
 ```text
-balance = totalCommissions + totalSubscriptionCharges - totalPayments
+balance = combinedChargeTotal - totalPayments
 ```
 
 Interpretation:
@@ -273,11 +299,18 @@ Interpretation:
 - negative balance: credit in the driver's favour;
 - zero: settled.
 
-`/drivers` shows aggregate commission, payment, subscription, and outstanding totals. `/drivers/overview` derives Total Commission Due, Driver Credits, and Net Position from final per-driver balances, and also shows payments this week/month, subscriptions this month, active-driver count, and recent commission/payment activity.
+`/drivers` shows combined charges, payments, and outstanding totals. Driver detail
+also shows the subscription component without adding it again.
+`/drivers/overview` derives Total Commission Due, Driver Credits, and Net Position
+from final per-driver balances, and also shows payments this week/month,
+subscriptions this month, active-driver count, and recent commission/payment
+activity.
 
 ## Monthly driver subscription system
 
-Subscriptions are money owed by the driver and are never stored in `CommissionEntry`.
+Subscription rows record the monthly component, status, and payment allocation.
+They remain separate from `CommissionEntry`, while the operational
+`CommissionEntry` aggregate is the already-combined charge total.
 
 ### Configuration and rates
 
@@ -342,7 +375,7 @@ All PDF routes perform server-side ADMIN checks and return private, non-cached d
 | Route | Content |
 | --- | --- |
 | `GET /api/drivers/[id]/ledger-pdf` | Driver identity; commission, payment, subscription, and balance totals; commission routes; payment history; subscription month/amount history |
-| `GET /api/drivers/due-pdf` | Drivers with positive final balances and totals including subscription deductions |
+| `GET /api/drivers/due-pdf` | Drivers with positive combined-charge balances and the current subscription component/status |
 | `GET /api/drivers/full-ledger-pdf` | Every driver with commission routes, payments, subscriptions, and final balance |
 
 The homepage exposes the Full Ledger PDF directly to ADMIN users. The finance overview exposes the Due PDF, and each driver detail page exposes the individual ledger.
@@ -386,7 +419,7 @@ There is no current driver-delete API. The restrictive financial foreign keys pr
 
 Implemented action families include:
 
-- authentication/administration: registration, exactly one fresh-session LOGIN, logout, legacy admin-login history, and admin user-list view;
+- authentication/administration: exactly one fresh-session LOGIN, logout, legacy admin-login history, PIN setup/unlock failures, managed-user creation, password change, deactivation/reactivation, session revocation, and admin user-list view;
 - reservations: create/update/delete/restore contexts, assignment changes, linked-commission create/update/remove;
 - drivers: create/update/activate/deactivate;
 - manual commissions: create/update/delete;
@@ -571,6 +604,7 @@ The repository's `00000000000000_baseline/migration.sql` is empty. Therefore, th
 | `20260810120000_add_driver_subscriptions` | Adds vehicle enum/configuration, exemption flag, DriverSubscriptionCharge, month index, unique driver/month constraint, and restrictive driver relation |
 | `20260906090000_device_sessions_location` | Adds the DeviceSession registry required by current authentication; its nullable legacy GPS columns remain unused pending a separately reviewed cleanup migration |
 | `20260912120000_add_driver_subscription_payment_allocations` | Adds explicit positive Decimal payment-to-subscription allocations, lookup/uniqueness indexes and preservation-oriented foreign keys |
+| `20260913120000_add_admin_user_lifecycle` | Adds ACTIVE/INACTIVE user status, secondary ADMIN PIN state, and a per-session unlock expiry without deleting or rewriting User/history rows |
 
 All are additive relative to the live Taxi Reserve architecture. No migration imports or reinterprets financial history from an external standalone system.
 
@@ -582,7 +616,7 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 
 ## Known risks and limitations
 
-- Public registration, login, and password change have no application-level rate limiting; deployment/network controls remain important.
+- Public registration is disabled. Primary credential login and self password change have no application-level rate limiting; deployment/network controls remain important. The secondary ADMIN PIN has a persistent five-attempt/five-minute lockout.
 - The 2026-08-11 Phase 1E dependency pass updated compatible Next 15, NextAuth 4, Mailparser, PostCSS/Nodemailer, and patched transitive packages. The final `npm audit --json` reports zero advisories. Sharp 0.35 is explicitly overridden under Next 15 and must remain covered by build/image regression checks on later lockfile changes.
 - Assistant admission is keyed by the canonical database user ID and enforces one active generation plus a rolling per-minute accepted-request cap. It is process-local, not a distributed/global quota across multiple serverless instances; deployment-level controls remain the next option if real traffic requires a global limit.
 - Phase 1D remains read-only. Physical iOS/Android keyboard, slow-stream, driver/finance Stop/Retry, network-switch, accessibility, and background/foreground validation remains a release gate.
@@ -605,6 +639,8 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 - [ ] Run all seven assistant test commands; verify unauthenticated, disabled, timeout, rate limits, tool limits, cancellation, retry, partial-stream recovery, driver/finance authorization, Decimal totals, exact registry boundaries, dependency/email compatibility, and metadata-only logging without a billed OpenAI call.
 - [ ] As ADMIN, test driver search, duplicate names, inactive/unconfigured vehicles, positive/zero/negative balances, typed month transactions, and existing deep links. As USER, confirm all driver/finance requests reveal no driver existence or amount.
 - [ ] Sign in as USER and ADMIN; verify role-specific navbar/homepage and server denials.
+- [ ] Configure the ADMIN PIN with the current password; verify wrong-PIN lockout, ten-minute session-only expiry, explicit lock, fresh-login isolation, and direct admin page/API denial while locked.
+- [ ] Create a worker, change its password, confirm old sessions are revoked, deactivate/reactivate the same ID, and verify reservations, reminders, finance attribution, AI records, session history, and ActivityLog rows remain attached.
 - [ ] Confirm USER reservations remain owner-scoped and do not receive driver commission data in cards or WhatsApp shares.
 - [ ] Search reservations; test `from`/`to` URL ranges, sort order, status cycling, edit sections, soft delete, restore, and permanent-delete-all confirmation.
 - [ ] Verify local reservation date/time survives save/reload without shifting.
@@ -614,7 +650,7 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 - [ ] Assign/change/unassign an ACTIVE driver and create/update/remove the reservation-linked commission with confirmation.
 - [ ] Create/edit/delete manual commissions and payments; verify route source labels and delete-and-re-entry protection for payment amount/date.
 - [ ] Confirm new payments allocate oldest subscription first, partial/excess states reconcile, deletion reverses allocations, and audit history remains visible.
-- [ ] Confirm finance balances and overview use commissions plus subscriptions minus payments without counting allocations again.
+- [ ] Confirm finance balances and overview use combined charges minus payments; subscription and allocation rows must not alter the total again.
 - [ ] Generate individual, due, and full ledger PDFs and inspect multi-page route/payment/subscription layout.
 - [ ] Run monthly subscription tests on disposable PostgreSQL data for rates, skips, two months, idempotency, history preservation, and uniqueness.
 - [ ] Call the cron route with missing/wrong/valid Bearer values only in a non-production environment.

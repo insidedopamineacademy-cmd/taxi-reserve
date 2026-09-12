@@ -7,7 +7,7 @@ import { readSecurityJson, requireSameOrigin, requireSecuritySession, securityFa
 export async function POST(request: Request) {
   try {
     requireSameOrigin(request);
-    const { identity } = await requireSecuritySession({ admin: true });
+    const { identity } = await requireSecuritySession({ admin: true, settingsUnlocked: true });
     const body = await readSecurityJson(request, 65536);
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new SecurityError(400, "INVALID_REQUEST", "Invalid confirmation.");
     const input = body as Record<string, unknown>;

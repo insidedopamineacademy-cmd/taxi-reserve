@@ -6,29 +6,28 @@ commit, push or deployment was performed.
 
 ## Accounting contract
 
-The pre-change audit found this exact implementation:
+A post-allocation read-only audit proved that the operational
+`CommissionEntry` aggregate is already the combined driver charge total. The
+reported production shape contains €264.00 in 25 CommissionEntry rows, zero
+payments, and a separate €20.00 subscription row. The schema has no commission
+type or subscription marker, so no individual CommissionEntry can be identified as
+the subscription. The confirmed business meaning is €244.00 ordinary commission
+plus a €20.00 subscription component inside the €264.00 combined total.
+
+`DriverSubscriptionCharge` is the authoritative monthly component/status row. It
+must remain visible for allocation and settlement, but must not be added again:
 
 ```text
-balance = totalCommissions - totalPayments - totalSubscriptionCharges
+balance = combinedChargeTotal - totalPayments
 ```
 
-At the same time, the product labelled a positive balance as owed to the business.
-That sign made a new subscription lower the driver's liability and produced €124,
-not the required €164, for commissions €244, subscription €20 and payment €100.
-The subscription term therefore had to change sign to implement the stated
-business rule. No other finance term or aggregate source changed.
-
-`DriverSubscriptionCharge` is the authoritative monthly liability row. The
-canonical balance is:
-
-```text
-balance = totalCommissions + totalSubscriptionCharges - totalPayments
-```
-
-Positive means the driver owes the business, zero means settled, and negative is a
-credit in the driver's favour. All driver money uses Prisma `Decimal`.
-`DriverSubscriptionPaymentAllocation` explains how a payment was divided; it is
-reconciliation metadata and is never added to or subtracted from the balance.
+The internal `totalCommissions` property retains its legacy name and contains the
+combined charge total. Worker-facing summaries call it **Total charges** and call
+the monthly/all-time subscription value **Subscription component** where the two
+appear together. Positive means the driver owes the business, zero means settled,
+and negative is a credit in the driver's favour. All driver money uses Prisma
+`Decimal`. `DriverSubscriptionPaymentAllocation` explains how a payment was
+divided; it never changes the balance independently.
 
 ## Existing monthly generation
 
@@ -98,8 +97,9 @@ The driver ledger shows the same split on each payment and shows paid/remaining
 amounts for every monthly charge. Record payment is the primary driver action; Add
 commission remains adjacent.
 
-Drivers, Pending Commissions, the due PDF, individual ledger PDF and full ledger
-PDF use the same canonical balance and settlement derivation. The Pending column
+Drivers, Pending Commissions, the due PDF, individual ledger PDF, full ledger PDF,
+and assistant finance responses use the same canonical balance and settlement
+derivation. The Pending column
 can show `€10.00/€20.00`, `PARCIAL`, and the exact remaining subscription without
 changing the final amount due.
 
@@ -114,8 +114,9 @@ existing middleware and server/API ADMIN checks.
 
 ## Validation evidence
 
-- Pure/unit coverage: partial, exact, excess, no-charge, multiple-month oldest-first,
-  below-minimum validation, derived states, authoritative formula and no double count.
+- Pure/unit coverage: the exact €264/€20 regression, partial, exact, excess,
+  no-charge, multiple-month oldest-first, below-minimum validation, derived states,
+  authoritative formula, negative credit and cross-surface reconciliation.
 - Disposable PostgreSQL coverage: historical PAID/UNVERIFIED compatibility,
   exempt/inactive behavior, second payment completion, reversal/idempotency,
   protected edits, manual compatibility, two concurrent payments and forced audit

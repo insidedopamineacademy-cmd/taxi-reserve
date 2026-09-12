@@ -43,9 +43,9 @@ export const DriverFinancialSummaryCard = memo(function DriverFinancialSummaryCa
           </span>
         </div>
         <dl className="mt-3 space-y-2">
-          <TotalRow label="Commissions" amount={summary.totalCommissions} />
+          <TotalRow label="Total charges" amount={summary.totalCommissions} />
           <TotalRow label="Payments" amount={summary.totalPayments} />
-          <TotalRow label="Subscription charges" amount={summary.totalSubscriptionCharges} />
+          <TotalRow label="Subscription component" amount={summary.totalSubscriptionCharges} />
         </dl>
       </div>
       <div className="border-t border-white/10 px-3 py-2.5">

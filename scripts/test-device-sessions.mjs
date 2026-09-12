@@ -162,12 +162,14 @@ try {
 
   await db.deviceSession.update({ where: { id: c.id }, data: {
     expiresAt: new Date(now.getTime() + 1000), ipAddress: "198.51.100.1",
+    settingsUnlockedUntil: new Date(now.getTime() + 60_000),
     latitude: 41.3879, longitude: 2.1699, accuracy: 34,
     locationCapturedAt: now, locationVerifiedAt: now,
   } });
   await cleanupDeviceSessions(db, new Date(now.getTime() + 2000));
   const scrubbed = await get(c.id);
   assert.equal(scrubbed.ipAddress, null);
+  assert.equal(scrubbed.settingsUnlockedUntil, null);
   assert.deepEqual(
     [scrubbed.latitude, scrubbed.longitude, scrubbed.accuracy, scrubbed.locationCapturedAt, scrubbed.locationVerifiedAt],
     [null, null, null, null, null],

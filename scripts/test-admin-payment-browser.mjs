@@ -27,6 +27,7 @@ const db = new PrismaClient({ datasourceUrl: databaseUrl });
 const output = fs.mkdtempSync(path.join(os.tmpdir(), "taxi-admin-payment-browser-"));
 const run = randomUUID().slice(0, 8);
 const password = "TaxiAllocationQA2026!";
+const pin = "246810";
 const adminEmail = `allocation-admin-${run}@qa.example.test`;
 const userEmail = `allocation-user-${run}@qa.example.test`;
 const widths = [360, 390, 430, 1280];
@@ -55,8 +56,9 @@ async function capture(page, name, width) {
 
 console.log("QA artifacts:", output);
 const hash = await bcrypt.hash(password, 12);
+const pinHash = await bcrypt.hash(pin, 12);
 const [admin, user] = await Promise.all([
-  db.user.create({ data: { email: adminEmail, name: "Allocation Admin", role: "ADMIN", password: hash } }),
+  db.user.create({ data: { email: adminEmail, name: "Allocation Admin", role: "ADMIN", password: hash, settingsPinHash: pinHash } }),
   db.user.create({ data: { email: userEmail, name: "Allocation User", role: "USER", password: hash } }),
 ]);
 const driver = await db.driver.create({ data: {
@@ -66,7 +68,7 @@ const driver = await db.driver.create({ data: {
 } });
 await db.commissionEntry.create({ data: {
   driverId: driver.id,
-  commissionAmount: "244.00",
+  commissionAmount: "264.00",
   entryDate: new Date("2026-09-08T00:00:00.000Z"),
 } });
 await db.driverSubscriptionCharge.create({ data: {
@@ -88,6 +90,8 @@ try {
 
   await page.goto(`${base}/settings`);
   await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+  await page.getByRole("textbox", { name: "Security PIN", exact: true }).fill(pin);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
   await page.getByRole("link", { name: "Open Admin", exact: true }).waitFor();
   for (const width of widths) await capture(page, "settings-admin", width);
   await page.getByRole("link", { name: "Open Admin", exact: true }).click();
@@ -102,6 +106,10 @@ try {
   await page.goto(`${base}/drivers/${driver.id}`);
   await page.getByRole("link", { name: "Record payment", exact: true }).waitFor();
   await page.getByRole("link", { name: "Add commission", exact: true }).waitFor();
+  const financialSummary = page.getByRole("main").last();
+  assert.match(await financialSummary.textContent() ?? "", /Total charges€264\.00/);
+  assert.match(await financialSummary.textContent() ?? "", /Subscription component€20\.00/);
+  assert.match(await financialSummary.textContent() ?? "", /Outstanding balance€264\.00/);
   for (const width of widths) await capture(page, "driver-ledger-unpaid", width);
   await page.getByRole("link", { name: "Record payment", exact: true }).click();
   await page.getByRole("heading", { name: "Record payment", exact: true }).waitFor();
@@ -117,6 +125,7 @@ try {
   await subscription.getByText("Partially paid", { exact: true }).first().waitFor();
   assert.match(await subscription.textContent() ?? "", /Paid€10\.00/);
   assert.match(await subscription.textContent() ?? "", /Remaining€10\.00/);
+  assert.match(await financialSummary.textContent() ?? "", /Outstanding balance€254\.00/);
 
   await page.getByRole("link", { name: "Record payment", exact: true }).click();
   await page.getByLabel("Payment amount (€)").fill("50.00");
@@ -129,6 +138,7 @@ try {
   await subscription.getByText("Paid", { exact: true }).first().waitFor();
   assert.match(await subscription.textContent() ?? "", /Paid€20\.00/);
   assert.match(await subscription.textContent() ?? "", /Remaining€0\.00/);
+  assert.match(await financialSummary.textContent() ?? "", /Outstanding balance€204\.00/);
   for (const width of widths) await capture(page, "driver-ledger-paid", width);
 
   const summary = await Promise.all([

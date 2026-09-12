@@ -5,6 +5,7 @@ declare module "next-auth" {
   interface Session {
     id?: string;
     expiresAt?: string;
+    settingsUnlockedUntil?: string;
     user?: DefaultSession["user"] & {
       id?: string;
       role?: Role;
@@ -22,5 +23,6 @@ declare module "next-auth/jwt" {
     role?: Role;
     sid?: string;
     sessionExpiresAt?: string;
+    settingsUnlockedUntil?: string;
   }
 }

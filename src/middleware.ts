@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { decodeRegisteredToken } from "@/lib/security/token";
 
-const publicPaths = new Set(["/login", "/register", "/api/register", "/favicon.ico", "/icon.png", "/apple-icon.png", "/robots.txt"]);
+const publicPaths = new Set(["/login", "/favicon.ico", "/icon.png", "/apple-icon.png", "/robots.txt"]);
 const machinePaths = new Set(["/api/admin/driver-subscriptions/run-monthly", "/api/admin/sessions/cleanup"]);
+const gateBootstrapPrefix = "/api/admin/security-gate";
 
 export default async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -21,6 +22,19 @@ export default async function middleware(request: NextRequest) {
     const adminPath = ["/admin", "/drivers", "/commissions", "/payments", "/api/admin", "/api/drivers"].some(prefix => path === prefix || path.startsWith(prefix + "/"));
     if (adminPath && token.role !== "ADMIN") {
       return isApi ? NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 }) : NextResponse.redirect(new URL("/reservations", request.url));
+    }
+    const settingsUnlockedUntil = typeof token.settingsUnlockedUntil === "string"
+      ? new Date(token.settingsUnlockedUntil)
+      : null;
+    const settingsUnlocked = Boolean(settingsUnlockedUntil && Number.isFinite(settingsUnlockedUntil.getTime()) && settingsUnlockedUntil > new Date());
+    const needsSettingsGate = (path === "/admin" || path.startsWith("/admin/") || path === "/api/admin" || path.startsWith("/api/admin/"))
+      && !path.startsWith(gateBootstrapPrefix);
+    if (needsSettingsGate && !settingsUnlocked) {
+      if (isApi) return NextResponse.json({ error: "Unlock protected settings to continue.", code: "SETTINGS_LOCKED" }, { status: 423, headers: { "Cache-Control": "private, no-store, max-age=0" } });
+      const destination = `${path}${request.nextUrl.search}`;
+      const settingsUrl = new URL("/settings", request.url);
+      settingsUrl.searchParams.set("next", destination);
+      return NextResponse.redirect(settingsUrl);
     }
     const response = NextResponse.next();
     response.headers.set("Cache-Control", "private, no-store, max-age=0");

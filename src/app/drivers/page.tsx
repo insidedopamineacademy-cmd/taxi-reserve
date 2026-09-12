@@ -59,7 +59,7 @@ export default async function DriversPage() {
         </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <article className="rounded-xl border border-app-border bg-surface p-4">
-            <p className="text-sm text-muted">Total commissions</p>
+            <p className="text-sm text-muted">Total charges</p>
             <p className="mt-2 text-xl font-semibold text-white tnum">
               {formatEuro(overview.totalCommissions)}
             </p>

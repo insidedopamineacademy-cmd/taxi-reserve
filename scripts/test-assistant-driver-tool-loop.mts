@@ -38,7 +38,7 @@ const driverCard = (id: string, name = "Alex", balance = "12.50"): AssistantDriv
   currency: "EUR",
 });
 
-const summary = (balance = "12.50"): AssistantDriverLedgerSummaryData => ({
+const summary = (balance = "15.00"): AssistantDriverLedgerSummaryData => ({
   driver: {
     id: "d-1",
     name: "Alex",

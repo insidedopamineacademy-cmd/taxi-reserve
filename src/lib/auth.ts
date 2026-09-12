@@ -23,7 +23,7 @@ export const authOptions: NextAuthOptions = {
         if (!email || !password) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user?.password) return null;
+        if (!user?.password || user.status !== "ACTIVE") return null;
 
         const ok = await bcrypt.compare(password, user.password);
         if (!ok) return null;
@@ -66,5 +66,6 @@ function identitySession(session: import("next-auth").Session, token: import("ne
     ...session,
     user: { ...session.user, id: token.sub, email: token.email, name: token.name, role: token.role },
     id: token.sid, expires: token.sessionExpiresAt ?? session.expires, expiresAt: token.sessionExpiresAt,
+    settingsUnlockedUntil: token.settingsUnlockedUntil,
   };
 }

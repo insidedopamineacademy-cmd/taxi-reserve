@@ -82,27 +82,38 @@ try {
 
   const standard = await driver("standard");
   const standardCharge = await charge(standard.id, september, "20.00");
-  await db.commissionEntry.create({ data: { driverId: standard.id, commissionAmount: "244.00", entryDate: paymentDate } });
+  // CommissionEntry is the combined charge total: ordinary €244 + subscription €20.
+  await db.commissionEntry.create({ data: { driverId: standard.id, commissionAmount: "264.00", entryDate: paymentDate } });
+  assert.equal((await financials(standard.id)).balance.toFixed(2), "264.00");
   const standardPayment = await record(standard.id, "100.00");
   assert.equal(standardPayment.allocation.subscriptionTotal.toFixed(2), "20.00");
   assert.equal(standardPayment.allocation.commissionAmount.toFixed(2), "80.00");
   assert.equal((await settlement(standardCharge.id)).status, "PAID");
-  assert.equal((await financials(standard.id)).balance.toFixed(2), "164.00", "244 + 20 - 100");
+  assert.equal((await financials(standard.id)).balance.toFixed(2), "164.00", "264 combined charges - 100");
 
   const partial = await driver("partial");
   const partialCharge = await charge(partial.id, september, "20.00");
+  await db.commissionEntry.create({ data: { driverId: partial.id, commissionAmount: "264.00", entryDate: paymentDate } });
   const first = await record(partial.id, "10.00");
   assert.equal(first.allocation.subscriptionTotal.toFixed(2), "10.00");
   assert.equal(first.allocation.commissionAmount.toFixed(2), "0.00");
   assert.deepEqual(await settlement(partialCharge.id), {
     status: "PARTIAL", paid: "10.00", remaining: "10.00", automaticallyAllocated: "10.00",
   });
+  assert.equal((await financials(partial.id)).balance.toFixed(2), "254.00");
   const second = await record(partial.id, "50.00");
   assert.equal(second.allocation.subscriptionTotal.toFixed(2), "10.00");
   assert.equal(second.allocation.commissionAmount.toFixed(2), "40.00");
   assert.equal((await settlement(partialCharge.id)).status, "PAID");
+  assert.equal((await financials(partial.id)).balance.toFixed(2), "204.00");
+  assert.equal((await deleteDriverPayment(db, adminEmail, partial.id, second.payment.id)).changed, true);
+  assert.deepEqual(await settlement(partialCharge.id), {
+    status: "PARTIAL", paid: "10.00", remaining: "10.00", automaticallyAllocated: "10.00",
+  });
+  assert.equal((await financials(partial.id)).balance.toFixed(2), "254.00");
 
   const oldest = await driver("oldest");
+  await db.commissionEntry.create({ data: { driverId: oldest.id, commissionAmount: "300.00", entryDate: paymentDate } });
   const oldCharges = await Promise.all([
     charge(oldest.id, july, "5.00"),
     charge(oldest.id, august, "20.00"),
@@ -114,6 +125,7 @@ try {
   ]), [["2026-07", "5.00"], ["2026-08", "20.00"], ["2026-09", "20.00"]]);
   assert.equal(oldestPayment.allocation.commissionAmount.toFixed(2), "5.00");
   for (const row of oldCharges) assert.equal((await settlement(row.id)).status, "PAID");
+  assert.equal((await financials(oldest.id)).balance.toFixed(2), "250.00", "three subscription months remain breakdown-only");
 
   const exact = await driver("exact");
   const exactCharge = await charge(exact.id, september, "20.00");
@@ -122,9 +134,11 @@ try {
   assert.equal((await settlement(exactCharge.id)).remaining, "0.00");
 
   const noCharge = await driver("no-charge");
+  await db.commissionEntry.create({ data: { driverId: noCharge.id, commissionAmount: "264.00", entryDate: paymentDate } });
   const noChargePayment = await record(noCharge.id, "100.00");
   assert.equal(noChargePayment.allocation.subscriptionTotal.toFixed(2), "0.00");
   assert.equal(noChargePayment.allocation.commissionAmount.toFixed(2), "100.00");
+  assert.equal((await financials(noCharge.id)).balance.toFixed(2), "164.00");
 
   const exempt = await driver("exempt", { subscriptionExempt: true });
   assert.equal((await record(exempt.id, "7.00")).allocation.commissionAmount.toFixed(2), "7.00");

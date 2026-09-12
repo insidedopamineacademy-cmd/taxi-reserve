@@ -156,18 +156,12 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
                 <UserMenu email={userEmail} isAdmin={isAdmin} />
               </div>
             ) : (
-              <div className="ml-1 flex items-center gap-2 border-l border-white/10 pl-3">
+              <div className="ml-1 flex items-center border-l border-white/10 pl-3">
                 <Link
                   href="/login"
                   className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/[0.05] hover:text-white"
                 >
                   Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-fg transition hover:bg-brand-hover"
-                >
-                  Register
                 </Link>
               </div>
             )}
@@ -217,20 +211,13 @@ export default function NavbarClient({ userEmail, canAccessInbox, isAdmin, assis
                   </div>
                 </>
               ) : (
-                <div className="mt-1 flex flex-col gap-2 border-t border-white/10 pt-3">
+                <div className="mt-1 flex flex-col border-t border-white/10 pt-3">
                   <Link
                     href="/login"
                     onClick={() => setOpen(false)}
                     className="flex min-h-11 items-center rounded-lg px-3 text-[15px] font-medium text-white/80 hover:bg-white/5"
                   >
                     Login
-                  </Link>
-                  <Link
-                    href="/register"
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center justify-center rounded-lg bg-brand px-3 text-[15px] font-semibold text-brand-fg transition hover:bg-brand-hover"
-                  >
-                    Register
                   </Link>
                 </div>
               )}
