@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { createDeviceSession, logoutDeviceSession } from "@/lib/security/sessionCore";
 import { decodeRegisteredToken } from "@/lib/security/token";
-import { hasFreshLocation, SESSION_MAX_AGE_SECONDS } from "@/lib/security/policy";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/security/policy";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS },
@@ -50,8 +50,6 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      // Default server sessions cannot authorize app data before location.
-      if (!hasFreshLocation(token.locationVerifiedAt)) return { ...session, user: undefined, locationRequired: true };
       return identitySession(session, token);
     },
   },
@@ -68,12 +66,5 @@ function identitySession(session: import("next-auth").Session, token: import("ne
     ...session,
     user: { ...session.user, id: token.sub, email: token.email, name: token.name, role: token.role },
     id: token.sid, expires: token.sessionExpiresAt ?? session.expires, expiresAt: token.sessionExpiresAt,
-    locationVerifiedAt: token.locationVerifiedAt ?? null,
   };
 }
-
-// Narrow exception for authentication bootstrap/logout/location only.
-export const identityAuthOptions: NextAuthOptions = {
-  ...authOptions,
-  callbacks: { ...authOptions.callbacks, async session({ session, token }) { return identitySession(session, token); } },
-};

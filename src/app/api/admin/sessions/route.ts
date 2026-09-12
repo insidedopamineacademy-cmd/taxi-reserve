@@ -20,7 +20,6 @@ export async function GET(request: Request) {
     const select = {
       id: true, userId: true, createdAt: true, lastSeenAt: true, expiresAt: true, revokedAt: true,
       device: true, browser: true, os: true, ipAddress: true, networkCity: true, networkRegion: true, networkCountry: true,
-      latitude: true, longitude: true, accuracy: true, locationCapturedAt: true, locationVerifiedAt: true,
       revokeReason: true, revokedBy: { select: { email: true } },
     } as const;
     const cutoff = new Date(now.getTime() - ENDED_SESSION_RETENTION_MS);
@@ -28,8 +27,8 @@ export async function GET(request: Request) {
       prisma.deviceSession.findMany({ where: { userId: user.id, revokedAt: null, expiresAt: { gt: now } }, orderBy: [{ lastSeenAt: "desc" }, { id: "asc" }], select }),
       prisma.deviceSession.findMany({ where: { userId: user.id, OR: [{ revokedAt: { gte: cutoff } }, { revokedAt: null, expiresAt: { lte: now, gte: cutoff } }] }, orderBy: [{ lastSeenAt: "desc" }, { id: "asc" }], take: 50, select }),
     ]) : [[], []];
-    // Never expose expired location/network data while waiting for daily cleanup.
-    const history = ended.map(row => ({ ...row, ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null, latitude: null, longitude: null, accuracy: null, locationCapturedAt: null, locationVerifiedAt: null }));
+    // Never expose expired network data while waiting for daily cleanup.
+    const history = ended.map(row => ({ ...row, ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null }));
     return securityJson({ users: users.map(user => ({ id: user.id, name: user.name, email: user.email, activeCount: user._count.deviceSessions })), user, sessions: [...active, ...history], currentSessionId: session.id, now: now.toISOString() });
   } catch (error) { return securityFailure(error); }
 }

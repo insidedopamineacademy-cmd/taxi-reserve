@@ -14,7 +14,7 @@ export function loginActivityDetails(log: LoginActivityRecord, currentSessionId?
   return {
     label: log.action === "admin_login" ? "ADMIN LOGIN (LEGACY)" : "LOGIN",
     device: [field("device", 40), field("browser", 40), field("os", 40)].filter(Boolean).join(" · ") || "Device details unavailable",
-    network: [field("networkCity", 80), field("networkRegion", 80), countryName].filter(Boolean).join(", ") || "Network location unavailable",
+    network: [field("networkCity", 80), field("networkRegion", 80), countryName].filter(Boolean).join(", ") || "Network estimate unavailable",
     ipAddress: field("ipAddress", 45),
     sessionId,
     isCurrentSession: Boolean(currentSessionId && sessionId === currentSessionId),

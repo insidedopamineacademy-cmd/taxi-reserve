@@ -3,7 +3,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { AssistantProvider } from "@/components/assistant/AssistantProvider";
-import LocationBoundary from "@/components/security/LocationBoundary";
+import SessionBoundary from "@/components/security/SessionBoundary";
 import type { Session } from "next-auth";
 
 type Props = {
@@ -19,7 +19,7 @@ export function Providers({ children, assistantEnabled, assistantPreviewMode, se
     : children;
   return <SessionProvider session={session} refetchOnWindowFocus={false}>
     {session?.id
-      ? <LocationBoundary key={session.id} sessionId={session.id}>{content}</LocationBoundary>
+      ? <SessionBoundary key={session.id} sessionId={session.id}>{content}</SessionBoundary>
       : content}
   </SessionProvider>;
 }

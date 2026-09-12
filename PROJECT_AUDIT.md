@@ -1,6 +1,6 @@
 # Taxi Reserve — Current Architecture and Operations Handoff
 
-Last audited: 2026-09-06
+Last audited: 2026-09-12
 
 ## Project purpose and system boundary
 
@@ -72,35 +72,33 @@ src/middleware.ts           Page-level NextAuth protection
 - `User.role` is the Prisma `Role` enum: `USER` or `ADMIN`; registrations default to `USER`.
 - NextAuth normalizes login email, verifies the password hash, creates a `DeviceSession` and puts its opaque ID in the existing encrypted JWT cookie.
 - Every token decode checks the registry for ownership, revocation and absolute 30-day expiry and reloads the canonical database role. Role changes apply immediately; password changes revoke other sessions.
-- Node.js middleware protects application pages (including `/`) and APIs, with explicit authentication/location bootstrap and independently authorized cron exceptions.
-- Normal server sessions require location verification within 30 minutes. The root client gate additionally obtains a fresh position at bootstrap and after a five-minute absence. Missing verification yields API 428 or the blocking `/location` page.
-- Location bootstrap treats the Permissions API as advisory and makes a fresh
-  Geolocation request on every user retry. It starts with high accuracy and retries
-  once at normal accuracy only for timeout/unavailable errors. Standalone detection
-  affects diagnostics and guidance only.
-- Location POST/DELETE require a non-safelisted Taxi Reserve marker. Exact foreign
-  origins and cross-site Fetch Metadata fail closed; a missing Origin is accepted
-  only with that marker to support iOS Home Screen WebKit. Cross-origin JavaScript
-  cannot add the marker without a CORS preflight, and the route sends no permissive
-  CORS response.
+- Node.js middleware protects application pages (including `/`) and APIs using the
+  registered session, current database role and independent cron authorization.
+- Browser permission and GPS state are not authorization inputs. The removed
+  `/location` page and location API no longer redirect, gate, or produce 428
+  responses. Valid sessions reach authorized routes immediately.
+- A session-only root boundary performs a once-per-minute foreground check, checks
+  persisted-page/app resume, and handles 401 responses from protected APIs. These
+  checks update `lastSeenAt` through the existing five-minute write throttle.
 - `/admin`, `/drivers`, `/commissions`, `/payments` and their ADMIN API paths require the canonical `ADMIN` role in middleware.
 - Driver/finance pages and APIs repeat authorization through server session checks. Middleware is not the sole security boundary.
 
 `/admin/sessions` lists all active and up to 50 recently ended sessions for a
 selected account. Individual and counted bulk revocation are transactional with
-audits; the current admin session is protected. Latest browser location and trusted
-Vercel network metadata are restricted to the admin DTO; normal auth sessions and
-assistant context contain no coordinates/IP. Daily cron scrubs expired private data
+audits; the current admin session is protected. Trusted Vercel IP/network metadata
+is restricted to the admin DTO; normal auth sessions and assistant context contain
+no IP data. Daily cron scrubs expired private data
 and removes records ended over 30 days ago. The full security/migration record is
 in `SESSION_LOCATION_SECURITY_REPORT.md`.
 
 Every successful Credentials authentication transaction creates one `user_login`
-ActivityLog entry tied to the new device-session ID before GPS verification. Its
-immutable snapshot contains the canonical user, parsed device labels and trusted
-Vercel IP/network metadata available at that moment. It excludes GPS, raw user
+ActivityLog entry tied to the new device-session ID. Its immutable snapshot contains
+the canonical user, parsed device labels and trusted Vercel IP/network metadata
+available at that moment. It excludes GPS, raw user
 agent, cookies/tokens, passwords and secrets. Page reload, visibility/resume,
-lastSeen and location refresh never create LOGIN entries; logout/revocation does
-not delete them. Failed credential attempts are not currently persisted: the public
+and lastSeen checks never create LOGIN entries; logout/revocation does not delete
+them. Each new authentication creates a distinct row even when IP, browser and user
+agent match an ended session; none of those values is a blacklist. Failed credential attempts are not currently persisted: the public
 Credentials callback has no bounded abuse-event store/rate-limit contract, so adding
 unbounded attacker-controlled email/IP rows to the operational ActivityLog was not
 included in this change.
@@ -130,7 +128,7 @@ included in this change.
 
 | Route | Purpose | Access |
 | --- | --- | --- |
-| `/` | Reservation dashboard, allowlisted unread Inbox card, ADMIN Drivers and Full Ledger PDF actions | Authenticated with location verification; content adapts to permissions |
+| `/` | Reservation dashboard, allowlisted unread Inbox card, ADMIN Drivers and Full Ledger PDF actions | Authenticated; content adapts to permissions |
 | `/login`, `/register` | Credentials sign-in and account registration | Public |
 | `/reservations` | Owned active reservations, free-text search, optional URL date range, sort, status, phone, sharing, edit, assignment shortcut, and soft delete | Authenticated |
 | `/reservations/new` | Create an owned reservation | Authenticated |
@@ -483,7 +481,7 @@ Never commit real values. Configure production values in the deployment platform
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production session/JWT secret |
-| `NEXTAUTH_URL` | Required canonical HTTPS production origin for auth, exact-origin actions, and validation when location requests include Origin |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for auth and exact-origin security actions |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for email replies/health |
 | `EMAIL_INBOX_ALLOWED_USERS` | Required comma-separated inbox allowlist |
@@ -557,12 +555,13 @@ The repository's `00000000000000_baseline/migration.sql` is empty. Therefore, th
 | `20260809160000_unique_commission_reservation` | Replaces the reservation commission index with a unique index, allowing at most one linked commission while still allowing many manual rows with null reservation IDs |
 | `20260809210000_add_manual_commission_route` | Adds optional manual pickup/drop-off fields without changing reservation-linked route ownership |
 | `20260810120000_add_driver_subscriptions` | Adds vehicle enum/configuration, exemption flag, DriverSubscriptionCharge, month index, unique driver/month constraint, and restrictive driver relation |
+| `20260906090000_device_sessions_location` | Adds the DeviceSession registry required by current authentication; its nullable legacy GPS columns remain unused pending a separately reviewed cleanup migration |
 
 All are additive relative to the live Taxi Reserve architecture. No migration imports or reinterprets financial history from an external standalone system.
 
 ## Response and browser hardening
 
-- `next.config.ts` denies framing, prevents MIME sniffing, applies a conservative referrer policy, and disables camera/microphone and permits same-origin geolocation with `geolocation=(self)`.
+- `next.config.ts` denies framing, prevents MIME sniffing, applies a conservative referrer policy, and disables camera, microphone and geolocation.
 - CSP remains intentionally deferred until Next.js, NextAuth, inbox HTML, and interactive flows can be tested together.
 - Global/mobile CSS hardens native date/time controls for iOS without changing date conversion logic.
 
@@ -580,14 +579,10 @@ All are additive relative to the live Taxi Reserve architecture. No migration im
 - Permanent reservation deletion is irreversible and can sever reservation route context from preserved linked commissions.
 - Date/time behavior depends on browser-local conversion for reservations; timezone changes need dedicated regression testing.
 - A strict Content Security Policy is not yet enabled.
-- The iOS Home Screen compatibility path is covered by Chromium browser emulation
-  and direct HTTP boundary tests. The available Playwright WebKit runtime launches
-  but stalls before completing a page, and no physical iPhone was attached, so the
-  native prompt, per-app settings entry and real suspend/resume behavior remain a
-  manual release check. Development diagnostics expose only secure-context,
-  visibility, standalone flags, protocol, coarse browser/platform class and
-  sanitized Geolocation error code/message; they never include coordinates,
-  cookies, tokens, session IDs or raw user agents.
+- The no-location iPhone Home Screen path is covered by Chromium user-agent and
+  standalone emulation with tripwires proving that neither Permissions nor
+  Geolocation is accessed. No physical iPhone was attached, so real suspend/resume
+  behavior remains a manual release check.
 
 ## QA checklist
 

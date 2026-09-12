@@ -8,8 +8,6 @@ type Device = {
   id: string; userId: string; device: string; browser: string; os: string;
   createdAt: string; lastSeenAt: string; expiresAt: string; revokedAt: string | null;
   ipAddress: string | null; networkCity: string | null; networkRegion: string | null; networkCountry: string | null;
-  latitude: number | null; longitude: number | null; accuracy: number | null;
-  locationCapturedAt: string | null; locationVerifiedAt: string | null;
   revokedBy: { email: string } | null; revokeReason: string | null;
 };
 type SessionData = { users: Account[]; user: { id: string; email: string; name: string | null } | null; sessions: Device[]; currentSessionId: string; now: string };
@@ -36,7 +34,7 @@ function RevokeConfirmation({ confirmation, busy, error, cancel, confirm }: { co
   return <dialog ref={dialog} aria-labelledby="revoke-title" aria-describedby="revoke-description" onCancel={event => { event.preventDefault(); if (!busy) cancel(); }} className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-app-border bg-surface p-6 text-white shadow-xl backdrop:bg-black/70">
     <h2 id="revoke-title" className="text-xl font-semibold">{confirmation.kind === "one" ? "Log out this device?" : `Log out ${confirmation.ids.length} ${confirmation.ids.length === 1 ? "device" : "devices"}?`}</h2>
     <p className="mt-3 break-words text-sm text-white">{confirmation.email}</p>
-    {confirmation.kind === "one" && <p className="mt-2 text-sm text-muted">{confirmation.device.device} · {confirmation.device.browser} · {confirmation.device.os}<br />{confirmation.device.networkCity ? `${confirmation.device.networkCity} · IP estimate` : confirmation.device.locationCapturedAt ? "Browser location reported" : "Location not verified"}<br />Last active {instant(confirmation.device.lastSeenAt)}</p>}
+    {confirmation.kind === "one" && <p className="mt-2 text-sm text-muted">{confirmation.device.device} · {confirmation.device.browser} · {confirmation.device.os}<br />IP: {confirmation.device.ipAddress || "Unavailable"}<br />Last active {instant(confirmation.device.lastSeenAt)}</p>}
     <p id="revoke-description" className="mt-3 text-sm leading-6 text-muted">{confirmation.kind === "one" ? "This device will" : "These devices will"} need to sign in again. Your current device will stay signed in.</p>
     {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
     <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -112,7 +110,7 @@ export default function SessionManager() {
           {data?.users.map(user => <li key={user.id}><button type="button" onClick={() => setUserId(user.id)} aria-pressed={data.user?.id === user.id} className={`min-h-11 w-full rounded-lg p-3 text-left hover:bg-surface-2 ${data.user?.id === user.id ? "bg-brand/10 ring-1 ring-brand/25" : ""}`}>
             <span className="block break-words text-sm font-medium text-white">{user.name || user.email}</span>
             {user.name && <span className="mt-1 block break-all text-xs text-muted">{user.email}</span>}
-            <span className="mt-1 block text-xs text-muted">{user.activeCount} active {user.activeCount === 1 ? "session" : "sessions"}</span>
+            <span className="mt-1 block text-xs text-muted">{user.activeCount} active {user.activeCount === 1 ? "device" : "devices"}</span>
           </button></li>)}
         </ul>
         {!loading && !data?.users.length && <p className="p-2 text-sm text-muted">No matching accounts.</p>}
@@ -121,7 +119,7 @@ export default function SessionManager() {
       <section aria-label="User devices" className="min-w-0">
         {data?.user && <>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0"><h2 className="break-all text-lg font-semibold text-white">{data.user.email}</h2><p className="mt-1 text-sm text-muted">{active.length} active {active.length === 1 ? "session" : "sessions"} · device labels are estimates</p></div>
+            <div className="min-w-0"><h2 className="break-words text-lg font-semibold text-white">{data.user.name || data.user.email}</h2>{data.user.name && <p className="mt-1 break-all text-sm text-muted">{data.user.email}</p>}<p className="mt-1 text-sm font-medium text-white">{active.length} active {active.length === 1 ? "device" : "devices"}</p><p className="mt-1 text-xs text-muted">Device labels are browser estimates.</p></div>
             <button type="button" disabled={otherIds.length === 0 || loading} onClick={() => openConfirmation({ kind: "others", ids: otherIds, userId: data.user!.id, email: data.user!.email })} className="min-h-11 rounded-lg border border-danger/30 px-3 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50">{active.some(device => device.id === data.currentSessionId) ? "Log out all other devices" : "Log out all devices"}</button>
           </div>
           <div className="space-y-3">
@@ -135,17 +133,15 @@ export default function SessionManager() {
                   <div className="flex flex-wrap gap-2 text-xs font-medium">{current && <span className="rounded-full bg-brand/10 px-2.5 py-1 text-brand">THIS DEVICE</span>}<span className={`rounded-full px-2.5 py-1 ${state === "Active" ? "bg-success/10 text-success" : "bg-white/5 text-muted"}`}>{state === "Active" ? activeLabel(device.lastSeenAt, data.now) : state}</span></div>
                 </div>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <div><dt className="text-xs text-subtle">Location</dt><dd className="mt-1 text-white">{device.locationCapturedAt ? `Browser location · ${Math.round(device.accuracy ?? 0).toLocaleString("en-GB")} m accuracy` : state === "Active" ? "Not verified yet" : "Location removed"}</dd>{device.locationCapturedAt && <dd className="mt-1 text-xs text-muted">Updated {instant(device.locationCapturedAt)}</dd>}</div>
-                  <div><dt className="text-xs text-subtle">Network</dt><dd className="mt-1 break-words text-white">{network || "IP location unavailable"}</dd>{network && <dd className="mt-1 text-xs text-muted">Approximate IP estimate</dd>}</div>
+                  <div><dt className="text-xs text-subtle">IP address</dt><dd className="mt-1 break-all text-white">{device.ipAddress || "Unavailable"}</dd></div>
+                  <div><dt className="text-xs text-subtle">Network estimate</dt><dd className="mt-1 break-words text-white">{network || "Unavailable"}</dd>{network && <dd className="mt-1 text-xs text-muted">Approximate Vercel network metadata</dd>}</div>
                 </dl>
                 <details className="mt-3 border-t border-app-border pt-2">
                   <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-brand">Session details</summary>
                   <dl className="grid gap-3 pb-3 text-sm sm:grid-cols-2">
-                    <div><dt className="text-xs text-subtle">IP address</dt><dd className="mt-1 break-all text-white">{device.ipAddress || "Unavailable"}</dd></div>
                     <div><dt className="text-xs text-subtle">Signed in · Madrid</dt><dd className="mt-1 text-white">{instant(device.createdAt)}</dd></div>
                     <div><dt className="text-xs text-subtle">Last active · Madrid</dt><dd className="mt-1 text-white">{instant(device.lastSeenAt)}</dd></div>
                     <div><dt className="text-xs text-subtle">Expires · Madrid</dt><dd className="mt-1 text-white">{instant(device.expiresAt)}</dd></div>
-                    {device.latitude !== null && <div className="sm:col-span-2"><dt className="text-xs text-subtle">Browser-reported coordinates · rounded to 4 decimals</dt><dd className="mt-1 text-white">{device.latitude.toFixed(4)}, {device.longitude?.toFixed(4)}</dd></div>}
                     {device.revokedAt && <div className="sm:col-span-2"><dt className="text-xs text-subtle">Logged out</dt><dd className="mt-1 break-words text-white">{instant(device.revokedAt)}{device.revokedBy ? ` · ${device.revokedBy.email}` : ""}</dd></div>}
                   </dl>
                 </details>
@@ -154,7 +150,7 @@ export default function SessionManager() {
             })}
           </div>
           {data.sessions.length === 0 && <p className="rounded-xl border border-app-border bg-surface p-6 text-sm text-muted">No active or recent sessions for this account.</p>}
-          <p className="mt-4 text-xs leading-5 text-subtle">All active sessions and up to 50 recent ended sessions from the last 30 days. Location and network details are removed when a session ends. Activity times are approximate; timestamps use Madrid time.</p>
+          <p className="mt-4 text-xs leading-5 text-subtle">All active sessions and up to 50 recent ended sessions from the last 30 days. IP and network details are removed when a session ends. Activity times are approximate; timestamps use Madrid time.</p>
         </>}
       </section>
     </div>

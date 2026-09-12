@@ -8,9 +8,9 @@ Taxi Reserve does not currently include a web app manifest, service worker, or
 standalone-display configuration. On iOS 26, Safari opens every site added to the
 Home Screen as a web app by default unless the user disables “Open as Web App,”
 so the absence of a manifest does not make the standalone runtime inapplicable.
-The location boundary detects `navigator.standalone` and the standalone display
-media query only for diagnostics/guidance; neither can bypass authentication or
-location. Physical iPhone permission recovery and resume checks remain required.
+Taxi Reserve no longer queries standalone mode for location, requests browser
+location, or gates an authenticated session on permission. Physical iPhone session
+resume and remote-revocation checks remain required.
 The assistant uses `viewport-fit=cover` so safe-area insets work in mobile contexts.
 
 ## Automated and browser-supplemental evidence
@@ -28,14 +28,13 @@ The assistant uses `viewport-fit=cover` so safe-area insets work in mobile conte
 | Driver/finance authorization and Decimal DTOs | VERIFIED | `npm run test:assistant-driver-finance` |
 | Five-tool loop and permission-safe finance failures | VERIFIED | `npm run test:assistant-driver-tool-loop` |
 | Rate limit, cancellation release, cost caps, headers, telemetry, dependency smoke | VERIFIED | `npm run test:assistant-production` |
-| iOS Safari/Chrome UA and Home Screen standalone location paths | VERIFIED IN EMULATION | Browser suite; location remains required and LOGIN stays singular |
-| Real WebKit page run | BLOCKED BY TEST RUNTIME | Installed runtime launches but stalls before completing a page |
+| iOS UA and Home Screen access without location | VERIFIED IN CHROMIUM EMULATION | Browser tripwires prove no Geolocation or Permissions access; valid session and one LOGIN remain |
 | Open/close, scroll lock restoration, draft preservation | VERIFIED | Browser interaction |
 | Narrow reservation card and long-address wrapping | VERIFIED | Browser screenshots at target widths |
 | Driver, ledger-summary, and transaction card wrapping | VERIFIED | Browser measurements at 320×700, 375×812, and 430×932; no card/dialog horizontal overflow |
 | Physical virtual-keyboard positioning | NEEDS PHYSICAL DEVICE | Emulation cannot prove iOS/Android keyboard behavior |
 
-The in-app Chromium supplemental pass verified 320×568, 360×800, 375×812, 390×844, 393×852, 412×915, and 430×932. Every size matched the visible viewport, retained a reachable 44×44 close/send target, kept the composer at the bottom, and had no document-level horizontal overflow. A 390×844 → 844×390 → 390×844 cycle also recovered without stale dimensions or gaps. Chromium emulation reports a fine pointer and cannot prove coarse-pointer soft-keyboard behavior; that path is covered by unit logic and still requires physical-device verification. That historical assistant pass did not include WebKit. The separate session/location pass uses a temporary external WebKit runtime; its evidence and limits are recorded in `SESSION_LOCATION_SECURITY_REPORT.md`.
+The in-app Chromium supplemental pass verified 320×568, 360×800, 375×812, 390×844, 393×852, 412×915, and 430×932. Every size matched the visible viewport, retained a reachable 44×44 close/send target, kept the composer at the bottom, and had no document-level horizontal overflow. A 390×844 → 844×390 → 390×844 cycle also recovered without stale dimensions or gaps. Chromium emulation reports a fine pointer and cannot prove coarse-pointer soft-keyboard behavior; that path is covered by unit logic and still requires physical-device verification. Session-management browser QA is recorded in `SESSION_LOCATION_SECURITY_REPORT.md`.
 
 ## Physical-device matrix
 
@@ -43,7 +42,7 @@ The in-app Chromium supplemental pass verified 320×568, 360×800, 375×812, 390
 | --- | --- | --- |
 | Modern iPhone Safari with Dynamic Island | Portrait, landscape, repeated keyboard cycles, browser chrome expanded/collapsed, notch/Home Indicator, close while keyboard open | NEEDS PHYSICAL DEVICE |
 | Narrow iPhone Safari | 320–375px-equivalent layout, long draft, large text, long result card | NEEDS PHYSICAL DEVICE |
-| iOS Add to Home Screen | Location prompt/blocked settings, reopening, background/resume, safe areas, remote revocation | NEEDS PHYSICAL DEVICE — no manifest/service worker is added |
+| iOS Add to Home Screen | No location prompt, reopening, background/resume, safe areas, remote revocation | NEEDS PHYSICAL DEVICE — no manifest/service worker is added |
 | Modern Android Chrome | Portrait, landscape, repeated keyboard cycles, predictive text, dictation, background/foreground | NEEDS PHYSICAL DEVICE |
 | VoiceOver on iPhone | Dialog title, close/send/stop/retry labels, reading order, restrained announcements | NEEDS PHYSICAL DEVICE |
 | TalkBack on Android | Dialog title, controls, reading order, disabled and error states | NEEDS PHYSICAL DEVICE |
@@ -85,20 +84,13 @@ First use a development build with `AI_ASSISTANT_ENABLED=true` and `AI_ASSISTANT
 
 Automated tests verify state/protocol behavior, but real radio switching, physical virtual keyboards, mobile browser lifecycle suspension, VoiceOver, TalkBack, and device-specific stream timing remain unverified until this matrix is executed on physical hardware.
 
-## Session/location release checks
+## Device-session release checks
 
-Run before the assistant checks: a fresh login must show the location gate without
-navigation or assistant; denial must block both UI and direct API access. Enable
-permission in browser/device settings and retry. Test reopening, five-minute
-background/resume, back/forward restoration, permission withdrawal while open,
-and remote session revocation. Verify the account stays blocked after timeout,
-unavailable location, or insecure HTTP. Physical Safari/Home Screen permission
-controls and OS Location Services cannot be certified by desktop emulation.
-Every Retry must increase the Geolocation call count. When Permissions API is
-absent, throws or reports denied, the user action must still reach Geolocation.
-Verify distinct UI for permission denied, position unavailable, timeout, insecure/
-unsupported context, server preparation failure and server persistence failure.
-On iPhone, Apple documents permission recovery under Settings → Privacy & Security
-→ Location Services and the entry that requested access. Record the exact Home
-Screen entry shown by the tested iOS release rather than assuming Safari's tab
-permission applies.
+Run before the assistant checks: a fresh login must reach the authorized page
+without a location prompt, permission screen or intermediate route. Denied browser
+location permission must have no effect. Refresh, reopen, background/foreground and
+back/forward restoration must retain the same session and original LOGIN audit.
+Revoke the session remotely and confirm the next protected request or foreground
+poll returns the app to login. Sign in again from the same browser and IP and confirm
+the new session works. Physical Safari/Home Screen suspension timing cannot be
+certified by desktop emulation.

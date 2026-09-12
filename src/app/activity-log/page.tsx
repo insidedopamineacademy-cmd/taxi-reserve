@@ -194,7 +194,7 @@ export default async function ActivityLogPage({
                   <dd className="min-w-0 break-all text-neutral-300">{log.userEmail ?? "System"}</dd>
                   {login && <>
                     <dt className="text-neutral-500">Network at login</dt>
-                    <dd className="min-w-0 break-words text-neutral-300">{login.network}<span className="mt-1 block text-xs text-neutral-500">Approximate IP location; browser GPS is recorded separately.</span></dd>
+                    <dd className="min-w-0 break-words text-neutral-300">{login.network}<span className="mt-1 block text-xs text-neutral-500">Approximate network estimate from trusted request metadata.</span></dd>
                     <dt className="text-neutral-500">IP at login</dt>
                     <dd className="min-w-0 break-all text-neutral-300">{login.ipAddress ?? "Unavailable"}</dd>
                     {login.sessionId && <>

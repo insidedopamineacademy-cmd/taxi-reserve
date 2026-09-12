@@ -1,16 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { parseDeviceMetadata, trustedNetworkMetadata } from "./deviceMetadata.ts";
-import { ENDED_SESSION_RETENTION_MS, LAST_SEEN_INTERVAL_MS, SESSION_MAX_AGE_SECONDS, SecurityError, hasFreshLocation, parseLocationInput } from "./policy.ts";
+import { ENDED_SESSION_RETENTION_MS, LAST_SEEN_INTERVAL_MS, SESSION_MAX_AGE_SECONDS, SecurityError } from "./policy.ts";
 
 export type SessionIdentity = { sid?: unknown; sub?: unknown };
 type Reader = Pick<PrismaClient, "deviceSession">;
-const clearedLocation = { latitude: null, longitude: null, accuracy: null, locationCapturedAt: null, locationVerifiedAt: null };
-const clearedPrivateData = { ...clearedLocation, ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null, userAgent: null };
+// Nullable GPS columns remain only for migration compatibility. New sessions never
+// populate them; clearing them retires any data written by an older deployment.
+const clearedPrivateData = {
+  latitude: null, longitude: null, accuracy: null, locationCapturedAt: null, locationVerifiedAt: null,
+  ipAddress: null, networkCity: null, networkRegion: null, networkCountry: null, userAgent: null,
+};
 
 export async function validateDeviceSession(db: Reader, identity: SessionIdentity, now = new Date(), touch = true) {
   if (typeof identity.sid !== "string" || !/^[0-9a-f-]{36}$/i.test(identity.sid) || typeof identity.sub !== "string") return null;
-  const record = await db.deviceSession.findUnique({ where: { id: identity.sid }, include: {
+  const record = await db.deviceSession.findUnique({ where: { id: identity.sid }, select: {
+    id: true, userId: true, lastSeenAt: true, expiresAt: true, revokedAt: true,
     user: { select: { id: true, email: true, name: true, role: true } },
   } });
   if (!record || record.userId !== identity.sub || record.revokedAt || record.expiresAt <= now) return null;
@@ -36,12 +41,17 @@ export async function createDeviceSession(db: PrismaClient, userId: string, veri
       id: randomUUID(), userId, createdAt: now, lastSeenAt: now,
       expiresAt: new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000),
       ...parseDeviceMetadata(headers.get("user-agent")), ...trustedNetworkMetadata(headers),
+    }, select: {
+      id: true, userId: true, createdAt: true, lastSeenAt: true, expiresAt: true,
+      revokedAt: true, revokedByUserId: true, revokeReason: true, userAgent: true,
+      device: true, browser: true, os: true, ipAddress: true, networkCity: true,
+      networkRegion: true, networkCountry: true,
     } });
     await tx.activityLog.create({ data: {
       action: "user_login", entityType: "device_session", entityId: session.id, userEmail: user.email,
       createdAt: now,
-      // One immutable login snapshot per new session, before GPS verification.
-      // Explicit fields keep credentials, cookies, raw UA and later GPS out.
+      // One immutable login snapshot per new session. Explicit fields keep
+      // credentials, cookies, raw UA and legacy GPS columns out.
       metadata: {
         eventType: "LOGIN", userId, sessionId: session.id, role: user.role,
         isCurrentSessionAtLogin: true,
@@ -54,37 +64,9 @@ export async function createDeviceSession(db: PrismaClient, userId: string, veri
   });
 }
 
-export async function recordSessionLocation(db: PrismaClient, identity: SessionIdentity, body: unknown, now = new Date()) {
-  const location = parseLocationInput(body, now);
-  return db.$transaction(async tx => {
-    const record = await validateDeviceSession(tx, identity, now, false);
-    if (!record) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-    const result = await tx.deviceSession.updateMany({
-      where: { id: record.id, userId: record.userId, revokedAt: null, expiresAt: { gt: now } },
-      data: location,
-    });
-    if (!result.count) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-    // One useful verification event per login; refreshes never contain GPS/IP
-    // audit metadata and do not append a movement history.
-    const firstCheck = await tx.activityLog.findFirst({ where: { entityId: record.id, action: "session_location_verified" }, select: { id: true } });
-    if (!firstCheck) await tx.activityLog.create({ data: {
-      action: "session_location_verified", entityType: "device_session", entityId: record.id,
-      userEmail: record.user.email, metadata: { userId: record.userId },
-    } });
-    return { verifiedAt: now.toISOString() };
-  });
-}
-
-export async function clearSessionLocation(db: Reader, identity: SessionIdentity, now = new Date()) {
-  const record = await validateDeviceSession(db, identity, now, false);
-  if (!record) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-  await db.deviceSession.updateMany({ where: { id: record.id, userId: record.userId, revokedAt: null, expiresAt: { gt: now }, locationVerifiedAt: { not: null } }, data: clearedLocation });
-}
-
 async function requireAdmin(tx: Prisma.TransactionClient, identity: SessionIdentity, now: Date) {
   const actor = await validateDeviceSession(tx, identity, now, false);
   if (!actor) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-  if (!hasFreshLocation(actor.locationVerifiedAt, now)) throw new SecurityError(428, "LOCATION_REQUIRED", "Verify your location first.");
   if (actor.user.role !== "ADMIN") throw new SecurityError(403, "FORBIDDEN", "Administrator access required.");
   return actor;
 }
@@ -145,7 +127,6 @@ export async function changePasswordAndRevokeOthers(db: PrismaClient, identity: 
   return db.$transaction(async tx => {
     const actor = await validateDeviceSession(tx, identity, now, false);
     if (!actor) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");
-    if (!hasFreshLocation(actor.locationVerifiedAt, now)) throw new SecurityError(428, "LOCATION_REQUIRED", "Verify your location first.");
     const changed = await tx.user.updateMany({ where: { id: actor.userId, password: previousHash }, data: { password: newHash } });
     if (!changed.count) throw new SecurityError(409, "PASSWORD_CHANGED", "The password changed. Try again.");
     const revoked = await tx.deviceSession.updateMany({ where: { userId: actor.userId, id: { not: actor.id }, revokedAt: null, expiresAt: { gt: now } }, data: {

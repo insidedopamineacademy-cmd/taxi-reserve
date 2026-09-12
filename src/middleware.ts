@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { decodeRegisteredToken } from "@/lib/security/token";
-import { hasFreshLocation, safeReturnPath } from "@/lib/security/policy";
 
 const publicPaths = new Set(["/login", "/register", "/api/register", "/favicon.ico", "/icon.png", "/apple-icon.png", "/robots.txt"]);
 const machinePaths = new Set(["/api/admin/driver-subscriptions/run-monthly", "/api/admin/sessions/cleanup"]);
-const bootstrapPaths = new Set(["/location", "/api/security/session", "/api/security/location"]);
 
 export default async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -19,12 +17,6 @@ export default async function middleware(request: NextRequest) {
     if (!token) {
       if (isApi) return NextResponse.json({ error: "Sign in again.", code: "UNAUTHORIZED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
       return NextResponse.redirect(new URL("/login?reason=session-ended", request.url));
-    }
-    if (!bootstrapPaths.has(path) && !hasFreshLocation(token.locationVerifiedAt)) {
-      if (isApi) return NextResponse.json({ error: "Location verification is required.", code: "LOCATION_REQUIRED" }, { status: 428, headers: { "Cache-Control": "no-store" } });
-      const gate = new URL("/location", request.url);
-      gate.searchParams.set("next", safeReturnPath(path + request.nextUrl.search));
-      return NextResponse.redirect(gate);
     }
     const adminPath = ["/admin", "/drivers", "/commissions", "/payments", "/api/admin", "/api/drivers"].some(prefix => path === prefix || path.startsWith(prefix + "/"));
     if (adminPath && token.role !== "ADMIN") {

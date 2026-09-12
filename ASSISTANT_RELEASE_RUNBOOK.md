@@ -4,15 +4,14 @@ This runbook covers controlled production validation of the existing five-tool, 
 
 ## Release gate
 
-The incident operator reports that the additive DeviceSession migration is already
-applied in production. The iOS Home Screen compatibility fix adds no migration.
-Application rollout still requires a canonical HTTPS `NEXTAUTH_URL` and the
-configured daily cleanup cron. Existing pre-registry cookies require one-time
-sign-in. Validate the
-blocking location gate first: the assistant must not mount before verification,
-and assistant API requests must reject missing/stale location and revoked cookies.
-Use `SESSION_LOCATION_SECURITY_REPORT.md` for the coordinated migration sequence
-and the additional session/location physical-device checks.
+Local code expects additive DeviceSession migration
+`20260906090000_device_sessions_location`. Confirm it is recorded and compatible in
+the production database before deploying because the current production application
+was manually rolled back and its database state is not inferred from this checkout.
+This location-removal change adds no migration. Existing pre-registry cookies still
+require one-time sign-in. Validate that authenticated assistant requests accept a
+valid registered session without browser location and reject revoked cookies. Use
+`SESSION_LOCATION_SECURITY_REPORT.md` for the session rollout sequence.
 
 Automated security, authorization, schema, rate-limit, streaming, dependency, type, lint, and build checks must pass before enabling the assistant. The physical-device matrix in `ASSISTANT_MOBILE_QA.md` remains a manual release gate. Until that matrix is completed, the correct verdict is **PRODUCTION READY WITH MANUAL MOBILE QA**.
 
@@ -105,22 +104,17 @@ Primary rollback:
 
 Secondary rollback: revert the application deployment to the last reviewed build while keeping the flag false. No database rollback or data cleanup is required: Phase 1 added no AI schema, migration, durable chat state, or production data mutation.
 
-## Location compatibility smoke check
+## Device-session smoke check
 
 Before assistant validation, use a dedicated account in a non-production
-environment. Test normal iPhone Safari, normal iPhone Chrome and the Home Screen
-web app. Confirm each fresh login stays gated, Allow location persists only the
-latest position, and Try again makes a new request after denied, unavailable and
-timeout results. Confirm refresh/resume do not add LOGIN events. In a development
-build, inspect the privacy-safe location diagnostics and the response status/code;
-never capture coordinates, cookies or tokens. A foreign Origin and a request
-without the Taxi Reserve location marker must return 403.
-
-For permission recovery, Apple documents Settings → Privacy & Security → Location
-Services, then the app entry that requested access; choose an allowed foreground
-setting and enable Precise Location when required. The actual entry presented for
-a Home Screen site must be confirmed on the release device.
+environment. Test normal iPhone Safari, normal iPhone Chrome and a Home Screen
+launch. Confirm a fresh login reaches the authorized destination immediately and
+does not request browser location. Refresh and reopen with the retained cookie and
+confirm no new DeviceSession or LOGIN entry appears. Revoke a second session and
+confirm its next protected request is rejected, then sign in again from the same
+browser/IP and confirm a new independent session is accepted. Never capture
+cookies, tokens, passwords or secrets in QA artifacts.
 
 ## Manual mobile gate
 
-Complete every applicable physical-device row in `ASSISTANT_MOBILE_QA.md`, including iPhone Safari, Android Chrome, repeated keyboard cycles, rotation, slow streams, Stop/Retry, radio switching, background/foreground, VoiceOver, TalkBack, and long reservation/driver/finance cards. The app has no manifest or service worker, but Safari 26 opens sites added to the Home Screen as web apps by default unless the user disables that option. Home Screen location permission and resume therefore require a physical-device check for the session/location release. All other physical rows remain `NEEDS PHYSICAL DEVICE` until actually executed on hardware.
+Complete every applicable physical-device row in `ASSISTANT_MOBILE_QA.md`, including iPhone Safari, Android Chrome, repeated keyboard cycles, rotation, slow streams, Stop/Retry, radio switching, background/foreground, VoiceOver, TalkBack, and long reservation/driver/finance cards. The app has no manifest or service worker. Confirm a Home Screen launch never displays or triggers a location permission flow and that remote session revocation is detected on the next request or foreground check. All other physical rows remain `NEEDS PHYSICAL DEVICE` until actually executed on hardware.

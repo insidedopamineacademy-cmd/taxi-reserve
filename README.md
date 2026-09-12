@@ -46,7 +46,7 @@ A capability-parity review of the driver/commission surface against the legacy `
 
 The homepage keeps the original reservation and inbox cards. ADMIN users additionally receive direct access to Drivers and the Full Ledger PDF. The navigation exposes Overview, Drivers, Commissions, and Payments only to ADMIN users.
 
-## Device sessions and required location
+## Device sessions
 
 Every sign-in creates a database-backed device session. The existing NextAuth
 encrypted JWT cookie references that record; authorization checks its ownership,
@@ -54,58 +54,47 @@ revocation, absolute 30-day expiry and current database role on every request.
 Existing cookies without a registered session ID require one-time sign-in after
 rollout. Password changes keep the current session and revoke the account's others.
 
-Authenticated users enter through `/location`. Normal navigation and the assistant
-remain unavailable until a fresh browser position is accepted. Protected pages,
-APIs and server actions also enforce location verification, which expires after
-30 minutes. Each browser bootstrap and return after five minutes away requests a
-fresh position; foreground checks detect session revocation within 60 seconds or
-on the next API request. Denied/blocked access requires browser/device settings;
-unsupported browsers and insecure connections remain blocked with an explanation.
-The Permissions API is advisory because WebKit can report a stale or incomplete
-state; Allow location and Try again always make a new Geolocation request. A
-current high-accuracy request uses an 18-second bound and retries once at normal
-accuracy only after timeout or temporary unavailability.
-
-The location bootstrap endpoint requires a dedicated non-safelisted request marker.
-It still rejects a foreign Origin and cross-site Fetch Metadata. If a Home Screen
-WebKit request omits Origin, the marker provides the CSRF proof because another
-origin cannot add it without a CORS preflight, which this endpoint does not permit.
-This compatibility path does not change authentication, session binding, coordinate
-validation or the location gate.
+Valid registered sessions enter Taxi Reserve immediately. Browser geolocation,
+permission checks, GPS submission, freshness checks, `/location` redirects and
+location-specific 428 responses are not part of authentication. A lightweight
+foreground check detects remote session revocation within 60 seconds, on app
+resume, or on the next protected API request.
 
 ADMIN users can open `/admin/sessions` from Admin or their account menu, search
 accounts, inspect active/recent sessions, and confirm individual or counted bulk
 logout. The current device is protected from admin revocation; use normal Sign out.
 Device labels are user-agent estimates. IP/city metadata is accepted only from
 Vercel-controlled headers; other hosts show unavailable unless their trusted proxy
-integration is explicitly implemented. No reverse-geocoding service is used.
+integration is explicitly implemented. IP and network estimates are informational
+only: they never allow, reject, revoke or blacklist a login. No fingerprinting or
+external geolocation service is used, and exact handset models are not promised.
 
-Only the latest browser-reported coordinates, rounded to four decimals, accuracy
-and timestamps are stored. They are not proof of physical presence. Location,
-network details and full user agent are cleared at logout/revocation and scrubbed
-daily after expiry. Ended records are retained for 30 days. Each fresh authentication
-creates exactly one immutable LOGIN audit with user/session, parsed device and trusted
-IP/network metadata available at login. It never contains GPS, full user agent,
-plaintext cookies/tokens, credentials or secrets. Location refresh, page refresh,
-resume and last-seen checks do not create login events.
+Every successful fresh authentication creates a new independent DeviceSession and
+exactly one immutable LOGIN audit with user/session, parsed device and trusted
+IP/network metadata available at login. Refreshing or reopening with the same
+cookie does not create another session or LOGIN. A revoked browser may log in again
+normally and receives a new session ID; no old session is resurrected. LOGIN audits
+never contain GPS, full user agents, plaintext cookies/tokens, credentials or
+secrets. IP/network details and the full user agent are cleared when a session ends
+and scrubbed daily after expiry. Ended records are retained for 30 days.
 `GET /api/admin/sessions/cleanup` runs daily at 04:10 UTC with `CRON_SECRET`.
 
 See [SESSION_LOCATION_SECURITY_REPORT.md](SESSION_LOCATION_SECURITY_REPORT.md)
-for the audit, browser evidence, limits and deployment sequence. The incident
-operator reports that additive migration `20260906090000_device_sessions_location`
-is already applied in production. The iOS compatibility fix adds no schema or
-migration and has not been deployed from this checkout.
+for the current architecture, location-removal audit, test evidence and deployment
+sequence. Local code still expects additive migration
+`20260906090000_device_sessions_location`; its nullable legacy GPS columns remain
+unused to avoid a destructive cleanup migration. Verify production migration state
+before deployment. No migration is added by the location removal.
 
 Regression commands: `npm test` (the full non-database suite),
-`npm run test:session-security` for the focused session/location unit suite, and
+`npm run test:session-security` for the focused session metadata unit suite, and
 `SESSION_TEST_DATABASE_URL=<disposable-local-test-database> npm run test:device-sessions`.
 The database script rejects non-local/non-test database URLs. Optional repeatable
 browser QA uses `npm run test:session-browser` with `SESSION_TEST_DATABASE_URL`,
 `SESSION_TEST_BASE_URL` (localhost app using that database),
 `SESSION_TEST_AUTH_SECRET` (matching test server secret), and `PLAYWRIGHT_MODULE`
 (absolute path to Playwright's `index.mjs`). Set `CHROME_EXECUTABLE` for system
-Chrome, or use installed Playwright Chromium. `SESSION_TEST_WEBKIT=1` also requires
-a working installed WebKit runtime. The script creates only synthetic QA accounts
+Chrome, or use installed Playwright Chromium. The script creates only synthetic QA accounts
 in the disposable database and writes screenshots under the system temporary folder.
 
 ## Driver finance rules
@@ -158,7 +147,7 @@ The development server uses the standard Next.js port unless one is supplied. `n
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL/Neon connection string used by Prisma |
 | `NEXTAUTH_SECRET` or `AUTH_SECRET` | Required stable production secret for JWT/session signing |
-| `NEXTAUTH_URL` | Required canonical HTTPS production origin for authentication, exact-origin actions, and validation when location requests include Origin |
+| `NEXTAUTH_URL` | Required canonical HTTPS production origin for authentication and exact-origin security actions |
 | `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASSWORD` | Required together for inbox synchronization |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Required together for replies and SMTP health checks |
 | `EMAIL_INBOX_ALLOWED_USERS` | Comma-separated email allowlist; authentication or ADMIN status alone does not grant inbox access |
@@ -198,7 +187,7 @@ No AI write, reservation/driver/finance mutation, unrestricted Prisma/SQL access
 
 For local visual QA only, set both flags to `true` while running the development server and visit `/assistant-preview`. This route presents clearly labelled static fixtures and returns 404 in production. It must never be used as a source of operational truth.
 
-Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve has no manifest or service worker. Current iOS can still launch a site added to the Home Screen as a web app by default, so that execution context is detected for diagnostics and tested without granting it any security exception. Physical iPhone location prompts, OS permission recovery and lifecycle suspension still require hardware verification.
+Phase 1B.1 mobile behavior, supplemental checks, and the required physical-device matrix are documented in `ASSISTANT_MOBILE_QA.md`. Taxi Reserve has no manifest or service worker. A valid registered session works in an iPhone Home Screen launch without requesting location permission; physical iPhone lifecycle suspension still requires hardware verification.
 
 Production rollout, read-only smoke tests, deterministic answer evaluation, monitoring, and rollback are documented in `ASSISTANT_RELEASE_RUNBOOK.md`.
 
