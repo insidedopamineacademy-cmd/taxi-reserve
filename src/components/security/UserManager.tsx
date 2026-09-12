@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatLocalInstantDateDisplay } from "@/lib/dateDisplay";
+import { securityRequestHeaders } from "@/lib/security/securityRequestGuard";
 
 type ManagedUser = {
   id: string;
@@ -61,7 +62,7 @@ function ManagedDialog({ state, busy, error, close, refresh }: {
         ? { password: form.get("password"), confirmPassword: form.get("confirmPassword") }
         : { active: false };
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(endpoint, { method: "POST", headers: securityRequestHeaders(), body: JSON.stringify(body) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not update the user.");
       refresh(state.kind === "create" ? "Worker account created." : state.kind === "password" ? "Password changed and active devices logged out." : "User deactivated. Historical records were preserved.");
@@ -135,7 +136,7 @@ export default function UserManager() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/users/${user.id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: true }) });
+      const response = await fetch(`/api/admin/users/${user.id}/status`, { method: "POST", headers: securityRequestHeaders(), body: JSON.stringify({ active: true }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not reactivate the user.");
       setMessage("User reactivated. They can sign in with their current password.");

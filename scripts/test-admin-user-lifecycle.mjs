@@ -14,6 +14,7 @@ import {
   requireUnlockedAdmin,
   setupAdminSecurityPin,
   unlockAdminSettings,
+  validateSettingsPin,
 } from "../src/lib/security/adminSecurity.ts";
 import { createDeviceSession, validateDeviceSession } from "../src/lib/security/sessionCore.ts";
 
@@ -67,7 +68,12 @@ try {
   const baseline = await counts(worker);
 
   assert.deepEqual(await getAdminSecurityStatus(db, adminIdentity, now), { configured: false, unlocked: false, unlockedUntil: null, lockedUntil: null });
+  for (const malformed of ["12345", "123456789", "abcdef", 123456]) {
+    assert.throws(() => validateSettingsPin(malformed), { status: 400, code: "INVALID_PIN" });
+  }
   await assert.rejects(listManagedUsers(db, adminIdentity, now), { status: 423 });
+  await assert.rejects(setupAdminSecurityPin(db, { sid: randomUUID(), sub: admin.id }, adminPassword, pin, now), { status: 401 });
+  await assert.rejects(setupAdminSecurityPin(db, {}, adminPassword, pin, now), { status: 401 });
   await assert.rejects(setupAdminSecurityPin(db, identity(workerSessionA), oldWorkerPassword, pin, now), { status: 403 });
   await assert.rejects(setupAdminSecurityPin(db, adminIdentity, "wrong password", pin, now), { status: 400 });
   const setup = await setupAdminSecurityPin(db, adminIdentity, adminPassword, pin, now);

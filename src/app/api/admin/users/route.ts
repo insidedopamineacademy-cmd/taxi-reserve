@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { createManagedUser, listManagedUsers } from "@/lib/security/adminUsers";
 import { SecurityError } from "@/lib/security/policy";
-import { readSecurityJson, requireSameOrigin, requireSecuritySession, securityFailure, securityJson } from "@/lib/security/http";
+import { readSecurityJson, requireTrustedSecurityRequest, requireSecuritySession, securityFailure, securityJson } from "@/lib/security/http";
 
 export async function GET() {
   try {
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    requireSameOrigin(request);
+    requireTrustedSecurityRequest(request);
     const { identity } = await requireSecuritySession({ admin: true, settingsUnlocked: true });
     const body = await readSecurityJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new SecurityError(400, "INVALID_REQUEST", "Invalid user details.");

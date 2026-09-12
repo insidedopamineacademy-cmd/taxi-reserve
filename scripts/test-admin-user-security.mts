@@ -2,9 +2,44 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import {
+  isTrustedSecurityRequest,
+  SECURITY_REQUEST_MARKER,
+} from "../src/lib/security/securityRequestGuard.ts";
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+
+const expectedOrigin = "https://taxi-reserve.example";
+const trust = (overrides: Partial<Parameters<typeof isTrustedSecurityRequest>[0]> = {}) =>
+  isTrustedSecurityRequest({
+    expectedOrigin,
+    origin: expectedOrigin,
+    referer: `${expectedOrigin}/settings`,
+    secFetchSite: "same-origin",
+    marker: null,
+    ...overrides,
+  });
+
+test("security mutation guard accepts desktop, Safari, and iOS standalone requests without trusting forwarded hosts", () => {
+  assert.equal(trust(), true, "normal desktop request");
+  assert.equal(trust({ referer: null }), true, "Safari request with Origin");
+  assert.equal(trust({ origin: null, marker: SECURITY_REQUEST_MARKER }), true, "standalone WebKit request without Origin");
+  assert.equal(trust({ origin: null, referer: null, secFetchSite: null, marker: SECURITY_REQUEST_MARKER }), true, "older WebKit request with only the non-safelisted marker");
+
+  const http = read("src/lib/security/http.ts");
+  assert.match(http, /process\.env\.NEXTAUTH_URL \?\? request\.url/);
+  assert.doesNotMatch(http, /x-forwarded-host|x-forwarded-proto/);
+});
+
+test("security mutation guard rejects missing proof, hostile provenance, and inconsistent browser headers", () => {
+  assert.equal(trust({ origin: null, marker: null }), false, "missing Origin alone is insufficient without app proof");
+  assert.equal(trust({ origin: "https://attacker.example", referer: null, marker: SECURITY_REQUEST_MARKER }), false);
+  assert.equal(trust({ origin: null, referer: "https://attacker.example/phish", marker: SECURITY_REQUEST_MARKER }), false);
+  assert.equal(trust({ origin: null, referer: null, secFetchSite: "cross-site", marker: SECURITY_REQUEST_MARKER }), false);
+  assert.equal(trust({ origin: expectedOrigin, referer: null, secFetchSite: "same-site", marker: SECURITY_REQUEST_MARKER }), false);
+  assert.equal(trust({ origin: "not a URL", referer: null }), false);
+});
 
 test("public registration is removed and Login is the only public account entry", () => {
   assert.equal(fs.existsSync(path.join(root, "src/app/(auth)/register/page.tsx")), false);
@@ -43,12 +78,16 @@ test("role, active status, device session and Settings unlock are separate serve
 test("PIN handling uses bcrypt, persistent lockout and per-session expiry without exposing secrets", () => {
   const gate = read("src/lib/security/adminSecurity.ts");
   const policy = read("src/lib/security/policy.ts");
+  const settings = read("src/app/settings/page.tsx");
+  const route = read("src/app/api/admin/security-gate/route.ts");
   assert.match(gate, /bcrypt\.hash\(pin, 12\)/);
   assert.match(gate, /bcrypt\.compare\(pin, user\.settingsPinHash\)/);
   assert.match(gate, /ADMIN_SETTINGS_UNLOCK_FAILED/);
   assert.match(policy, /SETTINGS_UNLOCK_WINDOW_MS = 10 \* 60 \* 1000/);
   assert.match(policy, /SETTINGS_PIN_MAX_FAILURES = 5/);
   assert.match(policy, /SETTINGS_PIN_LOCKOUT_MS = 5 \* 60 \* 1000/);
+  assert.match(settings, /securityRequestHeaders\(\)/);
+  assert.match(route, /requireTrustedSecurityRequest\(request\)/);
   assert.doesNotMatch(gate, /metadata:\s*\{[^}]*\b(?:pin|pinHash|settingsPinHash)\s*:/i);
 });
 

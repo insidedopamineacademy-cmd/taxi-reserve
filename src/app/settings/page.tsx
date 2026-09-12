@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { securityRequestHeaders } from "@/lib/security/securityRequestGuard";
 
 type GateStatus = {
   configured: boolean;
@@ -31,7 +32,7 @@ function ProtectedSettingsGate({ status, reload }: { status: GateStatus; reload:
       const action = status.configured ? "unlock" : "setup";
       const response = await fetch("/api/admin/security-gate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: securityRequestHeaders(),
         body: JSON.stringify(action === "unlock" ? { action, pin } : { action, currentPassword, pin, confirmPin }),
       });
       const result = await response.json().catch(() => ({}));
@@ -77,7 +78,7 @@ function SensitiveSettings({ admin, onAdminPasswordChanged }: { admin: boolean; 
     event.preventDefault();
     setMsg(null);
     setPending(true);
-    const response = await fetch("/api/user/change-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    const response = await fetch("/api/user/change-password", { method: "POST", headers: securityRequestHeaders(), body: JSON.stringify(form) });
     const result = await response.json().catch(() => ({}));
     if (response.ok) {
       setMsg({ ok: true, text: "Password changed successfully. Other devices were signed out." });
@@ -133,7 +134,7 @@ export default function SettingsPage() {
   }, [gate?.unlockedUntil]);
 
   async function lock() {
-    await fetch("/api/admin/security-gate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "lock" }) });
+    await fetch("/api/admin/security-gate", { method: "POST", headers: securityRequestHeaders(), body: JSON.stringify({ action: "lock" }) });
     setRevision(value => value + 1);
   }
 

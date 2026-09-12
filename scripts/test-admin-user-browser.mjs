@@ -58,10 +58,10 @@ async function captureAll(page, name) {
 }
 
 console.log("QA artifacts:", output);
-const [adminHash, workerHash, normalHash, pinHash] = await Promise.all([
-  bcrypt.hash(adminPassword, 12), bcrypt.hash(workerOldPassword, 12), bcrypt.hash("NormalWorker2026!", 12), bcrypt.hash(pin, 12),
+const [adminHash, workerHash, normalHash] = await Promise.all([
+  bcrypt.hash(adminPassword, 12), bcrypt.hash(workerOldPassword, 12), bcrypt.hash("NormalWorker2026!", 12),
 ]);
-const admin = await db.user.create({ data: { name: "Arslan", email: adminEmail, password: adminHash, role: "ADMIN", settingsPinHash: pinHash } });
+const admin = await db.user.create({ data: { name: "Arslan", email: adminEmail, password: adminHash, role: "ADMIN" } });
 const worker = await db.user.create({ data: { name: "Junaid", email: workerEmail, password: workerHash, role: "USER" } });
 await db.user.create({ data: { name: "Normal Worker", email: normalEmail, password: normalHash, role: "USER" } });
 
@@ -76,21 +76,67 @@ try {
   contexts.push(adminContext);
   await login(adminContext, adminEmail, adminPassword);
   const page = await pageFor(adminContext);
+  let standaloneSetupSeen = false;
+  await page.route("**/api/admin/security-gate", async route => {
+    const request = route.request();
+    if (!standaloneSetupSeen && request.method() === "POST") {
+      const headers = { ...request.headers() };
+      assert.equal(headers["x-taxi-security-request"], "security-v1");
+      delete headers.origin;
+      headers["sec-fetch-site"] = "same-origin";
+      standaloneSetupSeen = true;
+      await route.continue({ headers });
+      return;
+    }
+    await route.continue();
+  });
 
   await page.goto(`${base}/admin`);
   await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
   assert.equal(new URL(page.url()).pathname, "/settings");
-  await page.getByRole("heading", { name: "Enter security PIN", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Set Settings PIN", exact: true }).waitFor();
   assert.equal(await page.getByRole("link", { name: "Open Admin", exact: true }).count(), 0);
   await captureAll(page, "settings-pin-gate");
   const pinInput = page.locator('input[aria-label="Security PIN"]');
+  await page.getByLabel("Current account password", { exact: true }).fill(adminPassword);
+  await pinInput.fill(pin);
+  await page.getByLabel("Confirm security PIN", { exact: true }).fill(pin);
+  await page.getByRole("button", { name: "Set PIN and unlock", exact: true }).click();
+  await page.getByRole("heading", { name: "Administration", exact: true }).waitFor();
+  assert.equal(standaloneSetupSeen, true);
+  const configuredAdmin = await db.user.findUniqueOrThrow({ where: { id: admin.id } });
+  assert.notEqual(configuredAdmin.settingsPinHash, pin);
+  assert.equal(await bcrypt.compare(pin, configuredAdmin.settingsPinHash), true);
+
+  await page.goto(`${base}/settings`);
+  await page.getByRole("button", { name: "Lock Settings", exact: true }).click();
+  await page.getByRole("heading", { name: "Enter security PIN", exact: true }).waitFor();
   await pinInput.fill("111111");
   await page.getByRole("button", { name: "Unlock", exact: true }).click();
   await page.getByRole("alert").getByText("Incorrect security PIN.", { exact: true }).waitFor();
   await pinInput.fill(pin);
   await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  await page.getByRole("link", { name: "Open Admin", exact: true }).click();
   await page.getByRole("heading", { name: "Administration", exact: true }).waitFor();
   await captureAll(page, "admin-hub");
+
+  const securityBody = { action: "unlock", pin };
+  const securityHeaders = { "Content-Type": "application/json", "X-Taxi-Security-Request": "security-v1" };
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Origin: "https://attacker.example" }, data: securityBody,
+  })).status(), 403);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Referer: "https://attacker.example/phish" }, data: securityBody,
+  })).status(), 403);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { "Content-Type": "application/json" }, data: securityBody,
+  })).status(), 403);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Origin: "https://attacker.example", "X-Forwarded-Host": appUrl.host }, data: securityBody,
+  })).status(), 403);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Origin: base }, data: { action: "unlock", pin: "123" },
+  })).status(), 400);
 
   await page.getByRole("link", { name: /Users/ }).click();
   await page.getByRole("heading", { name: "Users", exact: true }).waitFor();
@@ -172,6 +218,9 @@ try {
 
   const anonymous = await browser.newContext();
   contexts.push(anonymous);
+  assert.equal((await anonymous.request.post(`${base}/api/admin/security-gate`, {
+    headers: securityHeaders, data: securityBody,
+  })).status(), 401);
   assert.equal((await anonymous.request.post(`${base}/api/admin/users`, { headers: { Origin: base, "Content-Type": "application/json" }, data: { name: "No", email: "no@example.test", password: "NoPassword2026!", confirmPassword: "NoPassword2026!" } })).status(), 401);
   const register = await anonymous.request.get(`${base}/register`, { maxRedirects: 0 });
   assert.equal(register.status(), 307);

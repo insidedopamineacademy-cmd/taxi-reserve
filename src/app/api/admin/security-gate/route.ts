@@ -11,7 +11,7 @@ import {
 import { SecurityError } from "@/lib/security/policy";
 import {
   readSecurityJson,
-  requireSameOrigin,
+  requireTrustedSecurityRequest,
   requireSecuritySession,
   securityFailure,
   securityJson,
@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    requireSameOrigin(request);
+    requireTrustedSecurityRequest(request);
     const { identity } = await requireSecuritySession({ admin: true });
     const body = await readSecurityJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {

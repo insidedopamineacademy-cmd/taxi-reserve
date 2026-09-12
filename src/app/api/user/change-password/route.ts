@@ -6,10 +6,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { changePasswordAndRevokeOthers } from "@/lib/security/sessionCore";
-import { requireSameOrigin, securityFailure } from "@/lib/security/http";
+import { requireTrustedSecurityRequest, securityFailure } from "@/lib/security/http";
 
 export async function POST(req: Request) {
-  try { requireSameOrigin(req); } catch (error) { return securityFailure(error); }
+  try { requireTrustedSecurityRequest(req); } catch (error) { return securityFailure(error); }
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email || !session?.id || !session.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

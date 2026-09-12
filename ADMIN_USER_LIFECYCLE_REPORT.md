@@ -53,6 +53,19 @@ Expiry comparisons are server-trusted; the browser cannot grant itself access.
 PINs, password values, hashes, cookies, and plaintext or derived session tokens are
 excluded from responses and ActivityLog metadata.
 
+The PIN setup failure seen in the iOS Home Screen app came from request provenance
+validation before password/PIN processing: the original guard required `Origin`
+to exist and exactly equal `NEXTAUTH_URL`. Normal WebKit fetch supplies Origin, but
+standalone WebKit can omit it. Security writes now retain that exact comparison
+when Origin exists. When it does not, Taxi Reserve's own fetch supplies the
+non-safelisted `X-Taxi-Security-Request: security-v1` marker. Cross-origin script
+cannot send that header without a successful CORS preflight, and these private
+routes expose no cross-origin allowance. A supplied Referer must still have the
+canonical origin; Sec-Fetch-Site must be `same-origin` or `none`. Forwarded host
+and protocol headers are not trusted. The fallback still proceeds through the
+authenticated DeviceSession, ACTIVE ADMIN, current-password, PIN-format, bcrypt,
+session-unlock, and lockout checks.
+
 ## Lifecycle guarantees
 
 - Create validates normalized unique email, name, and password; hashes the password
@@ -114,7 +127,12 @@ lockout, new-session isolation, duplicate account rejection, in-place password
 change, session revocation, history preservation, deactivation/reactivation, current
 admin safety, and secret-free audits. Browser QA covers locked deep links, USER and
 anonymous denials, all lifecycle actions, and horizontal overflow at 360, 390, 430,
-and 1280 pixels.
+and 1280 pixels. The request-guard suite additionally covers desktop/Safari
+origins, an iOS standalone request with Origin deliberately removed, missing proof,
+hostile Origin/Referer, cross-site/same-site Fetch Metadata, malformed values, and
+forwarded-host spoofing. The browser suite completes real PIN setup with Origin
+removed, verifies the stored bcrypt hash and current-session unlock, then locks and
+unlocks again through the normal desktop request path.
 
 Production prerequisites are: reviewed backup; confirmed target and migration
 history; successful Prisma validate/generate; `npm run migrate:deploy` before the new

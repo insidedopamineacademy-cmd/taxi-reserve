@@ -119,6 +119,15 @@ minutes. A new login, logout, session revocation, explicit Settings lock, or the
 admin's own password change has no inherited unlock. Initial PIN setup requires the
 admin's current account password.
 
+Security mutation requests normally prove their source with an exact canonical
+`Origin`. Because iOS Home Screen WebKit may omit `Origin`, Taxi Reserve also sends
+a non-safelisted `X-Taxi-Security-Request` marker. The fallback is accepted only
+when `Origin` is absent and every available Referer/Sec-Fetch-Site signal remains
+same-app; cross-site, same-site, malformed, and conflicting signals are rejected.
+The marker is CSRF proof that triggers a CORS preflight cross-origin, not an
+authentication secret. These checks do not trust forwarded host/protocol headers
+and do not replace DeviceSession, role, password, PIN, or lockout validation.
+
 See [ADMIN_USER_LIFECYCLE_REPORT.md](ADMIN_USER_LIFECYCLE_REPORT.md) for the User
 dependency map, preservation guarantees, test evidence, read-only verification
 query, and production rollout order. Local and deployed code must not serve this

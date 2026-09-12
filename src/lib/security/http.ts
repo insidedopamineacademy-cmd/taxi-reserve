@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SecurityError } from "./policy";
+import { isTrustedSecurityRequest, SECURITY_REQUEST_HEADER } from "./securityRequestGuard";
 
 export async function requireSecuritySession(options: { admin?: boolean; settingsUnlocked?: boolean } = {}) {
   const session = await getServerSession(authOptions);
@@ -17,9 +18,15 @@ export async function requireSecuritySession(options: { admin?: boolean; setting
   return { session, identity: { sid: session.id, sub: session.user.id } };
 }
 
-export function requireSameOrigin(request: Request) {
+export function requireTrustedSecurityRequest(request: Request) {
   const expectedOrigin = new URL(process.env.NEXTAUTH_URL ?? request.url).origin;
-  if (request.headers.get("origin") !== expectedOrigin) throw new SecurityError(403, "INVALID_ORIGIN", "This action must be submitted from Taxi Reserve.");
+  if (!isTrustedSecurityRequest({
+    expectedOrigin,
+    origin: request.headers.get("origin"),
+    referer: request.headers.get("referer"),
+    secFetchSite: request.headers.get("sec-fetch-site"),
+    marker: request.headers.get(SECURITY_REQUEST_HEADER),
+  })) throw new SecurityError(403, "INVALID_ORIGIN", "This action must be submitted from Taxi Reserve.");
 }
 
 export async function readSecurityJson(request: Request, maxBytes = 4096) {

@@ -91,6 +91,15 @@ current DeviceSession for ten minutes. Five failed checks create a five-minute
 lockout. PINs, password values, hashes, cookies, and session tokens never enter
 ActivityLog metadata. A fresh login never inherits another session's unlock.
 
+Security mutations require an exact canonical Origin when WebKit supplies one.
+For iOS Home Screen requests that omit Origin, the app supplies a non-safelisted
+security-request marker; any present Referer must have the canonical origin and any
+present Sec-Fetch-Site must be `same-origin` or `none`. Missing Origin without the
+marker, cross-site/same-site metadata, hostile Referer, malformed Origin, and
+conflicting evidence fail closed. Host and forwarded-host/protocol headers do not
+grant trust. Authentication and database-backed DeviceSession checks remain
+independent mandatory gates.
+
 User lifecycle changes never delete or replace a User. Worker password reset updates
 the existing password hash and revokes all active target sessions. Deactivation sets
 the same row to INACTIVE and revokes its sessions; reactivation changes the same row

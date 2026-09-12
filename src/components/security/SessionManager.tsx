@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatMadridDateDisplay, formatMadridTime } from "@/lib/time/madrid";
+import { securityRequestHeaders } from "@/lib/security/securityRequestGuard";
 
 type Account = { id: string; email: string; name: string | null; status: "ACTIVE" | "INACTIVE"; activeCount: number };
 type Device = {
@@ -79,7 +80,7 @@ export default function SessionManager({ initialUserId = "" }: { initialUserId?:
     setConfirmationError(null);
     try {
       const response = await fetch(confirmation.kind === "one" ? `/api/admin/sessions/${confirmation.device.id}/revoke` : "/api/admin/sessions/revoke-others", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: securityRequestHeaders(),
         ...(confirmation.kind === "others" ? { body: JSON.stringify({ userId: confirmation.userId, expectedIds: confirmation.ids }) } : {}),
       });
       const result = await response.json();

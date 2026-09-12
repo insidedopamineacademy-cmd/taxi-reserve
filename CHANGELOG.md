@@ -4,6 +4,18 @@ Notable project changes are recorded here in reverse chronological order.
 
 ## Unreleased
 
+### iOS Settings PIN request compatibility
+
+- Fixed legitimate iPhone Home Screen PIN setup requests being rejected when
+  WebKit omitted the `Origin` header.
+- Security mutations now keep strict origin validation when `Origin` is present.
+  The missing-Origin fallback requires Taxi Reserve's non-safelisted
+  `X-Taxi-Security-Request` marker; any supplied Referer or Sec-Fetch-Site value
+  must also describe the same app.
+- Kept authenticated DeviceSession, canonical ADMIN role, current-password PIN
+  setup, PIN format, temporary session unlock, and brute-force lockout checks.
+  Forwarded host/protocol headers are not trusted. No schema or data changed.
+
 ### Driver balance double-count correction
 
 - Proved with a read-only aggregate that the reported €264.00 is the raw
