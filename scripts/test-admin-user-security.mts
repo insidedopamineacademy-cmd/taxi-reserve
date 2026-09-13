@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
+  evaluateSecurityRequest,
   isTrustedSecurityRequest,
   SECURITY_REQUEST_MARKER,
 } from "../src/lib/security/securityRequestGuard.ts";
@@ -25,11 +26,39 @@ test("security mutation guard accepts desktop, Safari, and iOS standalone reques
   assert.equal(trust(), true, "normal desktop request");
   assert.equal(trust({ referer: null }), true, "Safari request with Origin");
   assert.equal(trust({ origin: null, marker: SECURITY_REQUEST_MARKER }), true, "standalone WebKit request without Origin");
+  assert.equal(trust({ origin: null, referer: `${expectedOrigin}/settings`, secFetchSite: null, marker: SECURITY_REQUEST_MARKER }), true, "standalone WebKit request with canonical Referer");
   assert.equal(trust({ origin: null, referer: null, secFetchSite: null, marker: SECURITY_REQUEST_MARKER }), true, "older WebKit request with only the non-safelisted marker");
 
   const http = read("src/lib/security/http.ts");
-  assert.match(http, /process\.env\.NEXTAUTH_URL \?\? request\.url/);
+  assert.match(http, /requestTargetOrigin\(request\)/);
+  assert.match(http, /request\.headers\.get\("host"\)/);
+  assert.doesNotMatch(http, /new URL\(process\.env\.NEXTAUTH_URL/);
   assert.doesNotMatch(http, /x-forwarded-host|x-forwarded-proto/);
+});
+
+test("security mutation guard reports the exact rejecting branch without request secrets", () => {
+  assert.equal(evaluateSecurityRequest({
+    expectedOrigin,
+    origin: "https://old-alias.example",
+    referer: null,
+    secFetchSite: "same-origin",
+    marker: SECURITY_REQUEST_MARKER,
+  }).branch, "origin-mismatch");
+  assert.equal(evaluateSecurityRequest({
+    expectedOrigin,
+    origin: null,
+    referer: null,
+    secFetchSite: null,
+    marker: SECURITY_REQUEST_MARKER,
+  }).branch, "marker-fallback");
+
+  const http = read("src/lib/security/http.ts");
+  for (const safeField of ["originPresent", "refererPresent", "refererOrigin", "secFetchSite", "markerPresent", "contentType", "deploymentHost", "branch"]) {
+    assert.match(http, new RegExp(safeField));
+  }
+  const diagnosticProjection = http.match(/const metadata = \{[\s\S]*?\n    \};/)?.[0] ?? "";
+  assert.ok(diagnosticProjection);
+  assert.doesNotMatch(diagnosticProjection, /request\.body|headers\.get\(["']cookie|headers\.get\(["']authorization|currentPassword|pinHash|settingsPinHash/i);
 });
 
 test("security mutation guard rejects missing proof, hostile provenance, and inconsistent browser headers", () => {
@@ -87,7 +116,7 @@ test("PIN handling uses bcrypt, persistent lockout and per-session expiry withou
   assert.match(policy, /SETTINGS_PIN_MAX_FAILURES = 5/);
   assert.match(policy, /SETTINGS_PIN_LOCKOUT_MS = 5 \* 60 \* 1000/);
   assert.match(settings, /securityRequestHeaders\(\)/);
-  assert.match(route, /requireTrustedSecurityRequest\(request\)/);
+  assert.match(route, /requireTrustedSecurityRequest\(request(?:,\s*"admin-security-gate")?\)/);
   assert.doesNotMatch(gate, /metadata:\s*\{[^}]*\b(?:pin|pinHash|settingsPinHash)\s*:/i);
 });
 

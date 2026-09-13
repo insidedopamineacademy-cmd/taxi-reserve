@@ -75,6 +75,7 @@ try {
   const adminContext = await browser.newContext();
   contexts.push(adminContext);
   await login(adminContext, adminEmail, adminPassword);
+  const adminSession = await db.deviceSession.findFirstOrThrow({ where: { userId: admin.id, revokedAt: null }, orderBy: { createdAt: "desc" } });
   const page = await pageFor(adminContext);
   let standaloneSetupSeen = false;
   await page.route("**/api/admin/security-gate", async route => {
@@ -83,7 +84,8 @@ try {
       const headers = { ...request.headers() };
       assert.equal(headers["x-taxi-security-request"], "security-v1");
       delete headers.origin;
-      headers["sec-fetch-site"] = "same-origin";
+      delete headers.referer;
+      delete headers["sec-fetch-site"];
       standaloneSetupSeen = true;
       await route.continue({ headers });
       return;
@@ -127,6 +129,12 @@ try {
   })).status(), 403);
   assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
     headers: { ...securityHeaders, Referer: "https://attacker.example/phish" }, data: securityBody,
+  })).status(), 403);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Referer: `${base}/settings` }, data: { action: "unlock", pin: "123" },
+  })).status(), 400);
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, "Sec-Fetch-Site": "cross-site" }, data: securityBody,
   })).status(), 403);
   assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
     headers: { "Content-Type": "application/json" }, data: securityBody,
@@ -213,13 +221,17 @@ try {
   const denied = await normalPage.goto(`${base}/admin`);
   assert.equal(new URL(denied.url()).pathname, "/reservations");
   assert.equal((await normalContext.request.get(`${base}/api/admin/users`)).status(), 403);
-  assert.equal((await normalContext.request.post(`${base}/api/admin/security-gate`, { headers: { Origin: base, "Content-Type": "application/json" }, data: { action: "unlock", pin } })).status(), 403);
+  assert.equal((await normalContext.request.post(`${base}/api/admin/security-gate`, { headers: { ...securityHeaders, Origin: base }, data: { action: "unlock", pin } })).status(), 403);
   await capture(normalPage, "normal-user-settings", 390);
 
   const anonymous = await browser.newContext();
   contexts.push(anonymous);
   assert.equal((await anonymous.request.post(`${base}/api/admin/security-gate`, {
     headers: securityHeaders, data: securityBody,
+  })).status(), 401);
+  await db.deviceSession.update({ where: { id: adminSession.id }, data: { revokedAt: new Date(), revokeReason: "TEST_REVOKED" } });
+  assert.equal((await adminContext.request.post(`${base}/api/admin/security-gate`, {
+    headers: { ...securityHeaders, Origin: base }, data: securityBody,
   })).status(), 401);
   assert.equal((await anonymous.request.post(`${base}/api/admin/users`, { headers: { Origin: base, "Content-Type": "application/json" }, data: { name: "No", email: "no@example.test", password: "NoPassword2026!", confirmPassword: "NoPassword2026!" } })).status(), 401);
   const register = await anonymous.request.get(`${base}/register`, { maxRedirects: 0 });

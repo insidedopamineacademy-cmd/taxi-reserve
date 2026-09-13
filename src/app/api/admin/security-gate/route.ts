@@ -28,8 +28,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    requireTrustedSecurityRequest(request);
+    requireTrustedSecurityRequest(request, "admin-security-gate");
     const { identity } = await requireSecuritySession({ admin: true });
+    console.info("Security gate request stage.", { event: "SECURITY_GATE_STAGE", stage: "jwt-admin-accepted" });
     const body = await readSecurityJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new SecurityError(400, "INVALID_REQUEST", "Invalid security request.");
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
           typeof input.currentPassword !== "string" || input.pin !== input.confirmPin) {
         throw new SecurityError(400, "INVALID_REQUEST", "PIN confirmation must match.");
       }
+      console.info("Security gate request stage.", { event: "SECURITY_GATE_STAGE", stage: "setup-input-accepted" });
       const result = await setupAdminSecurityPin(prisma, identity, input.currentPassword, input.pin);
       return securityJson({ unlocked: true, unlockedUntil: result.unlockedUntil.toISOString() });
     }
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
       if (Object.keys(input).some(key => !["action", "pin"].includes(key))) {
         throw new SecurityError(400, "INVALID_REQUEST", "Invalid security request.");
       }
+      console.info("Security gate request stage.", { event: "SECURITY_GATE_STAGE", stage: "unlock-input-accepted" });
       const result = await unlockAdminSettings(prisma, identity, input.pin);
       return securityJson({ unlocked: true, unlockedUntil: result.unlockedUntil.toISOString() });
     }
