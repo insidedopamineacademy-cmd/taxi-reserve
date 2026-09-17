@@ -20,6 +20,7 @@ const ACCENT_COLOR = rgb(0.92, 0.67, 0.05);
 function pdfSafeText(value: unknown) {
   return String(value ?? "")
     .replace(/→/g, "->")
+    .replace(/·/g, " | ")
     .replace(/[–—]/g, "-")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -333,12 +334,14 @@ async function finishReport(writer: ReportWriter) {
   return writer.doc.save();
 }
 
-type PdfCommissionHistoryEntry = {
+export type PdfCommissionHistoryEntry = {
   date: string;
+  time?: string | null;
   pickupText: string | null;
   dropoffText: string | null;
   amount: string;
-  source?: string;
+  classification: string;
+  reference?: string | null;
 };
 
 type PdfPaymentHistoryEntry = {
@@ -362,19 +365,29 @@ function commissionEntryHeight(
   commission: PdfCommissionHistoryEntry,
 ) {
   const amount = formatPdfMoney(commission.amount);
-  const pickup = `Pickup: ${commission.pickupText || "Not set"}`;
-  const dropoff = `Drop-off: ${commission.dropoffText || "Not set"}`;
-  const source = commission.source ? `Source: ${commission.source}` : null;
+  const header = commission.time
+    ? `${commission.date} · ${commission.time}`
+    : commission.date;
+  const details = commissionDetailLines(commission);
 
   return (
-    entryHeaderLayout(writer, commission.date, amount).height +
-    wrapText(pickup, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13 +
-    wrapText(dropoff, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13 +
-    (source
-      ? wrapText(source, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13
-      : 0) +
+    entryHeaderLayout(writer, header, amount).height +
+    details.reduce(
+      (height, detail) =>
+        height +
+        wrapText(detail, writer.regular, 9, PAGE_WIDTH - MARGIN * 2).length * 13,
+      0,
+    ) +
     18
   );
+}
+
+function commissionDetailLines(commission: PdfCommissionHistoryEntry) {
+  const details = [`Type: ${commission.classification}`];
+  if (commission.reference) details.push(`Reference: ${commission.reference}`);
+  if (commission.pickupText) details.push(`Pickup: ${commission.pickupText}`);
+  if (commission.dropoffText) details.push(`Destination: ${commission.dropoffText}`);
+  return details;
 }
 
 function drawCommissionHistory(
@@ -394,24 +407,17 @@ function drawCommissionHistory(
 
   for (const commission of commissions) {
     const amount = formatPdfMoney(commission.amount);
-    const pickup = `Pickup: ${commission.pickupText || "Not set"}`;
-    const dropoff = `Drop-off: ${commission.dropoffText || "Not set"}`;
+    const header = commission.time
+      ? `${commission.date} · ${commission.time}`
+      : commission.date;
     ensureSpace(writer, commissionEntryHeight(writer, commission));
-    drawEntryHeader(writer, commission.date, amount);
-    if (commission.source) {
-      drawWrappedText(writer, `Source: ${commission.source}`, {
+    drawEntryHeader(writer, header, amount);
+    for (const detail of commissionDetailLines(commission)) {
+      drawWrappedText(writer, detail, {
         size: 9,
         color: MUTED_COLOR,
       });
     }
-    drawWrappedText(writer, pickup, {
-      size: 9,
-      color: MUTED_COLOR,
-    });
-    drawWrappedText(writer, dropoff, {
-      size: 9,
-      color: MUTED_COLOR,
-    });
     drawEntryDivider(writer);
   }
 }

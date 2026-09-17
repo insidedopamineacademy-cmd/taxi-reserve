@@ -15,8 +15,8 @@ import { requireDriverAdminPage } from "@/lib/drivers/access";
 import { buildShareFilename } from "@/lib/pdfShare";
 import {
   formatCommissionRoute,
-  resolveCommissionRoute,
 } from "@/lib/drivers/commissionRoute";
+import { resolveCommissionPresentation } from "@/lib/drivers/commissionPresentation";
 import {
   formatEuro,
   getDriverFinancialSummary,
@@ -64,9 +64,13 @@ export default async function DriverDetailPage({ params }: PageProps) {
           reservation: {
             select: {
               id: true,
+              startAt: true,
               pickupText: true,
               dropoffText: true,
             },
+          },
+          subscriptionCharge: {
+            select: { id: true, chargeMonth: true },
           },
         },
       },
@@ -305,26 +309,25 @@ export default async function DriverDetailPage({ params }: PageProps) {
           ) : (
             <ol className="mt-3 grid gap-3">
               {driver.commissionEntries.map((entry) => {
-                const route = resolveCommissionRoute(entry);
+                const presentation = resolveCommissionPresentation(entry);
 
                 return (
                   <li key={entry.id} className="rounded-xl border border-app-border bg-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm text-neutral-300">
-                          {formatFinancialDateDisplay(entry.entryDate)}
+                          {presentation.date}
+                          {presentation.time ? ` · ${presentation.time}` : ""}
                         </p>
-                        {entry.reservation ? (
-                          <div className="mt-1 text-xs text-subtle">
-                            <p className="font-medium text-muted">Reservation-linked</p>
-                            <p className="mt-1 break-words">{formatCommissionRoute(route)}</p>
-                          </div>
-                        ) : (
-                          <div className="mt-1 text-xs text-subtle">
-                            <p>Manual commission</p>
-                            <p className="mt-1 break-words">{formatCommissionRoute(route)}</p>
-                          </div>
-                        )}
+                        <div className="mt-1 text-xs text-subtle">
+                          <p className="font-medium text-muted">{presentation.classification}</p>
+                          {presentation.pickupText || presentation.dropoffText ? (
+                            <p className="mt-1 break-words">{formatCommissionRoute(presentation)}</p>
+                          ) : null}
+                          {presentation.reference ? (
+                            <p className="mt-1 break-all">Reference: {presentation.reference}</p>
+                          ) : null}
+                        </div>
                       </div>
                       <p className="shrink-0 font-semibold text-white tnum">
                         {formatEuro(entry.commissionAmount)}
@@ -335,19 +338,21 @@ export default async function DriverDetailPage({ params }: PageProps) {
                         {entry.notes}
                       </p>
                     ) : null}
-                    <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-app-border pt-3">
-                      <Link
-                        href={`/drivers/${driver.id}/commissions/${entry.id}/edit`}
-                        className="inline-flex h-9 items-center rounded-md border border-white/10 px-3 text-xs font-medium text-neutral-200 hover:bg-white/5"
-                      >
-                        Edit
-                      </Link>
-                      <FinancialEntryDeleteButton
-                        driverId={driver.id}
-                        entryId={entry.id}
-                        kind="commission"
-                      />
-                    </div>
+                    {!entry.subscriptionCharge ? (
+                      <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-app-border pt-3">
+                        <Link
+                          href={`/drivers/${driver.id}/commissions/${entry.id}/edit`}
+                          className="inline-flex h-9 items-center rounded-md border border-white/10 px-3 text-xs font-medium text-neutral-200 hover:bg-white/5"
+                        >
+                          Edit
+                        </Link>
+                        <FinancialEntryDeleteButton
+                          driverId={driver.id}
+                          entryId={entry.id}
+                          kind="commission"
+                        />
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

@@ -37,12 +37,19 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       entryDate: true,
       notes: true,
       reservationId: true,
+      subscriptionChargeId: true,
       manualPickupText: true,
       manualDropoffText: true,
     },
   });
   if (!current) {
     return NextResponse.json({ error: "Commission not found." }, { status: 404 });
+  }
+  if (current.subscriptionChargeId) {
+    return NextResponse.json(
+      { error: "Subscription liability entries are managed by monthly subscriptions." },
+      { status: 409 },
+    );
   }
 
   const body = await request.json().catch(() => null);
@@ -131,8 +138,22 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   const { id: driverId, commissionId } = await params;
 
   try {
-    const result = await prisma.commissionEntry.deleteMany({
+    const current = await prisma.commissionEntry.findFirst({
       where: { id: commissionId, driverId },
+      select: { subscriptionChargeId: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Commission not found." }, { status: 404 });
+    }
+    if (current.subscriptionChargeId) {
+      return NextResponse.json(
+        { error: "Subscription liability entries are managed by monthly subscriptions." },
+        { status: 409 },
+      );
+    }
+
+    const result = await prisma.commissionEntry.deleteMany({
+      where: { id: commissionId, driverId, subscriptionChargeId: null },
     });
     if (result.count === 0) {
       return NextResponse.json({ error: "Commission not found." }, { status: 404 });

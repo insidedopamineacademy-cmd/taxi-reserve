@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
-import { resolveCommissionRoute } from "@/lib/drivers/commissionRoute";
+import { resolveCommissionPresentation } from "@/lib/drivers/commissionPresentation";
 import { formatFinancialDateDisplay } from "@/lib/drivers/financialValidation";
 import { getDriverFinancialSummary } from "@/lib/drivers/financials";
 import { buildDriverLedgerPdf } from "@/lib/drivers/pdf";
@@ -57,8 +57,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
           manualPickupText: true,
           manualDropoffText: true,
           reservation: {
-            select: { id: true, pickupText: true, dropoffText: true },
+            select: { id: true, startAt: true, pickupText: true, dropoffText: true },
           },
+          subscriptionCharge: { select: { id: true, chargeMonth: true } },
         },
       },
       payments: {
@@ -101,11 +102,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
     totalSubscriptionCharges: summary.totalSubscriptionCharges.toFixed(2),
     balance: summary.balance.toFixed(2),
     commissions: driver.commissionEntries.map((commission) => {
-      const route = resolveCommissionRoute(commission);
+      const presentation = resolveCommissionPresentation(commission);
       return {
-        date: formatFinancialDateDisplay(commission.entryDate),
-        pickupText: route.pickupText,
-        dropoffText: route.dropoffText,
+        ...presentation,
         amount: commission.commissionAmount.toFixed(2),
       };
     }),

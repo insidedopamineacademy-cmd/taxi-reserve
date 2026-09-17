@@ -22,6 +22,7 @@ export type DriverSubscriptionBatchResult = {
     id: string;
     driverId: string;
     amount: Prisma.Decimal;
+    liabilityCommissionId: string;
   }>;
 };
 
@@ -41,6 +42,52 @@ function assertNormalizedChargeMonth(chargeMonth: Date) {
   if (!valid) {
     throw new Error("Subscription chargeMonth must be the first UTC date of a calendar month.");
   }
+}
+
+export async function createSubscriptionChargeAndLiability(
+  transaction: Prisma.TransactionClient,
+  input: {
+    driverId: string;
+    chargeMonth: Date;
+    amount: Prisma.Decimal;
+  },
+) {
+  assertNormalizedChargeMonth(input.chargeMonth);
+
+  const existing = await transaction.driverSubscriptionCharge.findUnique({
+    where: {
+      driverId_chargeMonth: {
+        driverId: input.driverId,
+        chargeMonth: input.chargeMonth,
+      },
+    },
+    select: { id: true },
+  });
+  if (existing) return { created: false as const, chargeId: existing.id };
+
+  const charge = await transaction.driverSubscriptionCharge.create({
+    data: {
+      driverId: input.driverId,
+      chargeMonth: input.chargeMonth,
+      amount: input.amount,
+    },
+    select: { id: true, driverId: true, amount: true },
+  });
+  const liability = await transaction.commissionEntry.create({
+    data: {
+      driverId: input.driverId,
+      subscriptionChargeId: charge.id,
+      commissionAmount: input.amount,
+      entryDate: input.chargeMonth,
+    },
+    select: { id: true },
+  });
+
+  return {
+    created: true as const,
+    charge,
+    liabilityCommissionId: liability.id,
+  };
 }
 
 export async function generateMonthlyDriverSubscriptionCharges(
@@ -101,15 +148,21 @@ export async function generateMonthlyDriverSubscriptionCharges(
     }
 
     try {
-      const charge = await client.driverSubscriptionCharge.create({
-        data: {
+      const created = await client.$transaction((transaction) =>
+        createSubscriptionChargeAndLiability(transaction, {
           driverId: driver.id,
           chargeMonth,
-          amount: getDriverSubscriptionRate(driver.vehicleType),
-        },
-        select: { id: true, driverId: true, amount: true },
+          amount: getDriverSubscriptionRate(driver.vehicleType!),
+        }),
+      );
+      if (!created.created) {
+        result.alreadyExistingCount += 1;
+        continue;
+      }
+      result.createdCharges.push({
+        ...created.charge,
+        liabilityCommissionId: created.liabilityCommissionId,
       });
-      result.createdCharges.push(charge);
       result.createdCount += 1;
     } catch (error) {
       if (

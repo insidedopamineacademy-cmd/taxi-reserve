@@ -39,6 +39,7 @@ export async function runMonthlyDriverSubscriptions(now = new Date()) {
         metadata: {
           driverId: charge.driverId,
           chargeMonth: chargeMonthLabel,
+          liabilityCommissionId: charge.liabilityCommissionId,
         },
       }),
     ),

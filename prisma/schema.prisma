@@ -223,19 +223,21 @@ model Driver {
 }
 
 model CommissionEntry {
-  id                String   @id @default(cuid())
-  driverId          String
-  reservationId     String?  @unique
-  manualPickupText  String?
-  manualDropoffText String?
-  commissionAmount  Decimal  @db.Decimal(10, 2)
-  entryDate         DateTime
-  notes             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  driverId             String
+  reservationId        String?  @unique
+  subscriptionChargeId String?  @unique
+  manualPickupText     String?
+  manualDropoffText    String?
+  commissionAmount     Decimal  @db.Decimal(10, 2)
+  entryDate            DateTime
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  driver      Driver       @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  driver             Driver                    @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  reservation        Reservation?              @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  subscriptionCharge DriverSubscriptionCharge? @relation("SubscriptionLiability", fields: [subscriptionChargeId], references: [id], onDelete: Restrict)
 
   @@index([driverId, entryDate])
 }
@@ -269,9 +271,10 @@ model DriverSubscriptionCharge {
   createdAt       DateTime                        @default(now())
   updatedAt       DateTime                        @updatedAt
 
-  driver             Driver                                @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  paidByUser         User?                                 @relation("SubscriptionRecordedBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
-  paymentAllocations DriverSubscriptionPaymentAllocation[]
+  driver              Driver                                @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  paidByUser          User?                                 @relation("SubscriptionRecordedBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
+  paymentAllocations  DriverSubscriptionPaymentAllocation[]
+  liabilityCommission CommissionEntry?                      @relation("SubscriptionLiability")
 
   @@unique([driverId, chargeMonth])
   @@index([chargeMonth])
