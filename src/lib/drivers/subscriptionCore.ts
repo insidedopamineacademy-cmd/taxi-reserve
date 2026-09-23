@@ -97,6 +97,8 @@ export async function generateMonthlyDriverSubscriptionCharges(
   assertNormalizedChargeMonth(chargeMonth);
 
   const drivers = await client.driver.findMany({
+    // Deleted drivers never receive future subscription charges.
+    where: { deletedAt: null },
     orderBy: { id: "asc" },
     select: {
       id: true,

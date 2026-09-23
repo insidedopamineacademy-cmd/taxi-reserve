@@ -23,8 +23,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const { id: driverId } = await params;
-  const driver = await prisma.driver.findUnique({
-    where: { id: driverId },
+  const driver = await prisma.driver.findFirst({
+    where: { id: driverId, deletedAt: null },
     select: { id: true, status: true },
   });
   if (!driver) {

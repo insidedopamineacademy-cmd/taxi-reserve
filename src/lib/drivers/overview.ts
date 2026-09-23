@@ -19,6 +19,7 @@ export async function getDriverBalanceLines(now = new Date()) {
   // chargeMonth is a civil DATE, normalized to day 1 in the Madrid month.
   const { monthStart } = getMadridFinancialPeriods(now);
   const drivers = await prisma.driver.findMany({
+    where: { deletedAt: null },
     orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
     select: {
       id: true,

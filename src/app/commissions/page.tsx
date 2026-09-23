@@ -32,7 +32,7 @@ export default async function CommissionsPage() {
       },
     }),
     prisma.driver.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", deletedAt: null },
       orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
       select: { id: true, name: true, licenseNumber: true },
     }),

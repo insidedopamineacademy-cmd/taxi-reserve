@@ -43,14 +43,18 @@ export default async function EditReservationPage({ params }: PageProps) {
       ? await (async () => {
           const [drivers, linkedCommission] = await Promise.all([
             prisma.driver.findMany({
-              where: reservation.driverId
-                ? {
-                    OR: [
-                      { status: DriverStatus.ACTIVE },
-                      { id: reservation.driverId },
-                    ],
-                  }
-                : { status: DriverStatus.ACTIVE },
+              where: {
+                // Never offer a deleted driver, even the one currently assigned.
+                deletedAt: null,
+                ...(reservation.driverId
+                  ? {
+                      OR: [
+                        { status: DriverStatus.ACTIVE },
+                        { id: reservation.driverId },
+                      ],
+                    }
+                  : { status: DriverStatus.ACTIVE }),
+              },
               orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
               select: {
                 id: true,

@@ -33,6 +33,7 @@ export async function GET() {
   }
 
   const drivers = await prisma.driver.findMany({
+    where: { deletedAt: null },
     orderBy: [{ name: "asc" }, { licenseNumber: "asc" }],
     select: {
       id: true,

@@ -211,6 +211,10 @@ model Driver {
   vehicleType        DriverVehicleType?
   subscriptionExempt Boolean            @default(false)
   status             DriverStatus       @default(ACTIVE)
+  // Soft-delete marker. A non-null value hides the driver from every
+  // operational surface (lists, selectors, reports, subscription generation)
+  // while preserving all historical financial, reservation and audit records.
+  deletedAt          DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -220,6 +224,7 @@ model Driver {
   subscriptionCharges DriverSubscriptionCharge[]
 
   @@index([licenseNumber])
+  @@index([deletedAt])
 }
 
 model CommissionEntry {

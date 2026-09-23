@@ -13,8 +13,8 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function NewCommissionPage({ params }: PageProps) {
   await requireDriverAdminPage();
   const { id } = await params;
-  const driver = await prisma.driver.findUnique({
-    where: { id },
+  const driver = await prisma.driver.findFirst({
+    where: { id, deletedAt: null },
     select: { id: true, name: true, licenseNumber: true, status: true },
   });
 

@@ -24,6 +24,7 @@
     "prisma:validate": "dotenv -e .env.local -- prisma validate",
     "prisma:studio": "dotenv -e .env.local -- prisma studio",
     "test:driver-subscriptions": "node --conditions=react-server --experimental-transform-types scripts/test-driver-subscriptions.mjs",
+    "test:driver-delete": "node --conditions=react-server --experimental-transform-types scripts/test-driver-delete.mjs",
     "test:date-display": "node --experimental-transform-types --test scripts/test-date-display.mts",
     "test:assistant-mobile": "node --experimental-transform-types --test scripts/test-assistant-mobile.mts",
     "test:assistant-foundation": "node --conditions=react-server --experimental-transform-types --test scripts/test-assistant-foundation.mts",

@@ -128,8 +128,8 @@ export async function recordDriverPayment(
 ) {
   return client.$transaction(async (tx) => {
     await lockDriver(tx, input.driverId);
-    const driver = await tx.driver.findUnique({
-      where: { id: input.driverId },
+    const driver = await tx.driver.findFirst({
+      where: { id: input.driverId, deletedAt: null },
       select: { id: true, status: true },
     });
     if (!driver) throw new DriverPaymentError(404, "Driver not found.");

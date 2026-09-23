@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import DeleteDriverButton from "@/components/drivers/DeleteDriverButton";
 import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import SubscriptionStatusBadge from "@/components/drivers/SubscriptionStatusBadge";
@@ -33,16 +34,19 @@ function balanceMeta(balance: string) {
 
 export default function DriversList({ items, subscriptionMonth }: { items: DriverListItem[]; subscriptionMonth: string }) {
   const [query, setQuery] = useState("");
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+  const [message, setMessage] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredItems = useMemo(() => {
-    if (!normalizedQuery) return items;
+    const visible = removedIds.size ? items.filter((driver) => !removedIds.has(driver.id)) : items;
+    if (!normalizedQuery) return visible;
 
-    return items.filter(
+    return visible.filter(
       (driver) =>
         driver.name.toLocaleLowerCase().includes(normalizedQuery) ||
         driver.licenseNumber.toLocaleLowerCase().includes(normalizedQuery),
     );
-  }, [items, normalizedQuery]);
+  }, [items, normalizedQuery, removedIds]);
 
   return (
     <div className="space-y-4">
@@ -58,6 +62,12 @@ export default function DriversList({ items, subscriptionMonth }: { items: Drive
           className="h-11 w-full rounded-lg border border-app-border bg-surface-2 px-3 text-base text-white outline-none placeholder:text-subtle focus:border-brand/50 focus:ring-2 focus:ring-brand/25"
         />
       </label>
+
+      {message ? (
+        <p role="status" className="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
+          {message}
+        </p>
+      ) : null}
 
       <p className="text-xs text-subtle">
         {filteredItems.length} {filteredItems.length === 1 ? "driver" : "drivers"}
@@ -145,6 +155,19 @@ export default function DriversList({ items, subscriptionMonth }: { items: Drive
                     id={driver.id}
                     name={driver.name}
                     status={driver.status}
+                  />
+                  <DeleteDriverButton
+                    id={driver.id}
+                    name={driver.name}
+                    licenseNumber={driver.licenseNumber}
+                    onDeleted={() => {
+                      setRemovedIds((prev) => {
+                        const next = new Set(prev);
+                        next.add(driver.id);
+                        return next;
+                      });
+                      setMessage(`${driver.name} was deleted.`);
+                    }}
                   />
                 </div>
               </li>

@@ -89,8 +89,9 @@ export function createPrismaDriverAssignmentRepository(
       return row ? mapReservation(row) : null;
     },
     findDriver(driverId) {
-      return database.driver.findUnique({
-        where: { id: driverId },
+      // A deleted driver cannot be assigned to a reservation.
+      return database.driver.findFirst({
+        where: { id: driverId, deletedAt: null },
         select: assignmentDriverSelect,
       });
     },

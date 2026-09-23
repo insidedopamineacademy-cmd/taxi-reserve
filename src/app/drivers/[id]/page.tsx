@@ -8,6 +8,7 @@ import DriverStatusBadge from "@/components/drivers/DriverStatusBadge";
 import SubscriptionHistory from "@/components/drivers/SubscriptionHistory";
 import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
 import { currentSubscriptionStatus, subscriptionSettlement } from "@/lib/drivers/subscriptionStatus";
+import DeleteDriverButton from "@/components/drivers/DeleteDriverButton";
 import DriverStatusButton from "@/components/drivers/DriverStatusButton";
 import FinancialEntryDeleteButton from "@/components/drivers/FinancialEntryDeleteButton";
 import { PdfShareButton } from "@/components/PdfShareButton";
@@ -41,8 +42,8 @@ function paymentMethodLabel(method: "CASH" | "BANK" | "OTHER") {
 export default async function DriverDetailPage({ params }: PageProps) {
   await requireDriverAdminPage();
   const { id } = await params;
-  const driver = await prisma.driver.findUnique({
-    where: { id },
+  const driver = await prisma.driver.findFirst({
+    where: { id, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -222,6 +223,12 @@ export default async function DriverDetailPage({ params }: PageProps) {
               Edit driver
             </Link>
             <DriverStatusButton id={driver.id} name={driver.name} status={driver.status} />
+            <DeleteDriverButton
+              id={driver.id}
+              name={driver.name}
+              licenseNumber={driver.licenseNumber}
+              redirectTo="/drivers"
+            />
           </div>
         </div>
       </header>

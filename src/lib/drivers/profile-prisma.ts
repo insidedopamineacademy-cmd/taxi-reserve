@@ -22,8 +22,11 @@ export function createPrismaDriverProfileRepository(
 ): DriverProfileRepository {
   return {
     findByIdentity(input) {
+      // A deleted driver never counts as an existing match, so a new driver can
+      // reuse a deleted one's name and license number.
       return database.driver.findFirst({
         where: {
+          deletedAt: null,
           name: { equals: input.name, mode: "insensitive" },
           licenseNumber: { equals: input.licenseNumber, mode: "insensitive" },
         },

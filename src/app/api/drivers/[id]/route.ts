@@ -3,12 +3,19 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activityLog";
 import { getDriverAdminAccess } from "@/lib/drivers/access";
+import { softDeleteDriver } from "@/lib/drivers/deleteDriver";
 import {
   DriverProfileInputError,
   normalizeDriverLicenseNumber,
   normalizeDriverName,
 } from "@/lib/drivers/profile-core";
 import { prisma } from "@/lib/prisma";
+import {
+  requireSecuritySession,
+  requireTrustedSecurityRequest,
+  securityFailure,
+  securityJson,
+} from "@/lib/security/http";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,8 +48,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const { id } = await params;
-  const current = await prisma.driver.findUnique({
-    where: { id },
+  // A soft-deleted driver is treated as gone: it cannot be edited.
+  const current = await prisma.driver.findFirst({
+    where: { id, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -114,6 +122,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const duplicate = await prisma.driver.findFirst({
       where: {
         id: { not: current.id },
+        deletedAt: null,
         name: { equals: nextName, mode: "insensitive" },
         licenseNumber: { equals: nextLicenseNumber, mode: "insensitive" },
       },
@@ -208,5 +217,31 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   } catch (error) {
     console.error("Driver update failed:", error);
     return NextResponse.json({ error: "Could not update the driver." }, { status: 500 });
+  }
+}
+
+// Admin-only soft delete. Authorization (current ADMIN role, ACTIVE account,
+// unlocked Settings PIN, trusted same-origin request) is enforced entirely on
+// the server; the acting role is re-read from the database inside the
+// transaction and never taken from the client.
+export async function DELETE(request: Request, { params }: RouteContext) {
+  try {
+    requireTrustedSecurityRequest(request, "driver.delete");
+    const { identity } = await requireSecuritySession({ admin: true, settingsUnlocked: true });
+    const { id } = await params;
+
+    const result = await softDeleteDriver(prisma, identity, id);
+
+    revalidatePath("/drivers");
+    revalidatePath("/drivers/overview");
+    revalidatePath("/drivers/credits");
+    revalidatePath("/drivers/due");
+    revalidatePath(`/drivers/${id}`);
+    revalidatePath("/commissions");
+    revalidatePath("/payments");
+
+    return securityJson(result);
+  } catch (error) {
+    return securityFailure(error);
   }
 }

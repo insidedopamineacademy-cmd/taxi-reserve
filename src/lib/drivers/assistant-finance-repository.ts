@@ -179,6 +179,7 @@ export const assistantDriverFinanceRepository: AssistantDriverFinanceRepository 
   async searchDriverCandidates(query: AssistantDriverCandidateQuery) {
     const rows = await prisma.driver.findMany({
       where: {
+        deletedAt: null,
         ...(query.query
           ? {
               OR: [
@@ -199,7 +200,7 @@ export const assistantDriverFinanceRepository: AssistantDriverFinanceRepository 
   },
 
   async getDriver(driverId) {
-    return prisma.driver.findUnique({ where: { id: driverId }, select: driverSelect });
+    return prisma.driver.findFirst({ where: { id: driverId, deletedAt: null }, select: driverSelect });
   },
 
   getFinancialSummaries: getDriverFinancialSummaries,

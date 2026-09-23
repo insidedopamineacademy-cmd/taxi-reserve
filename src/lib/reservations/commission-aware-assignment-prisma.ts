@@ -187,7 +187,8 @@ export function createPrismaCommissionAwareAssignmentRepository(
     },
 
     findDriver(driverId) {
-      return database.driver.findUnique({ where: { id: driverId }, select: driverSelect });
+      // A deleted driver cannot be assigned to a reservation.
+      return database.driver.findFirst({ where: { id: driverId, deletedAt: null }, select: driverSelect });
     },
 
     async applyAtomic(input) {

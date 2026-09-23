@@ -32,7 +32,9 @@ export function createPrismaDriverImportExistingRepository(
       ];
       if (ors.length === 0) return [];
       const candidates = await database.driver.findMany({
-        where: { OR: ors },
+        // Deleted drivers are never import-match targets; a re-import creates a
+        // fresh active driver instead of reviving a deleted one.
+        where: { deletedAt: null, OR: ors },
         orderBy: [{ name: "asc" }, { id: "asc" }],
         select: importDriverSelect,
       });
