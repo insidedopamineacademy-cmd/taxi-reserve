@@ -78,6 +78,7 @@ async function reset() {
   await prisma.driver.deleteMany();
   await prisma.deviceSession.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.subscriptionAutomationSetting.deleteMany();
   driverSeq = 0;
   sessionSeq = 0;
 }

@@ -51,6 +51,7 @@ export async function runMonthlyDriverSubscriptions(now = new Date()) {
     entityId: chargeMonthLabel,
     metadata: {
       chargeMonth: chargeMonthLabel,
+      paused: result.paused,
       eligibleCount: result.eligibleCount,
       createdCount: result.createdCount,
       alreadyExistingCount: result.alreadyExistingCount,

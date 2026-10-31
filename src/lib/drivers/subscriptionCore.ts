@@ -4,6 +4,10 @@ import {
   Prisma,
   type PrismaClient,
 } from "@prisma/client";
+import {
+  readSubscriptionAutomationEnabled,
+  readSubscriptionAutomationEnabledForUpdate,
+} from "./subscriptionAutomation.ts";
 
 const RATE_VALUES = {
   [DriverVehicleType.VAN]: "20.00",
@@ -18,6 +22,8 @@ export type DriverSubscriptionBatchResult = {
   skippedInactiveCount: number;
   skippedExemptCount: number;
   skippedMissingVehicleTypeCount: number;
+  // True when the global automation switch was OFF, so this run created nothing.
+  paused: boolean;
   createdCharges: Array<{
     id: string;
     driverId: string;
@@ -96,6 +102,26 @@ export async function generateMonthlyDriverSubscriptionCharges(
 ): Promise<DriverSubscriptionBatchResult> {
   assertNormalizedChargeMonth(chargeMonth);
 
+  const result: DriverSubscriptionBatchResult = {
+    chargeMonth,
+    eligibleCount: 0,
+    createdCount: 0,
+    alreadyExistingCount: 0,
+    skippedInactiveCount: 0,
+    skippedExemptCount: 0,
+    skippedMissingVehicleTypeCount: 0,
+    paused: false,
+    createdCharges: [],
+  };
+
+  // Global automation switch. When OFF, the automatic generator creates nothing
+  // for this run. Paused months are therefore never generated and never later
+  // recovered — there is no catch-up path; the next run handles its own month.
+  if (!(await readSubscriptionAutomationEnabled(client))) {
+    result.paused = true;
+    return result;
+  }
+
   const drivers = await client.driver.findMany({
     // Deleted drivers never receive future subscription charges.
     where: { deletedAt: null },
@@ -107,17 +133,6 @@ export async function generateMonthlyDriverSubscriptionCharges(
       subscriptionExempt: true,
     },
   });
-
-  const result: DriverSubscriptionBatchResult = {
-    chargeMonth,
-    eligibleCount: 0,
-    createdCount: 0,
-    alreadyExistingCount: 0,
-    skippedInactiveCount: 0,
-    skippedExemptCount: 0,
-    skippedMissingVehicleTypeCount: 0,
-    createdCharges: [],
-  };
 
   for (const driver of drivers) {
     if (driver.status !== DriverStatus.ACTIVE) {
@@ -150,13 +165,24 @@ export async function generateMonthlyDriverSubscriptionCharges(
     }
 
     try {
-      const created = await client.$transaction((transaction) =>
-        createSubscriptionChargeAndLiability(transaction, {
+      const created = await client.$transaction(async (transaction) => {
+        // Re-check the switch under a row lock so a pause committed mid-run
+        // stops further charge creation. Serialises with setSubscriptionAutomation.
+        if (!(await readSubscriptionAutomationEnabledForUpdate(transaction))) {
+          return { paused: true as const };
+        }
+        return createSubscriptionChargeAndLiability(transaction, {
           driverId: driver.id,
           chargeMonth,
           amount: getDriverSubscriptionRate(driver.vehicleType!),
-        }),
-      );
+        });
+      });
+      if ("paused" in created) {
+        // Automation was paused during this run; create nothing further.
+        result.paused = true;
+        result.eligibleCount -= 1;
+        break;
+      }
       if (!created.created) {
         result.alreadyExistingCount += 1;
         continue;

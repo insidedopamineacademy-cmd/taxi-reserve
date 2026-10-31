@@ -43,6 +43,21 @@ export async function requireUnlockedAdmin(
   return actor;
 }
 
+/**
+ * Re-verifies, inside a transaction, that the caller is an authenticated, ACTIVE
+ * administrator with a valid device session, locking the actor rows FOR UPDATE.
+ * Same guarantees as requireUnlockedAdmin minus the Settings PIN gate — for
+ * financial-admin actions that, like driver payments/commissions, are not
+ * PIN-gated. Never trusts a client-supplied role.
+ */
+export async function requireActiveAdmin(
+  tx: Prisma.TransactionClient,
+  identity: SessionIdentity,
+  now = new Date(),
+) {
+  return lockIdentity(tx, identity, now);
+}
+
 export async function getAdminSecurityStatus(db: Database, identity: SessionIdentity, now = new Date()) {
   const actor = await validateDeviceSession(db, identity, now, false);
   if (!actor) throw new SecurityError(401, "UNAUTHORIZED", "Sign in again.");

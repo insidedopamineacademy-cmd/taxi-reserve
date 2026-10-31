@@ -403,3 +403,14 @@ model ActivityLog {
   @@index([entityType])
   @@index([action])
 }
+
+// Durable global switches. A single seeded row (id = "global") controls whether
+// the automatic monthly driver-subscription generator may create charges. The
+// row is always present so it can serialize pause-vs-generate via SELECT ... FOR
+// UPDATE. updatedByUserId is denormalized (no FK), like ActivityLog.userEmail.
+model SubscriptionAutomationSetting {
+  id              String   @id
+  enabled         Boolean  @default(true)
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt
+}

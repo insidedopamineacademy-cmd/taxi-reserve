@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import Link from "next/link";
 import DriversList from "@/components/drivers/DriversList";
+import SubscriptionAutomationToggle from "@/components/drivers/SubscriptionAutomationToggle";
 import { requireDriverAdminPage } from "@/lib/drivers/access";
 import {
   calculateDriverFinancePosition,
@@ -10,13 +11,16 @@ import {
   formatEuro,
 } from "@/lib/drivers/financials";
 import { getDriverBalanceLines } from "@/lib/drivers/overview";
+import { readSubscriptionAutomationEnabled } from "@/lib/drivers/subscriptionAutomation";
 import { getMadridFinancialPeriods } from "@/lib/drivers/financialDateCore";
+import { prisma } from "@/lib/prisma";
 
 export default async function DriversPage() {
   await requireDriverAdminPage();
 
   const now = new Date();
   const drivers = await getDriverBalanceLines(now);
+  const automationEnabled = await readSubscriptionAutomationEnabled(prisma);
   const subscriptionMonth = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(getMadridFinancialPeriods(now).monthStart);
   const summaries = drivers.map((driver) => driver.summary);
   const overview = combineDriverFinancialSummaries(summaries);
@@ -86,6 +90,10 @@ export default async function DriversPage() {
           </Link>
         </div>
       </section>
+
+      <div className="mb-6">
+        <SubscriptionAutomationToggle initialEnabled={automationEnabled} />
+      </div>
 
       <DriversList items={items} subscriptionMonth={subscriptionMonth} />
     </main>

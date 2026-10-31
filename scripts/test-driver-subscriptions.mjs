@@ -43,6 +43,7 @@ async function main() {
   await prisma.driverPayment.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.driver.deleteMany();
+  await prisma.subscriptionAutomationSetting.deleteMany();
 
   const user = await prisma.user.upsert({
     where: { email: "subscription-test@example.com" },
