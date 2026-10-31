@@ -40,7 +40,7 @@ export default function SubscriptionAutomationToggle({ initialEnabled }: { initi
       className="rounded-xl border border-app-border bg-surface p-4"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 id="subscription-automation-heading" className="text-sm font-semibold text-white">
             Automatic Monthly Charges
           </h2>
@@ -56,12 +56,12 @@ export default function SubscriptionAutomationToggle({ initialEnabled }: { initi
           className="inline-flex h-11 shrink-0 items-center rounded-full px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-app disabled:cursor-wait disabled:opacity-60"
         >
           <span
-            className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${
+            className={`inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
               enabled ? "bg-success" : "bg-white/15"
             }`}
           >
             <span
-              className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform duration-200 ${
+              className={`size-5 rounded-full bg-white shadow transition-transform duration-200 ${
                 enabled ? "translate-x-[22px]" : "translate-x-0.5"
               }`}
             />
